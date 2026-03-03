@@ -10,6 +10,20 @@ type CreateUserBody = {
 };
 
 export async function usersRoutes(app: FastifyInstance) {
+  app.get("/users", async (request, reply) => {
+    await request.jwtVerify();
+
+    if (request.user.role !== "ADMIN") {
+      return reply.status(403).send({ message: "Acesso restrito a administradores." });
+    }
+
+    const result = await db.query(
+      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC"
+    );
+
+    return reply.send(result.rows);
+  });
+
   app.post<{ Body: CreateUserBody }>(
     "/users",
     {
