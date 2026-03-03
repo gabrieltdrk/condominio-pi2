@@ -13,24 +13,21 @@ type LoginResponse = {
 
 
 
-// const BASE_URL = import.meta.env.VITE_API_URL; // (usar depois)
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 async function requestLogin(email: string, password: string): Promise<LoginResponse> {
-  // trocar esse bloco pelo da api 
-  await new Promise((r) => setTimeout(r, 600));
+  const res = await fetch(`${BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
 
-  const okAdmin = email === "admin@condominio.com" && password === "123456";
-  const okMorador = email === "morador@condominio.com" && password === "123456";
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? "Erro no login.");
+  }
 
-  if (!okAdmin && !okMorador) throw new Error("Email ou senha inválidos.");
-
-  const user: User = okAdmin
-    ? { name: "Admin", role: "ADMIN", email }
-    : { name: "Morador", role: "MORADOR", email };
-
-  return { token: "fake-token-" + Date.now(), user };
-
-
+  return res.json();
 }
 export async function login(email: string, password: string): Promise<User> {
   const { token, user } = await requestLogin(email.trim(), password);
