@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
+import { Eye, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
+import { getToken } from "../../services/auth";
+import { listUsers, type UserRecord } from "../../services/users";
 import "../../styles/pages/dashboardAdmin.css";
 
 type Pending = {
@@ -16,6 +20,17 @@ type Occurrence = {
 };
 
 export default function DashboardAdmin() {
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState("");
+
+  useEffect(() => {
+    listUsers(getToken()!)
+      .then(setUsers)
+      .catch((e: Error) => setUsersError(e.message))
+      .finally(() => setUsersLoading(false));
+  }, []);
+
   // Mock (depois troca por API)
   const pendencias: Pending[] = [
     { title: "Reserva • Salão de festas", subtitle: "Apto 32 • 15/03 • 20:00", tag: "Aprovar" },
@@ -162,6 +177,54 @@ export default function DashboardAdmin() {
           </div>
         </section>
 
+        {/* Usuários cadastrados */}
+        <section className="admin-kpis">
+          <div className="admin-card admin-span-12">
+            <div className="admin-cardHead">
+              <div>
+                <h3 className="admin-title">Usuários cadastrados</h3>
+                <p className="admin-sub">Gerencie os acessos ao sistema</p>
+              </div>
+              <span className="admin-badge">{users.length} usuários</span>
+            </div>
+
+            {usersLoading && <p className="admin-sub">Carregando...</p>}
+            {usersError && <p style={{ color: "crimson", fontSize: 13 }}>{usersError}</p>}
+
+            {!usersLoading && !usersError && (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th style={{ textAlign: "right" }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id}>
+                      <td>{u.name}</td>
+                      <td>{u.email}</td>
+                      <td>{u.role}</td>
+                      <td>
+                        <div className="admin-rowActions">
+                          <button className="admin-miniBtn" title="Alterar" onClick={() => onAction(`Alterar ${u.name}`)}>
+                            <Pencil size={15} />
+                          </button>
+                          <button className="admin-miniBtn" title="Apagar" style={{ color: "crimson" }} onClick={() => onAction(`Apagar ${u.name}`)}>
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
         {/* Ocorrências recentes */}
         <section className="admin-kpis">
           <div className="admin-card admin-span-12">
@@ -194,11 +257,11 @@ export default function DashboardAdmin() {
                     <td>{o.date}</td>
                     <td>
                       <div className="admin-rowActions">
-                        <button className="admin-miniBtn" onClick={() => onAction(`Ver ${o.id}`)}>
-                          Ver
+                        <button className="admin-miniBtn" title="Ver" onClick={() => onAction(`Ver ${o.id}`)}>
+                          <Eye size={15} />
                         </button>
-                        <button className="admin-miniBtn" onClick={() => onAction(`Atualizar ${o.id}`)}>
-                          Atualizar
+                        <button className="admin-miniBtn" title="Atualizar" onClick={() => onAction(`Atualizar ${o.id}`)}>
+                          <RefreshCw size={15} />
                         </button>
                       </div>
                     </td>
