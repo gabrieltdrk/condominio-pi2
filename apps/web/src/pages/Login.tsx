@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../services/auth";
+import "../styles/pages/login.css";
 
 export default function Login() {
   const nav = useNavigate();
@@ -25,108 +26,39 @@ export default function Login() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#f5f5f5",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          width: 380,
-          padding: 32,
-          borderRadius: 14,
-          backgroundColor: "#ffffff",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <h2
-          style={{
-            margin: 0,
-            textAlign: "center",
-            fontWeight: 600,
-            marginBottom: 10,
-          }}
-        >
+    <div className="container-center">
+      <form onSubmit={onSubmit} className="card" style={{ display: "grid", gap: 12 }}>
+        <h2 style={{ margin: 0, textAlign: "center", fontWeight: 600 }}>
           Sistema do Condomínio
         </h2>
 
-        <label style={{ fontSize: 14 }}>Email</label>
+        <label className="label">Email</label>
         <input
+          className="input"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           type="email"
           required
           placeholder="admin@condominio.com"
-          style={{
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            outline: "none",
-          }}
         />
 
-        <label style={{ fontSize: 14 }}>Senha</label>
+        <label className="label">Senha</label>
         <input
+          className="input"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           type="password"
           required
           placeholder="••••••••"
-          style={{
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            outline: "none",
-          }}
         />
 
-        {err && (
-          <p
-            style={{
-              color: "crimson",
-              fontSize: 13,
-              marginTop: 4,
-            }}
-          >
-            {err}
-          </p>
-        )}
+        {err && <p className="error">{err}</p>}
 
-        <button
-          disabled={loading}
-          style={{
-            marginTop: 8,
-            padding: 12,
-            borderRadius: 8,
-            border: "none",
-            backgroundColor: "#1f2937",
-            color: "#fff",
-            fontWeight: 500,
-            cursor: "pointer",
-            opacity: loading ? 0.7 : 1,
-            transition: "0.2s",
-          }}
-        >
+        <button className="button" disabled={loading} style={{ opacity: loading ? 0.7 : 1 }}>
           {loading ? "Entrando..." : "Entrar"}
         </button>
 
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 12,
-            opacity: 0.6,
-            textAlign: "center",
-          }}
-        >
+        <div className="helper" style={{ marginTop: 6 }}>
           <div><b>Admin:</b> admin@condominio.com / 123456</div>
           <div><b>Morador:</b> morador@condominio.com / 123456</div>
         </div>

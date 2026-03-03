@@ -1,22 +1,11 @@
-import { useNavigate } from "react-router-dom";
-import { getUser, logout } from "../services/auth";
+import { getUser } from "../services/auth";
+import DashboardAdmin from "./dashboard/DashboardAdmin";
+import DashboardUser from "./dashboard/DashboardUser";
+import "../styles/pages/dashboard.css";
 
 export default function Dashboard() {
   const user = getUser();
-  const nav = useNavigate();
+  if (!user) return null;
 
-  function sair() {
-    logout();
-    nav("/login");
-  }
-
-  return (
-    <div style={{ padding: 24 }}>
-      <h1>Dashboard</h1>
-      <p>
-        Logado como: <b>{user?.name}</b> ({user?.role})
-      </p>
-      <button onClick={sair}>Sair</button>
-    </div>
-  );
+  return user.role === "ADMIN" ? <DashboardAdmin /> : <DashboardUser />;
 }
