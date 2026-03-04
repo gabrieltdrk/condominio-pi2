@@ -18,22 +18,25 @@ export default function AppLayout({
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <div className="card" style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+    <div className="p-6">
+      <div className="w-full max-w-225 mx-auto bg-white rounded-[14px] shadow-[0_10px_30px_rgba(0,0,0,0.06)] p-8 border border-gray-200">
+        <div className="flex justify-between gap-3 items-center">
           <div>
-            <h1 style={{ margin: 0 }}>{title}</h1>
-            <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+            <h1 className="m-0">{title}</h1>
+            <p className="mt-1.5 text-gray-500 text-sm">
               Logado como: <b>{user?.name}</b> ({user?.role})
             </p>
           </div>
 
-          <button className="button" onClick={sair} style={{ width: "auto", paddingInline: 16 }}>
+          <button
+            className="bg-gray-900 text-white font-medium cursor-pointer px-4 py-3 rounded-[10px] border-none"
+            onClick={sair}
+          >
             Sair
           </button>
         </div>
 
-        <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "16px 0" }} />
+        <hr className="border-0 border-t border-gray-200 my-4" />
 
         {children}
       </div>

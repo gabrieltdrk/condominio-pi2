@@ -1,9 +1,8 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUser } from "../services/auth";
-import DashboardAdmin from "./dashboard/DashboardAdmin";
-import DashboardUser from "./dashboard/DashboardUser";
-import "../styles/pages/dashboard.css";
+import DashboardAdmin from "./dashboard/dashboard-admin";
+import DashboardUser from "./dashboard/dashboard-user";
 
 export default function Dashboard() {
   const user = getUser();

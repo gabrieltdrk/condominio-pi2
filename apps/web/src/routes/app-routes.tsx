@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login from "../pages/Login.tsx";
-import Dashboard from "../pages/Dashboard.tsx";
-import ProtectedRoute from "./ProtectedRoute";
+import Login from "../pages/login.tsx";
+import Dashboard from "../pages/dashboard.tsx";
+import ProtectedRoute from "./protected-route";
 
 export default function AppRoutes() {
   return (
