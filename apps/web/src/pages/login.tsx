@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { login, loginWithGoogle, checkOAuthSession } from "../services/auth";
+import { login, loginWithGoogle, checkOAuthSession, resetPassword } from "../services/auth";
 import loginBg from "../assets/login.jpg";
 
 function GoogleIcon() {
@@ -23,14 +23,20 @@ function FacebookIcon() {
   );
 }
 
+type View = "login" | "forgot" | "sent";
+
 export default function Login() {
   const nav = useNavigate();
+  const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotErr, setForgotErr] = useState("");
 
   // Detecta sessão OAuth após redirect do Google
   useEffect(() => {
@@ -38,6 +44,12 @@ export default function Login() {
       if (user) nav("/dashboard", { replace: true });
     });
   }, [nav]);
+
+  function openForgot() {
+    setForgotEmail(email); // pré-preenche com email digitado
+    setForgotErr("");
+    setView("forgot");
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,27 +65,38 @@ export default function Login() {
     }
   }
 
+  async function onForgot(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setForgotErr("");
+    setForgotLoading(true);
+    try {
+      await resetPassword(forgotEmail);
+      setView("sent");
+    } catch (e: unknown) {
+      setForgotErr(e instanceof Error ? e.message : "Erro ao enviar email.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
   async function onGoogle() {
     setSocialLoading(true);
     setErr("");
     try {
       await loginWithGoogle();
-      // loginWithGoogle redireciona para Google — sem finally
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Erro ao conectar com Google.");
       setSocialLoading(false);
     }
   }
 
+  const inputCls = "w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 placeholder-gray-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
+
   return (
     <div className="flex h-screen w-screen">
       {/* Left — image panel */}
       <div className="hidden md:block md:w-1/2 relative">
-        <img
-          src={loginBg}
-          alt="Login background"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+        <img src={loginBg} alt="Login background" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/20" />
       </div>
 
@@ -85,99 +108,114 @@ export default function Login() {
           <span className="font-semibold text-sm text-gray-700">Condomínio</span>
         </div>
 
-        {/* Form */}
-        <div className="w-full max-w-sm mx-auto">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">
-            Bem-vindo de volta
-          </h1>
-          <p className="text-sm text-gray-400 mb-8">
-            Faça login para acessar o sistema
-          </p>
+        {/* ── VIEW: login ── */}
+        {view === "login" && (
+          <div className="w-full max-w-sm mx-auto">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Bem-vindo de volta</h1>
+            <p className="text-sm text-gray-400 mb-8">Faça login para acessar o sistema</p>
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-5">
-            {/* Email */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Login
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@condominio.com"
-                required
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 placeholder-gray-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-              />
-            </div>
-
-            {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Senha
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Digite sua senha"
-                  required
-                  className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-11 text-sm text-gray-800 placeholder-gray-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+            <form onSubmit={onSubmit} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Login</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@condominio.com" required className={inputCls} />
               </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Senha</label>
+                  <button type="button" onClick={openForgot} className="text-xs text-indigo-500 hover:underline">
+                    Esqueceu a senha?
+                  </button>
+                </div>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Digite sua senha" required className={`${inputCls} pr-11`} />
+                  <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabIndex={-1}>
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {err && <p className="text-xs text-red-500 -mt-2">{err}</p>}
+
+              <button type="submit" disabled={loading || socialLoading} className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white font-semibold py-3 rounded-lg text-sm transition cursor-pointer">
+                {loading ? "Entrando..." : "Entrar"}
+              </button>
+            </form>
+
+            {/* Separator */}
+            <div className="flex items-center gap-3 my-6">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400 whitespace-nowrap">ou faça login com</span>
+              <div className="flex-1 h-px bg-gray-200" />
             </div>
 
-            {/* Error */}
-            {err && <p className="text-xs text-red-500 -mt-2">{err}</p>}
-
-            {/* Sign in */}
-            <button
-              type="submit"
-              disabled={loading || socialLoading}
-              className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white font-semibold py-3 rounded-lg text-sm transition cursor-pointer"
-            >
-              {loading ? "Entrando..." : "Entrar"}
-            </button>
-          </form>
-
-          {/* Separator */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 whitespace-nowrap">ou faça login com</span>
-            <div className="flex-1 h-px bg-gray-200" />
+            {/* Social buttons */}
+            <div className="flex gap-3">
+              <button type="button" onClick={onGoogle} disabled={loading || socialLoading} className="flex-1 flex items-center justify-center gap-2.5 border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60 transition cursor-pointer">
+                <GoogleIcon />
+                Google
+              </button>
+              <button type="button" disabled title="Em breve" className="flex-1 flex items-center justify-center gap-2.5 border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-400 bg-gray-50 cursor-not-allowed opacity-50">
+                <FacebookIcon />
+                Facebook
+              </button>
+            </div>
           </div>
+        )}
 
-          {/* Social buttons */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onGoogle}
-              disabled={loading || socialLoading}
-              className="flex-1 flex items-center justify-center gap-2.5 border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60 transition cursor-pointer"
-            >
-              <GoogleIcon />
-              Google
-            </button>
+        {/* ── VIEW: forgot ── */}
+        {view === "forgot" && (
+          <div className="w-full max-w-sm mx-auto">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Recuperar senha</h1>
+            <p className="text-sm text-gray-400 mb-8">
+              Informe seu email e enviaremos um link para criar uma nova senha.
+            </p>
 
-            <button
-              type="button"
-              disabled
-              title="Em breve"
-              className="flex-1 flex items-center justify-center gap-2.5 border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-400 bg-gray-50 cursor-not-allowed opacity-50"
-            >
-              <FacebookIcon />
-              Facebook
+            <form onSubmit={onForgot} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</label>
+                <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="email@condominio.com" required className={inputCls} />
+              </div>
+
+              {forgotErr && <p className="text-xs text-red-500 -mt-2">{forgotErr}</p>}
+
+              <button type="submit" disabled={forgotLoading} className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white font-semibold py-3 rounded-lg text-sm transition cursor-pointer">
+                {forgotLoading ? "Enviando..." : "Enviar link de recuperação"}
+              </button>
+            </form>
+
+            <button type="button" onClick={() => setView("login")} className="mt-5 text-sm text-gray-400 hover:text-gray-600 w-full text-center">
+              ← Voltar ao login
             </button>
           </div>
-        </div>
+        )}
+
+        {/* ── VIEW: sent ── */}
+        {view === "sent" && (
+          <div className="w-full max-w-sm mx-auto text-center">
+            <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifique seu email</h1>
+            <p className="text-sm text-gray-400 mb-1">
+              Enviamos um link de recuperação para
+            </p>
+            <p className="text-sm font-semibold text-gray-700 mb-8">{forgotEmail}</p>
+            <p className="text-xs text-gray-400 mb-6">
+              Não recebeu? Verifique a pasta de spam ou tente novamente.
+            </p>
+            <button type="button" onClick={() => { setView("forgot"); setForgotErr(""); }} className="text-sm text-indigo-500 hover:underline">
+              Reenviar email
+            </button>
+            <div className="mt-4">
+              <button type="button" onClick={() => setView("login")} className="text-sm text-gray-400 hover:text-gray-600">
+                ← Voltar ao login
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between text-xs text-gray-400">

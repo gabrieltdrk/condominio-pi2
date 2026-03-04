@@ -70,6 +70,20 @@ export async function login(email: string, password: string): Promise<User> {
   return user;
 }
 
+/** Envia email com link de recuperação de senha */
+export async function resetPassword(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + "/reset-password",
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Atualiza a senha do usuário autenticado via link de recuperação */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+}
+
 export async function logout() {
   await supabase.auth.signOut();
   localStorage.removeItem("token");
