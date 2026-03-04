@@ -1,3 +1,5 @@
+import { supabase } from "../lib/supabase";
+
 export type UserRole = "ADMIN" | "MORADOR";
 
 export type User = {
@@ -6,37 +8,30 @@ export type User = {
   email: string;
 };
 
-type LoginResponse = {
-  token: string;
-  user: User;
-};
-
-
-
-const BASE_URL = import.meta.env.VITE_API_URL;
-
-async function requestLogin(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${BASE_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? "Erro no login.");
-  }
-
-  return res.json();
-}
 export async function login(email: string, password: string): Promise<User> {
-  const { token, user } = await requestLogin(email.trim(), password);
-  localStorage.setItem("token", token);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) throw new Error(error.message);
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, role")
+    .eq("id", data.user.id)
+    .single();
+
+  const user: User = {
+    name: profile?.name ?? data.user.email ?? "",
+    email: data.user.email ?? "",
+    role: (profile?.role ?? "MORADOR") as UserRole,
+  };
+
+  localStorage.setItem("token", data.session.access_token);
   localStorage.setItem("user", JSON.stringify(user));
   return user;
 }
 
-export function logout() {
+export async function logout() {
+  await supabase.auth.signOut();
   localStorage.removeItem("token");
   localStorage.removeItem("user");
 }

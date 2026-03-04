@@ -1,7 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_URL;
+import { getSupabaseAdmin, supabase } from "../lib/supabase";
 
 export type UserRecord = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: "ADMIN" | "MORADOR";
@@ -15,26 +15,38 @@ export type CreateUserPayload = {
   role: "ADMIN" | "MORADOR";
 };
 
-export async function listUsers(token: string): Promise<UserRecord[]> {
-  const res = await fetch(`${BASE_URL}/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error("Erro ao carregar usuários.");
-  return res.json();
+export async function listUsers(): Promise<UserRecord[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, name, email, role, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error("Erro ao carregar usuários.");
+  return data as UserRecord[];
 }
 
-export async function createUser(token: string, payload: CreateUserPayload): Promise<UserRecord> {
-  const res = await fetch(`${BASE_URL}/users`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
+export async function createUser(payload: CreateUserPayload): Promise<UserRecord> {
+  const { data, error } = await getSupabaseAdmin().auth.admin.createUser({
+    email: payload.email,
+    password: payload.password,
+    email_confirm: true,
+    user_metadata: { name: payload.name, role: payload.role },
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? "Erro ao criar usuário.");
+
+  if (error) {
+    if (error.message.toLowerCase().includes("already registered")) {
+      throw new Error("Email já cadastrado.");
+    }
+    throw new Error(error.message);
   }
-  return res.json();
+
+  // O trigger cria o perfil automaticamente; buscamos para retornar
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, name, email, role, created_at")
+    .eq("id", data.user.id)
+    .single();
+
+  if (profileError) throw new Error("Usuário criado, mas erro ao carregar perfil.");
+  return profile as UserRecord;
 }
