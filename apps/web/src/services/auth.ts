@@ -8,6 +8,46 @@ export type User = {
   email: string;
 };
 
+/** Inicia login via Google OAuth — redireciona para Google e volta para /login */
+export async function loginWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin + "/login" },
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Após o redirect OAuth, o Supabase guarda a sessão automaticamente.
+ * Esta função detecta a sessão e popula o localStorage (token + user),
+ * retornando o User para que o Login possa redirecionar para /dashboard.
+ * Retorna null se não houver sessão OAuth pendente.
+ */
+export async function checkOAuthSession(): Promise<User | null> {
+  // Se já existe token salvo, o login foi via email/password — ignora
+  if (localStorage.getItem("token")) return null;
+
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return null;
+
+  const session = data.session;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, role")
+    .eq("id", session.user.id)
+    .single();
+
+  const user: User = {
+    name: profile?.name ?? session.user.email ?? "",
+    email: session.user.email ?? "",
+    role: (profile?.role ?? "MORADOR") as UserRole,
+  };
+
+  localStorage.setItem("token", session.access_token);
+  localStorage.setItem("user", JSON.stringify(user));
+  return user;
+}
+
 export async function login(email: string, password: string): Promise<User> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
