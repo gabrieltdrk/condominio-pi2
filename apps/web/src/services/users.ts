@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from "../lib/supabase";
+import { getSupabaseAdmin, supabase } from "../lib/supabase";
 
 export type UserRecord = {
   id: string;
@@ -26,7 +26,7 @@ export async function listUsers(): Promise<UserRecord[]> {
 }
 
 export async function createUser(payload: CreateUserPayload): Promise<UserRecord> {
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+  const { data, error } = await getSupabaseAdmin().auth.admin.createUser({
     email: payload.email,
     password: payload.password,
     email_confirm: true,
