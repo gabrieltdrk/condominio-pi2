@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Eye, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
-import { getToken } from "../../services/auth";
 import { createUser, listUsers, type CreateUserPayload, type UserRecord } from "../../services/users";
 import "../../styles/pages/dashboardAdmin.css";
 
@@ -34,7 +33,7 @@ export default function DashboardAdmin() {
   function loadUsers() {
     setUsersLoading(true);
     setUsersError("");
-    listUsers(getToken()!)
+    listUsers()
       .then(setUsers)
       .catch((e: Error) => setUsersError(e.message))
       .finally(() => setUsersLoading(false));
@@ -59,7 +58,7 @@ export default function DashboardAdmin() {
     setSubmitting(true);
     setFormError("");
     try {
-      await createUser(getToken()!, form);
+      await createUser(form);
       closeModal();
       loadUsers();
     } catch (err: unknown) {
