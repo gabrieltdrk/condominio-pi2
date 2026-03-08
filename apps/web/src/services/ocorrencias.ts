@@ -27,6 +27,8 @@ export type Ocorrencia = {
   created_at: string;
   updated_at: string;
   author_name?: string;
+  curtidas_count: number;
+  user_curtiu: boolean;
 };
 
 export type CreateOcorrenciaPayload = {
@@ -44,10 +46,27 @@ export type UpdateOcorrenciaPayload = {
   resposta_morador?: string;
 };
 
+// Prioridade automática por categoria
+export const PRIORIDADE_POR_CATEGORIA: Record<string, OcorrenciaUrgencia> = {
+  Manutenção: "Alta",
+  Barulho: "Média",
+  Reclamação: "Média",
+  Sugestão: "Baixa",
+  Dúvida: "Baixa",
+};
+
+type RawOcorrencia = Omit<Ocorrencia, "author_name" | "curtidas_count" | "user_curtiu"> & {
+  profiles: { name: string } | null;
+  ocorrencia_curtidas: Array<{ user_id: string }> | null;
+};
+
 export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const uid = authUser?.id ?? null;
+
   let query = supabase
     .from("ocorrencias")
-    .select("*, profiles(name)")
+    .select("*, profiles(name), ocorrencia_curtidas(user_id)")
     .order("created_at", { ascending: false });
 
   if (limit) query = query.limit(limit);
@@ -55,10 +74,15 @@ export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
   const { data, error } = await query;
   if (error) throw new Error("Erro ao carregar ocorrências.");
 
-  return (data as unknown as Array<Ocorrencia & { profiles: { name: string } | null }>).map((o) => ({
+  return (data as unknown as RawOcorrencia[]).map((o) => ({
     ...o,
     author_name: o.profiles?.name ?? "—",
+    curtidas_count: o.ocorrencia_curtidas?.length ?? 0,
+    user_curtiu: uid
+      ? (o.ocorrencia_curtidas ?? []).some((c) => c.user_id === uid)
+      : false,
     profiles: undefined,
+    ocorrencia_curtidas: undefined,
   })) as Ocorrencia[];
 }
 
@@ -75,7 +99,7 @@ export async function createOcorrencia(payload: CreateOcorrenciaPayload): Promis
     .single();
 
   if (error) throw new Error(error.message);
-  return data as Ocorrencia;
+  return { ...(data as Ocorrencia), curtidas_count: 0, user_curtiu: false };
 }
 
 export async function updateOcorrencia(id: string, payload: UpdateOcorrenciaPayload): Promise<void> {
@@ -85,4 +109,28 @@ export async function updateOcorrencia(id: string, payload: UpdateOcorrenciaPayl
     .eq("id", id);
 
   if (error) throw new Error(error.message);
+}
+
+export async function toggleCurtida(ocorrenciaId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado.");
+
+  const { data: existing } = await supabase
+    .from("ocorrencia_curtidas")
+    .select("ocorrencia_id")
+    .eq("ocorrencia_id", ocorrenciaId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("ocorrencia_curtidas")
+      .delete()
+      .eq("ocorrencia_id", ocorrenciaId)
+      .eq("user_id", user.id);
+  } else {
+    await supabase
+      .from("ocorrencia_curtidas")
+      .insert({ ocorrencia_id: ocorrenciaId, user_id: user.id });
+  }
 }
