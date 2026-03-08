@@ -63,6 +63,7 @@ export default function DashboardAdmin() {
 
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [ocorrenciasLoading, setOcorrenciasLoading] = useState(true);
+  const [ocorrenciasError, setOcorrenciasError] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<CreateUserPayload>(EMPTY_FORM);
@@ -82,7 +83,7 @@ export default function DashboardAdmin() {
     loadUsers();
     listOcorrencias(4)
       .then(setOcorrencias)
-      .catch(() => {})
+      .catch((e: Error) => setOcorrenciasError(e.message))
       .finally(() => setOcorrenciasLoading(false));
   }, []);
 
@@ -607,8 +608,9 @@ export default function DashboardAdmin() {
             </div>
 
             {ocorrenciasLoading && <p className="text-xs text-gray-400">Carregando...</p>}
+            {ocorrenciasError && <p className="text-xs text-red-500">{ocorrenciasError}</p>}
 
-            {!ocorrenciasLoading && ocorrencias.length === 0 && (
+            {!ocorrenciasLoading && !ocorrenciasError && ocorrencias.length === 0 && (
               <p className="text-xs text-gray-400">Nenhuma ocorrência cadastrada ainda.</p>
             )}
 

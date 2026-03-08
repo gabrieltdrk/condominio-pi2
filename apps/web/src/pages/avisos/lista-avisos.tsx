@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, ArrowUpDown,
-  Megaphone, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
+  Megaphone, Paperclip, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import AppLayout from "../../components/app-layout";
 import { getUser } from "../../services/auth";
@@ -12,6 +12,7 @@ import {
   toggleCurtidaAviso,
   toggleFixarAviso,
   updateAviso,
+  uploadAvisoAnexo,
   AVISO_TIPOS,
   AVISO_TIPO_COLORS,
   type Aviso,
@@ -21,6 +22,15 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const CURTIDAS_DESTAQUE = 3;
+
+// Barra lateral colorida por tipo (mesmo padrão das ocorrências)
+const AVISO_TIPO_BAR: Record<AvisoTipo, string> = {
+  Informativo:  "bg-blue-400",
+  Manutenção:   "bg-amber-400",
+  Assembleia:   "bg-indigo-400",
+  Segurança:    "bg-red-400",
+  Eventos:      "bg-emerald-400",
+};
 
 type SortKey = "titulo" | "tipo" | "created_at" | "data_expiracao" | "curtidas_count";
 
@@ -83,6 +93,10 @@ export default function ListaAvisos() {
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
+  const [anexoFile, setAnexoFile] = useState<File | null>(null);
+  const [editAnexoFile, setEditAnexoFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -133,13 +147,13 @@ export default function ListaAvisos() {
     setSubmitting(true);
     setFormError("");
     try {
-      await createAviso({
-        ...form,
-        data_expiracao: form.data_expiracao || undefined,
-        arquivo_url: form.arquivo_url || undefined,
-      });
+      let arquivo_url = form.arquivo_url || undefined;
+      if (anexoFile) arquivo_url = await uploadAvisoAnexo(anexoFile);
+      await createAviso({ ...form, data_expiracao: form.data_expiracao || undefined, arquivo_url });
       setNovoOpen(false);
       setForm(EMPTY_FORM);
+      setAnexoFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       load();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Erro ao criar aviso.");
@@ -151,6 +165,7 @@ export default function ListaAvisos() {
   function openEditar(a: Aviso) {
     setEditando(a);
     setEditForm({ titulo: a.titulo, descricao: a.descricao, tipo: a.tipo, data_expiracao: a.data_expiracao ?? "", arquivo_url: a.arquivo_url ?? "" });
+    setEditAnexoFile(null);
     setEditError("");
     setDetalhe(null);
   }
@@ -161,8 +176,11 @@ export default function ListaAvisos() {
     setEditSubmitting(true);
     setEditError("");
     try {
-      await updateAviso(editando.id, { ...editForm, data_expiracao: editForm.data_expiracao || undefined });
+      let arquivo_url = editForm.arquivo_url || undefined;
+      if (editAnexoFile) arquivo_url = await uploadAvisoAnexo(editAnexoFile);
+      await updateAviso(editando.id, { ...editForm, data_expiracao: editForm.data_expiracao || undefined, arquivo_url });
       setEditando(null);
+      setEditAnexoFile(null);
       load();
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : "Erro ao salvar.");
@@ -278,6 +296,7 @@ export default function ListaAvisos() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-linear-to-r from-gray-50 to-indigo-50/30">
+                    <th className="w-1 p-0 border-b border-gray-100" />
                     <th className="w-6 px-3 py-3 border-b border-gray-100" />
                     <SortTh col="titulo" label="Título" />
                     <SortTh col="tipo" label="Tipo" />
@@ -299,6 +318,10 @@ export default function ListaAvisos() {
                         style={{ animationDelay: `${idx * 30}ms` }}
                         className={`cursor-pointer transition-all duration-150 hover:bg-indigo-50/40 group ${destaque ? "bg-amber-50/40" : ""} ${expired ? "opacity-60" : ""}`}
                       >
+                        {/* Barra colorida por tipo */}
+                        <td className="p-0 w-1 border-b border-gray-100">
+                          <div className={`w-1 h-full min-h-12 ${AVISO_TIPO_BAR[a.tipo]} opacity-70 group-hover:opacity-100 transition-opacity`} />
+                        </td>
                         {/* Pin indicator */}
                         <td className="px-3 py-3 border-b border-gray-100 text-center">
                           {a.fixado && <Pin size={13} className="text-indigo-500 inline" />}
@@ -379,46 +402,50 @@ export default function ListaAvisos() {
                 <div
                   key={a.id}
                   onClick={() => setDetalhe(a)}
-                  className={`bg-white border rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.99] transition-all
+                  className={`bg-white border rounded-2xl shadow-sm cursor-pointer active:scale-[0.99] transition-all overflow-hidden relative
                     ${destaque ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-indigo-200"}
                     ${expired ? "opacity-60" : ""}`}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        {a.fixado && <Pin size={12} className="text-indigo-500 shrink-0" />}
-                        <Badge text={a.tipo} cls={AVISO_TIPO_COLORS[a.tipo]} />
+                  {/* Barra colorida por tipo */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${AVISO_TIPO_BAR[a.tipo]}`} />
+                  <div className="pl-3 p-4">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          {a.fixado && <Pin size={12} className="text-indigo-500 shrink-0" />}
+                          <Badge text={a.tipo} cls={AVISO_TIPO_COLORS[a.tipo]} />
+                        </div>
+                        <p className="text-base font-semibold text-gray-800 leading-snug">{a.titulo}</p>
                       </div>
-                      <p className="text-base font-semibold text-gray-800 leading-snug">{a.titulo}</p>
                     </div>
-                  </div>
-                  <p className="text-xs text-gray-400 line-clamp-2 mb-3">{a.descricao}</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span>{fmt(a.created_at)}</span>
-                      {a.data_expiracao && (
-                        <span className={expired ? "text-rose-500 font-semibold" : ""}>
-                          · expira {fmt(a.data_expiracao)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => handleCurtir(e, a)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-sm font-semibold cursor-pointer transition-all active:scale-95
-                          ${a.user_curtiu ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-white border-gray-200 text-gray-400"}`}
-                      >
-                        <ThumbsUp size={13} />
-                        {a.curtidas_count > 0 && <span>{a.curtidas_count}</span>}
-                      </button>
-                      {isAdmin && (
+                    <p className="text-xs text-gray-400 line-clamp-2 mb-3">{a.descricao}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <span>{fmt(a.created_at)}</span>
+                        {a.data_expiracao && (
+                          <span className={expired ? "text-rose-500 font-semibold" : ""}>
+                            · expira {fmt(a.data_expiracao)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleFixar(a); }}
-                          className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${a.fixado ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-white border-gray-200 text-gray-400"}`}
+                          onClick={(e) => handleCurtir(e, a)}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-sm font-semibold cursor-pointer transition-all active:scale-95
+                            ${a.user_curtiu ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-white border-gray-200 text-gray-400"}`}
                         >
-                          {a.fixado ? <PinOff size={13} /> : <Pin size={13} />}
+                          <ThumbsUp size={13} />
+                          {a.curtidas_count > 0 && <span>{a.curtidas_count}</span>}
                         </button>
-                      )}
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleFixar(a); }}
+                            className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${a.fixado ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-white border-gray-200 text-gray-400"}`}
+                          >
+                            {a.fixado ? <PinOff size={13} /> : <Pin size={13} />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -497,16 +524,35 @@ export default function ListaAvisos() {
 
               <div className="grid gap-2">
                 <label className="text-sm font-semibold text-gray-600">
-                  Anexo <span className="text-gray-400 font-normal">(URL do documento — em breve)</span>
+                  Anexo <span className="text-gray-400 font-normal">(PDF, Word, Imagem — máx 10MB)</span>
                 </label>
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={16} className="text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-500 flex-1 truncate">
+                    {anexoFile ? anexoFile.name : "Clique para selecionar um arquivo"}
+                  </span>
+                  {anexoFile && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setAnexoFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                      className="text-gray-400 hover:text-rose-500 shrink-0 border-none bg-transparent cursor-pointer">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
                 <input
-                  type="text"
-                  placeholder="https://... (funcionalidade em desenvolvimento)"
-                  value={form.arquivo_url}
-                  onChange={(e) => setForm({ ...form, arquivo_url: e.target.value })}
-                  className={`${inputCls} opacity-60`}
-                  disabled
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                  className="hidden"
+                  onChange={(e) => setAnexoFile(e.target.files?.[0] ?? null)}
                 />
+                {form.arquivo_url && !anexoFile && (
+                  <p className="text-xs text-indigo-600 flex items-center gap-1">
+                    <Paperclip size={11} /> Anexo atual: <a href={form.arquivo_url} target="_blank" rel="noreferrer" className="underline">ver arquivo</a>
+                  </p>
+                )}
               </div>
 
               {formError && <p className="text-sm text-red-500 m-0">{formError}</p>}
@@ -641,7 +687,7 @@ export default function ListaAvisos() {
                 <div className="grid gap-2">
                   <label className="text-sm font-semibold text-gray-600">Data de expiração <span className="text-gray-400 font-normal">(opcional)</span></label>
                   <div className="flex gap-2">
-                    <input type="date" value={editForm.data_expiracao} onChange={(e) => setEditForm({ ...editForm, data_expiracao: e.target.value })} className={inputCls} />
+                    <input type="date" lang="pt-BR" value={editForm.data_expiracao} onChange={(e) => setEditForm({ ...editForm, data_expiracao: e.target.value })} className={inputCls} />
                     {editForm.data_expiracao && (
                       <button type="button" onClick={() => setEditForm({ ...editForm, data_expiracao: "" })}
                         className="px-3 rounded-lg border border-gray-200 bg-white text-gray-400 hover:text-rose-500 hover:border-rose-200 cursor-pointer text-xs shrink-0 transition-colors">
@@ -651,6 +697,35 @@ export default function ListaAvisos() {
                   </div>
                 </div>
               </div>
+
+              {/* Anexo no formulário de edição */}
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-gray-600">
+                  Anexo <span className="text-gray-400 font-normal">(PDF, Word, Imagem — máx 10MB)</span>
+                </label>
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-colors"
+                  onClick={() => editFileInputRef.current?.click()}
+                >
+                  <Paperclip size={16} className="text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-500 flex-1 truncate">
+                    {editAnexoFile ? editAnexoFile.name : "Clique para selecionar um arquivo"}
+                  </span>
+                  {editAnexoFile && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setEditAnexoFile(null); if (editFileInputRef.current) editFileInputRef.current.value = ""; }}
+                      className="text-gray-400 hover:text-rose-500 shrink-0 border-none bg-transparent cursor-pointer">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <input ref={editFileInputRef} type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" className="hidden" onChange={(e) => setEditAnexoFile(e.target.files?.[0] ?? null)} />
+                {editForm.arquivo_url && !editAnexoFile && (
+                  <p className="text-xs text-indigo-600 flex items-center gap-1">
+                    <Paperclip size={11} /> Anexo atual: <a href={editForm.arquivo_url} target="_blank" rel="noreferrer" className="underline">ver arquivo</a>
+                  </p>
+                )}
+              </div>
+
               {editError && <p className="text-sm text-red-500 m-0">{editError}</p>}
               <div className="flex justify-end gap-3 mt-1">
                 <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setEditando(null)} disabled={editSubmitting}>

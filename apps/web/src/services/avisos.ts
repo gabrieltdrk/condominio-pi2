@@ -115,6 +115,15 @@ export async function updateAviso(id: string, payload: Partial<CreateAvisoPayloa
   if (error) throw new Error(error.message);
 }
 
+export async function uploadAvisoAnexo(file: File): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "bin";
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabase.storage.from("avisos-anexos").upload(path, file, { upsert: false });
+  if (error) throw new Error(`Erro no upload: ${error.message}`);
+  const { data } = supabase.storage.from("avisos-anexos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function deleteAviso(id: string): Promise<void> {
   const { error } = await supabase.from("avisos").delete().eq("id", id);
   if (error) throw new Error(error.message);
