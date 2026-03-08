@@ -131,6 +131,7 @@ export default function ListaOcorrencias() {
   const [editResponsavel, setEditResponsavel] = useState("");
   const [editRespostaInterna, setEditRespostaInterna] = useState("");
   const [editRespostaMorador, setEditRespostaMorador] = useState("");
+  const [editMotivoCancelamento, setEditMotivoCancelamento] = useState("");
   // Morador edit fields
   const [editAssunto, setEditAssunto] = useState("");
   const [editDescricao, setEditDescricao] = useState("");
@@ -213,6 +214,7 @@ export default function ListaOcorrencias() {
     setEditResponsavel(o.responsavel ?? "");
     setEditRespostaInterna(o.resposta_interna ?? "");
     setEditRespostaMorador(o.resposta_morador ?? "");
+    setEditMotivoCancelamento(o.motivo_cancelamento ?? "");
     // Morador fields
     setEditAssunto(o.assunto);
     setEditDescricao(o.descricao);
@@ -224,6 +226,10 @@ export default function ListaOcorrencias() {
   async function handleSaveAdmin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!detalhe) return;
+    if (editStatus === "Cancelado" && !editMotivoCancelamento.trim()) {
+      setSaveError("Informe o motivo do cancelamento.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     try {
@@ -232,6 +238,7 @@ export default function ListaOcorrencias() {
         responsavel: editResponsavel || undefined,
         resposta_interna: editRespostaInterna || undefined,
         resposta_morador: editRespostaMorador || undefined,
+        motivo_cancelamento: editStatus === "Cancelado" ? editMotivoCancelamento.trim() : undefined,
       });
       setDetalhe(null);
       load();
@@ -667,6 +674,14 @@ export default function ListaOcorrencias() {
               </div>
             )}
 
+            {/* Motivo de cancelamento — visível a todos */}
+            {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
+                <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
+              </div>
+            )}
+
             {/* ── Form ADMIN ── */}
             {isAdmin && (
               <form className="grid gap-4" onSubmit={handleSaveAdmin}>
@@ -682,6 +697,22 @@ export default function ListaOcorrencias() {
                     <input type="text" placeholder="Ex: Zelador João" value={editResponsavel} onChange={(e) => setEditResponsavel(e.target.value)} className={inputCls} />
                   </div>
                 </div>
+
+                {editStatus === "Cancelado" && (
+                  <div className="grid gap-2">
+                    <label className="text-sm font-semibold text-gray-600">
+                      Motivo do cancelamento <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      value={editMotivoCancelamento}
+                      onChange={(e) => setEditMotivoCancelamento(e.target.value)}
+                      rows={2}
+                      required
+                      placeholder="Descreva o motivo pelo qual a ocorrência está sendo cancelada..."
+                      className={`${inputCls} resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-100`}
+                    />
+                  </div>
+                )}
                 <div className="grid gap-2">
                   <label className="text-sm font-semibold text-gray-600">
                     Nota interna <span className="text-gray-400 font-normal">(não visível ao morador)</span>

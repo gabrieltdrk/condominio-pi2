@@ -25,6 +25,7 @@ export type Ocorrencia = {
   responsavel: string | null;
   resposta_interna: string | null;
   resposta_morador: string | null;
+  motivo_cancelamento: string | null;
   created_at: string;
   updated_at: string;
   author_name?: string;
@@ -46,6 +47,7 @@ export type UpdateOcorrenciaPayload = {
   responsavel?: string;
   resposta_interna?: string;
   resposta_morador?: string;
+  motivo_cancelamento?: string;
 };
 
 export type UpdateOcorrenciaMoradorPayload = {
