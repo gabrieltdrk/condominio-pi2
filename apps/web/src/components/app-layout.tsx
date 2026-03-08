@@ -89,15 +89,6 @@ export default function AppLayout({ title, children }: { title: string; children
 
   // ── Gear ─────────────────────────────────────────────────────────────
   const [gearOpen, setGearOpen] = useState(false);
-  const gearRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (gearRef.current && !gearRef.current.contains(e.target as Node)) setGearOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   function sair() { logout(); nav("/login"); }
 
@@ -171,7 +162,7 @@ export default function AppLayout({ title, children }: { title: string; children
               </p>
             </div>
 
-            <div ref={gearRef} className="relative shrink-0">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setGearOpen((v) => !v)}
                 title="Configurações"
@@ -181,30 +172,33 @@ export default function AppLayout({ title, children }: { title: string; children
               </button>
 
               {gearOpen && (
-                <div className="absolute bottom-full right-0 mb-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-200 overflow-hidden py-1">
-                  <button
-                    onClick={() => { setGearOpen(false); alert("Em desenvolvimento"); }}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
-                  >
-                    <User size={15} className="text-gray-400" />
-                    Alterar dados pessoais
-                  </button>
-                  <button
-                    onClick={() => { toggleDark(); setGearOpen(false); }}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
-                  >
-                    {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-gray-400" />}
-                    {dark ? "Modo claro" : "Modo escuro"}
-                  </button>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={sair}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-rose-600 hover:bg-rose-50 cursor-pointer border-none bg-transparent text-left transition-colors"
-                  >
-                    <LogOut size={15} className="text-rose-500" />
-                    Sair
-                  </button>
-                </div>
+                <>
+                  <div className="fixed inset-0 z-199" onClick={() => setGearOpen(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-200 overflow-hidden py-1">
+                    <button
+                      onClick={() => { setGearOpen(false); alert("Em desenvolvimento"); }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
+                    >
+                      <User size={15} className="text-gray-400" />
+                      Alterar dados pessoais
+                    </button>
+                    <button
+                      onClick={() => { toggleDark(); setGearOpen(false); }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
+                    >
+                      {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-gray-400" />}
+                      {dark ? "Modo claro" : "Modo escuro"}
+                    </button>
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      onClick={sair}
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-rose-600 hover:bg-rose-50 cursor-pointer border-none bg-transparent text-left transition-colors"
+                    >
+                      <LogOut size={15} className="text-rose-500" />
+                      Sair
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
