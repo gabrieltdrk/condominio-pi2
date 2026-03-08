@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../../components/app-layout";
 import { createUser, listUsers, type CreateUserPayload, type UserRecord } from "../../services/users";

@@ -63,12 +63,14 @@ export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
 }
 
 export async function createOcorrencia(payload: CreateOcorrenciaPayload): Promise<Ocorrencia> {
-  const user = getUser();
-  if (!user) throw new Error("Usuário não autenticado.");
+  if (!getUser()) throw new Error("Usuário não autenticado.");
+
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error("Usuário não autenticado.");
 
   const { data, error } = await supabase
     .from("ocorrencias")
-    .insert({ ...payload, created_by: user.id })
+    .insert({ ...payload, created_by: authUser.id })
     .select()
     .single();
 
