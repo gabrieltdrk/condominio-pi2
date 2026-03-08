@@ -1,20 +1,14 @@
 import { useEffect, useState } from "react";
 import { Eye, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "../../components/app-layout";
 import { createUser, listUsers, type CreateUserPayload, type UserRecord } from "../../services/users";
+import { listOcorrencias, type Ocorrencia } from "../../services/ocorrencias";
 
 type Pending = {
   title: string;
   subtitle: string;
   tag: string;
-};
-
-type Occurrence = {
-  id: string;
-  apartment: string;
-  type: string;
-  status: "Nova" | "Em análise" | "Resolvida";
-  date: string;
 };
 
 const EMPTY_FORM: CreateUserPayload = { name: "", email: "", password: "", role: "MORADOR" };
@@ -24,9 +18,13 @@ const btn = "px-3 py-2.5 rounded-[10px] border border-gray-200 bg-white text-gra
 const btnPrimary = `${btn} bg-gray-900 text-white border-gray-900`;
 
 export default function DashboardAdmin() {
+  const nav = useNavigate();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState("");
+
+  const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
+  const [ocorrenciasLoading, setOcorrenciasLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<CreateUserPayload>(EMPTY_FORM);
@@ -44,6 +42,10 @@ export default function DashboardAdmin() {
 
   useEffect(() => {
     loadUsers();
+    listOcorrencias(4)
+      .then(setOcorrencias)
+      .catch(() => {})
+      .finally(() => setOcorrenciasLoading(false));
   }, []);
 
   function openModal() {
@@ -71,19 +73,13 @@ export default function DashboardAdmin() {
     }
   }
 
-  // Mock (depois troca por API)
   const pendencias: Pending[] = [
     { title: "Reserva • Salão de festas", subtitle: "Apto 32 • 15/03 • 20:00", tag: "Aprovar" },
     { title: "Cadastro • Novo morador", subtitle: "Apto 08 • Documento pendente", tag: "Validar" },
     { title: "Ocorrência • Barulho", subtitle: "Apto 14 • 02/03 • 22:10", tag: "Analisar" },
   ];
 
-  const ocorrencias: Occurrence[] = [
-    { id: "OC-1021", apartment: "14", type: "Barulho", status: "Em análise", date: "03/03" },
-    { id: "OC-1019", apartment: "08", type: "Manutenção", status: "Nova", date: "03/03" },
-    { id: "OC-1012", apartment: "32", type: "Segurança", status: "Resolvida", date: "02/03" },
-    { id: "OC-1007", apartment: "05", type: "Elevador", status: "Resolvida", date: "01/03" },
-  ];
+  const abertas = ocorrencias.filter((o) => o.status === "Aberto" || o.status === "Em Análise" || o.status === "Em Atendimento");
 
   const financeiro = [
     { label: "Recebido no mês", value: 78, display: "R$ 27.300" },
@@ -104,7 +100,7 @@ export default function DashboardAdmin() {
           {[
             { title: "Moradores", sub: "Ativos no sistema", badge: "Hoje", kpi: "128", foot: "+2 novos cadastros" },
             { title: "Reservas", sub: "Esta semana", badge: "Semanal", kpi: "12", foot: "3 aguardando aprovação" },
-            { title: "Ocorrências", sub: "Últimas 24h", badge: "Diário", kpi: "3", foot: "1 crítica • 2 normais" },
+            { title: "Ocorrências", sub: "Em aberto", badge: "Diário", kpi: String(abertas.length), foot: `${ocorrencias.length} total cadastradas` },
             { title: "Inadimplência", sub: "Mês atual", badge: "Financeiro", kpi: "7%", foot: "9 boletos em atraso" },
           ].map((k) => (
             <div key={k.title} className={`${card} col-span-12 lg:col-span-3`}>
@@ -241,46 +237,50 @@ export default function DashboardAdmin() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="m-0 text-sm font-semibold text-gray-900">Ocorrências recentes</h3>
-                <p className="mt-1 text-xs text-gray-500">Acompanhe status e ações</p>
+                <p className="mt-1 text-xs text-gray-500">Últimas cadastradas no sistema</p>
               </div>
               <span className="text-xs text-gray-500 border border-gray-200 px-2.5 py-1.5 rounded-full whitespace-nowrap">{ocorrencias.length} registros</span>
             </div>
 
-            <table className="w-full border-collapse mt-3 text-[13px]">
-              <thead>
-                <tr>
-                  {["ID", "Apto", "Tipo", "Status", "Data"].map((h) => (
-                    <th key={h} className="text-left text-xs text-gray-500 font-semibold px-2 py-2.5 border-b border-gray-200">{h}</th>
-                  ))}
-                  <th className="text-right text-xs text-gray-500 font-semibold px-2 py-2.5 border-b border-gray-200">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ocorrencias.map((o) => (
-                  <tr key={o.id}>
-                    <td className="px-2 py-2.5 border-b border-gray-200">{o.id}</td>
-                    <td className="px-2 py-2.5 border-b border-gray-200">{o.apartment}</td>
-                    <td className="px-2 py-2.5 border-b border-gray-200">{o.type}</td>
-                    <td className="px-2 py-2.5 border-b border-gray-200">{o.status}</td>
-                    <td className="px-2 py-2.5 border-b border-gray-200">{o.date}</td>
-                    <td className="px-2 py-2.5 border-b border-gray-200">
-                      <div className="flex gap-2 justify-end">
-                        <button className="p-2 rounded-[10px] border border-gray-200 bg-white cursor-pointer" title="Ver" onClick={() => onAction(`Ver ${o.id}`)}>
-                          <Eye size={15} />
-                        </button>
-                        <button className="p-2 rounded-[10px] border border-gray-200 bg-white cursor-pointer" title="Atualizar" onClick={() => onAction(`Atualizar ${o.id}`)}>
-                          <RefreshCw size={15} />
-                        </button>
-                      </div>
-                    </td>
+            {ocorrenciasLoading && <p className="mt-1 text-xs text-gray-500">Carregando...</p>}
+
+            {!ocorrenciasLoading && ocorrencias.length === 0 && (
+              <p className="mt-3 text-xs text-gray-500">Nenhuma ocorrência cadastrada ainda.</p>
+            )}
+
+            {!ocorrenciasLoading && ocorrencias.length > 0 && (
+              <table className="w-full border-collapse mt-3 text-[13px]">
+                <thead>
+                  <tr>
+                    {["Protocolo", "Morador", "Categoria", "Status", "Data"].map((h) => (
+                      <th key={h} className="text-left text-xs text-gray-500 font-semibold px-2 py-2.5 border-b border-gray-200">{h}</th>
+                    ))}
+                    <th className="text-right text-xs text-gray-500 font-semibold px-2 py-2.5 border-b border-gray-200">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {ocorrencias.map((o) => (
+                    <tr key={o.id}>
+                      <td className="px-2 py-2.5 border-b border-gray-200 font-mono text-xs text-gray-600">{o.protocolo}</td>
+                      <td className="px-2 py-2.5 border-b border-gray-200">{o.author_name}</td>
+                      <td className="px-2 py-2.5 border-b border-gray-200">{o.categoria}</td>
+                      <td className="px-2 py-2.5 border-b border-gray-200">{o.status}</td>
+                      <td className="px-2 py-2.5 border-b border-gray-200">{new Date(o.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</td>
+                      <td className="px-2 py-2.5 border-b border-gray-200">
+                        <div className="flex gap-2 justify-end">
+                          <button className="p-2 rounded-[10px] border border-gray-200 bg-white cursor-pointer" title="Gerenciar" onClick={() => nav("/ocorrencias")}>
+                            <Eye size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
 
             <div className="flex gap-2.5 flex-wrap mt-3">
-              <button className={btn} onClick={() => onAction("Ver todas as ocorrências")}>Ver todas</button>
-              <button className={btn} onClick={() => onAction("Abrir painel de segurança")}>Painel de segurança</button>
+              <button className={btn} onClick={() => nav("/ocorrencias")}>Ver todas</button>
             </div>
           </div>
         </section>

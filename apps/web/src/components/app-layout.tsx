@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { logout, getUser } from "../services/auth";
 
 export default function AppLayout({
@@ -10,12 +10,18 @@ export default function AppLayout({
   children: ReactNode;
 }) {
   const nav = useNavigate();
+  const location = useLocation();
   const user = getUser();
 
   function sair() {
     logout();
     nav("/login");
   }
+
+  const navLinks = [
+    { label: "Dashboard", path: "/dashboard" },
+    { label: "Ocorrências", path: "/ocorrencias" },
+  ];
 
   return (
     <div className="p-6">
@@ -36,9 +42,29 @@ export default function AppLayout({
           </button>
         </div>
 
-        <hr className="border-0 border-t border-gray-200 my-4" />
+        <nav className="flex gap-1 mt-4 border-b border-gray-200 pb-0">
+          {navLinks.map((link) => {
+            const active = location.pathname === link.path;
+            return (
+              <button
+                key={link.path}
+                onClick={() => nav(link.path)}
+                className={`px-3 py-2 text-sm font-semibold cursor-pointer border-none bg-transparent rounded-t-lg transition-colors
+                  ${active
+                    ? "text-gray-900 border-b-2 border-gray-900"
+                    : "text-gray-500 hover:text-gray-900"
+                  }`}
+                style={{ marginBottom: active ? -1 : 0 }}
+              >
+                {link.label}
+              </button>
+            );
+          })}
+        </nav>
 
-        {children}
+        <div className="mt-4">
+          {children}
+        </div>
       </div>
     </div>
   );
