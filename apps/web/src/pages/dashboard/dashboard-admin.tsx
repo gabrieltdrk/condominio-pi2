@@ -335,25 +335,25 @@ export default function DashboardAdmin() {
           </div>
 
           {/* Cobrança rápida */}
-          <div className="col-span-12 lg:col-span-5 bg-linear-to-br from-indigo-600 to-violet-600 border border-indigo-500 rounded-2xl p-5 shadow-sm hover:shadow-lg transition-shadow duration-200 flex flex-col justify-between">
+          <div className="col-span-12 lg:col-span-5 bg-linear-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
             <div>
-              <span className="text-[11px] text-indigo-200 border border-indigo-400 px-2.5 py-1 rounded-full">
+              <span className="text-[11px] text-indigo-600 border border-indigo-200 bg-white px-2.5 py-1 rounded-full">
                 Financeiro
               </span>
-              <h3 className="mt-3 text-base font-bold text-white">Gestão de cobranças</h3>
-              <p className="mt-1 text-xs text-indigo-200">
+              <h3 className="mt-3 text-base font-bold text-gray-900">Gestão de cobranças</h3>
+              <p className="mt-1 text-xs text-gray-500">
                 9 boletos em atraso aguardando ação. Regularize o mês atual antes do vencimento.
               </p>
 
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {[
-                  { label: "Recebido", value: "R$ 27.300", sub: "78% da meta" },
-                  { label: "Pendente", value: "R$ 7.600", sub: "22% em aberto" },
+                  { label: "Recebido", value: "R$ 27.300", sub: "78% da meta", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
+                  { label: "Pendente", value: "R$ 7.600", sub: "22% em aberto", color: "text-rose-600", bg: "bg-rose-50 border-rose-100" },
                 ].map((s) => (
-                  <div key={s.label} className="bg-white/10 rounded-xl px-3 py-2.5">
-                    <p className="text-[10px] text-indigo-200">{s.label}</p>
-                    <p className="text-sm font-bold text-white">{s.value}</p>
-                    <p className="text-[10px] text-indigo-300">{s.sub}</p>
+                  <div key={s.label} className={`${s.bg} border rounded-xl px-3 py-2.5`}>
+                    <p className="text-[10px] text-gray-400">{s.label}</p>
+                    <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
+                    <p className="text-[10px] text-gray-400">{s.sub}</p>
                   </div>
                 ))}
               </div>
@@ -361,13 +361,13 @@ export default function DashboardAdmin() {
 
             <div className="flex gap-2.5 mt-5 flex-wrap">
               <button
-                className="px-4 py-2 rounded-xl bg-white text-indigo-700 text-xs font-bold cursor-pointer border-none hover:bg-indigo-50 transition-colors"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer border-none transition-colors"
                 onClick={() => alert("Registrar cobrança (mock)")}
               >
                 Registrar cobrança
               </button>
               <button
-                className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold cursor-pointer border border-white/20 transition-colors"
+                className="px-4 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold cursor-pointer border border-gray-200 transition-colors"
                 onClick={() => alert("Boletos em atraso (mock)")}
               >
                 Boletos em atraso
