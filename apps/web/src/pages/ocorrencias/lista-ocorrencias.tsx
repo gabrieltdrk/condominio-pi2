@@ -260,8 +260,7 @@ export default function ListaOcorrencias() {
               onClick={() => { setForm(EMPTY_FORM); setFormError(""); setNovaOpen(true); }}
             >
               <Plus size={15} />
-              <span className="hidden xs:inline">Nova Ocorrência</span>
-              <span className="xs:hidden">Nova</span>
+              Nova Ocorrência
             </button>
           </div>
 
@@ -279,11 +278,11 @@ export default function ListaOcorrencias() {
         </div>
 
         {/* ── Filtros de status (chips multi-select, scroll horizontal) ── */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 overflow-hidden">
           <span className="text-xs text-gray-400 font-semibold shrink-0">Status:</span>
           <div
-            className="flex gap-2 overflow-x-auto py-1"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            className="flex gap-2 overflow-x-auto py-1 flex-1"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
           >
             <button
               onClick={() => setFilterStatus([])}
@@ -412,8 +411,10 @@ export default function ListaOcorrencias() {
                     ${destaque ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-indigo-200"}`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="font-mono text-xs text-gray-400">{o.protocolo}</p>
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-gray-400 truncate">
+                        {o.protocolo}{o.author_name && o.author_name !== "—" ? ` — ${o.author_name}` : ""}
+                      </p>
                       <p className="text-base font-semibold text-gray-800 mt-0.5 leading-snug">{o.assunto}</p>
                     </div>
                     <Badge text={o.urgencia} cls={URGENCIA_COLORS[o.urgencia]} />
@@ -425,9 +426,6 @@ export default function ListaOcorrencias() {
                       <span className="text-xs font-medium text-gray-500 border border-gray-200 px-2.5 py-0.5 rounded-full">
                         {o.categoria}
                       </span>
-                    )}
-                    {isAdmin && (
-                      <span className="text-xs font-medium text-gray-600">{o.author_name}</span>
                     )}
                   </div>
 
@@ -461,9 +459,9 @@ export default function ListaOcorrencias() {
 
       {/* ── Modal — Nova ocorrência ── */}
       {novaOpen && (
-        <div className="fixed inset-0 bg-black/45 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setNovaOpen(false)}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setNovaOpen(false)}>
           <div
-            className="bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 max-h-[92vh] overflow-y-auto"
+            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -539,9 +537,9 @@ export default function ListaOcorrencias() {
 
       {/* ── Modal — Detalhe / Gestão ── */}
       {detalhe && (
-        <div className="fixed inset-0 bg-black/45 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setDetalhe(null)}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setDetalhe(null)}>
           <div
-            className="bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xl p-6 max-h-[92vh] overflow-y-auto"
+            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabeçalho — sem badges de prioridade/status */}
@@ -561,17 +559,6 @@ export default function ListaOcorrencias() {
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
               <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
-            </div>
-
-            {/* Curtidas info */}
-            <div className="flex items-center gap-2 mb-4">
-              <ThumbsUp size={15} className="text-indigo-400" />
-              <span className="text-sm text-gray-500">
-                {detalhe.curtidas_count} {detalhe.curtidas_count === 1 ? "curtida" : "curtidas"}
-                {detalhe.curtidas_count >= CURTIDAS_DESTAQUE && (
-                  <span className="ml-2 text-amber-600 font-semibold">⭐ Em destaque</span>
-                )}
-              </span>
             </div>
 
             {/* Resposta ao morador */}
