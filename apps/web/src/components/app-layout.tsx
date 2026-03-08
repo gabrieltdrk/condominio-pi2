@@ -177,14 +177,14 @@ export default function AppLayout({ title, children }: { title: string; children
                   <div className="absolute bottom-full right-0 mb-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-200 overflow-hidden py-1">
                     <button
                       onClick={() => { setGearOpen(false); alert("Em desenvolvimento"); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100 cursor-pointer border-none bg-transparent text-left transition-colors"
                     >
                       <User size={15} className="text-gray-400" />
                       Alterar dados pessoais
                     </button>
                     <button
                       onClick={() => { toggleDark(); setGearOpen(false); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100 cursor-pointer border-none bg-transparent text-left transition-colors"
                     >
                       {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-gray-400" />}
                       {dark ? "Modo claro" : "Modo escuro"}
