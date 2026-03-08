@@ -110,11 +110,11 @@ export default function AppLayout({ title, children }: { title: string; children
     return (
       <>
         {/* Logo + Bell */}
-        <div className="flex items-center gap-2 px-4 h-16 border-b border-gray-100 shrink-0">
+        <div className="flex items-center gap-2 px-4 h-16 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="w-8 h-8 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
             <Building2 size={16} className="text-white" />
           </div>
-          <span className="font-bold text-sm text-gray-900 leading-none flex-1">OmniLar</span>
+          <span className="font-bold text-sm text-gray-900 dark:text-gray-100 leading-none flex-1">OmniLar</span>
 
           {/* Sininho */}
           <button
@@ -151,7 +151,7 @@ export default function AppLayout({ title, children }: { title: string; children
         </nav>
 
         {/* User + Gear */}
-        <div className="p-3 border-t border-gray-100 shrink-0">
+        <div className="p-3 border-t border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex items-center gap-2.5 px-2 py-2">
             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
               <span className="text-xs font-bold text-indigo-700">{initials}</span>
@@ -206,10 +206,10 @@ export default function AppLayout({ title, children }: { title: string; children
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
 
       {/* Sidebar desktop */}
-      <aside className="hidden md:flex w-60 flex-col bg-white border-r border-gray-200 shrink-0">
+      <aside className="hidden md:flex w-60 flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shrink-0">
         {SidebarContent()}
       </aside>
 
@@ -217,7 +217,7 @@ export default function AppLayout({ title, children }: { title: string; children
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white border-r border-gray-200 shadow-xl transition-transform duration-300 md:hidden ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-xl transition-transform duration-300 md:hidden ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <button onClick={() => setSidebarOpen(false)} className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 cursor-pointer border-none bg-transparent">
           <X size={18} />
         </button>
@@ -304,13 +304,13 @@ export default function AppLayout({ title, children }: { title: string; children
 
       {/* Main */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <header className="flex items-center gap-3 h-16 px-4 md:px-8 border-b border-gray-200 bg-white shrink-0">
+        <header className="flex items-center gap-3 h-16 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
           <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 cursor-pointer border-none bg-transparent">
             <Menu size={20} />
           </button>
           <h1 className="m-0 text-base font-semibold text-gray-800 truncate">{title}</h1>
         </header>
-        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-6 dark:bg-gray-950">
           {children}
         </main>
       </div>
