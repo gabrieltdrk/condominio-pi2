@@ -204,7 +204,7 @@ export default function ListaOcorrencias() {
   }
 
   function onCategoriaChange(cat: string) {
-    setForm((f) => ({ ...f, categoria: cat, urgencia: PRIORIDADE_POR_CATEGORIA[cat] ?? "Média" }));
+    setForm((f) => ({ ...f, categoria: cat, urgencia: PRIORIDADE_POR_CATEGORIA[cat] ?? "Média", privado: cat === "Barulho" ? true : f.privado }));
   }
 
   function openDetalhe(o: Ocorrencia) {
