@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
   LineChart,
+  BarChart,
+  Bar,
   Line,
   XAxis,
   YAxis,
@@ -372,6 +374,154 @@ export default function DashboardAdmin() {
               >
                 Boletos em atraso
               </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Métricas rápidas ── */}
+        <section className="grid grid-cols-12 gap-4">
+
+          {/* A — Tempo médio de resolução */}
+          <div className="col-span-12 sm:col-span-6 lg:col-span-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                <Clock size={18} className="text-violet-600" />
+              </div>
+              <span className="text-[11px] text-gray-400 border border-gray-200 px-2 py-1 rounded-full">Eficiência</span>
+            </div>
+            <p className="text-[28px] font-extrabold tracking-tight text-gray-900 leading-none">4.2</p>
+            <p className="mt-1 text-xs font-semibold text-gray-700">Dias p/ resolução</p>
+            <div className="mt-2 flex items-center gap-1 text-[11px] text-emerald-600">
+              <span>↓ 0.8 dias</span>
+              <span className="text-gray-400">vs. mês anterior</span>
+            </div>
+          </div>
+
+          {/* B — Próximos vencimentos */}
+          <div className="col-span-12 sm:col-span-6 lg:col-span-3 bg-white border border-amber-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default bg-linear-to-br from-amber-50 to-white">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <CalendarCheck size={18} className="text-amber-600" />
+              </div>
+              <span className="text-[11px] text-amber-600 border border-amber-200 bg-amber-50 px-2 py-1 rounded-full">7 dias</span>
+            </div>
+            <p className="text-[28px] font-extrabold tracking-tight text-gray-900 leading-none">5</p>
+            <p className="mt-1 text-xs font-semibold text-gray-700">Cobranças vencendo</p>
+            <div className="mt-2 flex items-center gap-1 text-[11px] text-amber-600">
+              <span>R$ 2.150</span>
+              <span className="text-gray-400">a vencer</span>
+            </div>
+          </div>
+
+          {/* C — Avisos no mês */}
+          <div className="col-span-12 sm:col-span-6 lg:col-span-3 bg-white border border-blue-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default bg-linear-to-br from-blue-50 to-white">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                <Megaphone size={18} className="text-blue-600" />
+              </div>
+              <span className="text-[11px] text-gray-400 border border-gray-200 px-2 py-1 rounded-full">Mar/2026</span>
+            </div>
+            <p className="text-[28px] font-extrabold tracking-tight text-gray-900 leading-none">3</p>
+            <p className="mt-1 text-xs font-semibold text-gray-700">Avisos enviados</p>
+            <button
+              className="mt-2 text-[11px] text-blue-600 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
+              onClick={() => alert("Criar aviso (mock)")}
+            >
+              + Criar novo aviso →
+            </button>
+          </div>
+
+          {/* D — Taxa de ocupação */}
+          <div className="col-span-12 sm:col-span-6 lg:col-span-3 bg-white border border-emerald-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default bg-linear-to-br from-emerald-50 to-white">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <Building2 size={18} className="text-emerald-600" />
+              </div>
+              <span className="text-[11px] text-emerald-600 border border-emerald-200 bg-emerald-50 px-2 py-1 rounded-full">94%</span>
+            </div>
+            <p className="text-[28px] font-extrabold tracking-tight text-gray-900 leading-none">94<span className="text-base font-semibold text-gray-400">/100</span></p>
+            <p className="mt-1 text-xs font-semibold text-gray-700">Unidades ocupadas</p>
+            <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: "94%" }} />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Análise por categoria + Atividade recente ── */}
+        <section className="grid grid-cols-12 gap-4">
+
+          {/* E — Ocorrências por categoria */}
+          <div className="col-span-12 lg:col-span-7 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center">
+                  <BarChart2 size={16} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="m-0 text-sm font-semibold text-gray-900">Ocorrências por categoria</h3>
+                  <p className="mt-0.5 text-xs text-gray-400">Distribuição do mês atual</p>
+                </div>
+              </div>
+              <span className="text-[11px] text-gray-400 border border-gray-200 px-2.5 py-1 rounded-full whitespace-nowrap">
+                {ocorrencias.length} total
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart
+                data={["Manutenção", "Barulho", "Reclamação", "Sugestão", "Dúvida"].map((cat) => ({
+                  name: cat,
+                  total: ocorrencias.filter((o) => o.categoria === cat).length,
+                }))}
+                margin={{ top: 4, right: 8, left: -24, bottom: 0 }}
+              >
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip
+                  cursor={{ fill: "#f0f4ff" }}
+                  contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 12 }}
+                />
+                <Bar dataKey="total" name="Ocorrências" radius={[6, 6, 0, 0]}>
+                  {["Manutenção", "Barulho", "Reclamação", "Sugestão", "Dúvida"].map((_, i) => (
+                    <Cell key={i} fill={["#6366f1", "#f59e0b", "#f43f5e", "#10b981", "#3b82f6"][i]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* F — Atividade recente */}
+          <div className="col-span-12 lg:col-span-5 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
+                <Activity size={16} className="text-gray-600" />
+              </div>
+              <div>
+                <h3 className="m-0 text-sm font-semibold text-gray-900">Atividade recente</h3>
+                <p className="mt-0.5 text-xs text-gray-400">Últimas ações no sistema</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-0">
+              {[
+                { icon: AlertCircle, color: "text-rose-500 bg-rose-50", label: "Nova ocorrência aberta", sub: "Apto 14 · Barulho", time: "há 12 min" },
+                { icon: CheckCircle2, color: "text-emerald-500 bg-emerald-50", label: "Ocorrência concluída", sub: "OC-20260005 · Manutenção", time: "há 1h" },
+                { icon: UserPlus, color: "text-indigo-500 bg-indigo-50", label: "Novo morador cadastrado", sub: "Apto 08 · Isabela S.", time: "há 3h" },
+                { icon: FileText, color: "text-blue-500 bg-blue-50", label: "Aviso publicado", sub: "Reunião de condomínio", time: "há 1 dia" },
+                { icon: TrendingDown, color: "text-amber-500 bg-amber-50", label: "Boleto em atraso", sub: "Apto 22 · R$ 580", time: "há 2 dias" },
+              ].map((item, i) => {
+                const Icon = item.icon;
+                return (
+                  <div key={i} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${item.color}`}>
+                      <Icon size={13} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 leading-tight">{item.label}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{item.sub}</p>
+                    </div>
+                    <span className="text-[10px] text-gray-400 shrink-0 mt-0.5">{item.time}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
