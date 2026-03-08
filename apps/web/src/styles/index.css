@@ -29,13 +29,27 @@ html.dark #root { background-color: #0f172a; }
   html.dark .bg-gray-100         { background-color: #1e293b; }
   html.dark .bg-gray-200         { background-color: #334155; }
 
-  /* Gradientes → card escuro */
+  /* Gradientes → card escuro (background-image: none para gradient não sobrescrever) */
   html.dark [class*="from-indigo-50"],
   html.dark [class*="from-violet-50"],
   html.dark [class*="from-amber-50"],
   html.dark [class*="from-blue-50"],
   html.dark [class*="from-emerald-50"],
-  html.dark [class*="from-rose-50"] { background-color: #1e293b; }
+  html.dark [class*="from-rose-50"] { background-color: #1e293b; background-image: none; }
+
+  /* Backgrounds coloridos (50/100) → escuro */
+  html.dark .bg-indigo-50,
+  html.dark .bg-violet-50,
+  html.dark .bg-amber-50,
+  html.dark .bg-blue-50,
+  html.dark .bg-emerald-50,
+  html.dark .bg-rose-50        { background-color: #1e293b; }
+  html.dark .bg-indigo-100,
+  html.dark .bg-violet-100,
+  html.dark .bg-amber-100,
+  html.dark .bg-blue-100,
+  html.dark .bg-emerald-100,
+  html.dark .bg-rose-100       { background-color: #334155; }
 
   /* Texto */
   html.dark .text-gray-950,
