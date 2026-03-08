@@ -235,10 +235,10 @@ export default function ListaOcorrencias() {
     try {
       await updateOcorrencia(detalhe.id, {
         status: editStatus,
-        responsavel: editResponsavel || undefined,
-        resposta_interna: editRespostaInterna || undefined,
-        resposta_morador: editRespostaMorador || undefined,
-        motivo_cancelamento: editStatus === "Cancelado" ? editMotivoCancelamento.trim() : undefined,
+        responsavel: editResponsavel || null,
+        resposta_interna: editRespostaInterna || null,
+        resposta_morador: editRespostaMorador || null,
+        motivo_cancelamento: editStatus === "Cancelado" ? editMotivoCancelamento.trim() : null,
       });
       setDetalhe(null);
       load();

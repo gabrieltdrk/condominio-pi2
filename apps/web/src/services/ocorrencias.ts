@@ -44,10 +44,10 @@ export type CreateOcorrenciaPayload = {
 
 export type UpdateOcorrenciaPayload = {
   status?: OcorrenciaStatus;
-  responsavel?: string;
-  resposta_interna?: string;
-  resposta_morador?: string;
-  motivo_cancelamento?: string;
+  responsavel?: string | null;
+  resposta_interna?: string | null;
+  resposta_morador?: string | null;
+  motivo_cancelamento?: string | null;
 };
 
 export type UpdateOcorrenciaMoradorPayload = {
