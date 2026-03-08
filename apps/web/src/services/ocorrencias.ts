@@ -64,14 +64,23 @@ export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
 
-  let query = supabase
-    .from("ocorrencias")
-    .select("*, profiles(name), ocorrencia_curtidas(user_id)")
-    .order("created_at", { ascending: false });
+  // Tenta com curtidas; se a tabela ainda não existir, cai no fallback
+  const buildQuery = (withCurtidas: boolean) => {
+    let q = supabase
+      .from("ocorrencias")
+      .select(withCurtidas ? "*, profiles(name), ocorrencia_curtidas(user_id)" : "*, profiles(name)")
+      .order("created_at", { ascending: false });
+    if (limit) q = q.limit(limit);
+    return q;
+  };
 
-  if (limit) query = query.limit(limit);
+  let { data, error } = await buildQuery(true);
 
-  const { data, error } = await query;
+  if (error) {
+    // Provavelmente a tabela ocorrencia_curtidas ainda não foi criada — tenta sem ela
+    ({ data, error } = await buildQuery(false));
+  }
+
   if (error) throw new Error("Erro ao carregar ocorrências.");
 
   return (data as unknown as RawOcorrencia[]).map((o) => ({
