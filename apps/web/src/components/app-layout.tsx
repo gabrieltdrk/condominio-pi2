@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, Building2, ClipboardList, Home, LogOut, Menu, Megaphone, Trash2, X } from "lucide-react";
 import { logout, getUser } from "../services/auth";
@@ -37,23 +37,36 @@ export default function AppLayout({ title, children }: { title: string; children
   // ── Notificações ──────────────────────────────────────────────────────
   const [notifs, setNotifs] = useState<Notificacao[]>([]);
   const [bellOpen, setBellOpen] = useState(false);
-  const bellRef = useRef<HTMLDivElement>(null);
+  const [bellPos, setBellPos] = useState({ top: 0, left: 0 });
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const unread = notifs.filter((n) => !n.lida).length;
 
-  function loadNotifs() {
+  const loadNotifs = useCallback(() => {
     listNotificacoes().then(setNotifs).catch(() => {});
-  }
+  }, []);
 
   useEffect(() => {
     loadNotifs();
-    const interval = setInterval(loadNotifs, 30000); // poll a cada 30s
+    const interval = setInterval(loadNotifs, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadNotifs]);
+
+  function openBell() {
+    if (bellRef.current) {
+      const rect = bellRef.current.getBoundingClientRect();
+      setBellPos({ top: rect.bottom + 8, left: Math.min(rect.left, window.innerWidth - 336) });
+    }
+    setBellOpen((v) => !v);
+  }
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        bellRef.current && !bellRef.current.contains(e.target as Node)
+      ) {
         setBellOpen(false);
       }
     }
@@ -95,9 +108,10 @@ export default function AppLayout({ title, children }: { title: string; children
         <span className="font-bold text-sm text-gray-900 leading-none flex-1">Condomínio</span>
 
         {/* Sininho de notificações */}
-        <div ref={bellRef} className="relative">
+        <div className="relative">
           <button
-            onClick={() => setBellOpen((v) => !v)}
+            ref={bellRef}
+            onClick={openBell}
             className="relative p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer border-none bg-transparent transition-colors"
             title="Notificações"
           >
@@ -109,9 +123,13 @@ export default function AppLayout({ title, children }: { title: string; children
             )}
           </button>
 
-          {/* Dropdown de notificações */}
+          {/* Dropdown de notificações — posição FIXA para não ser clipado pelo sidebar */}
           {bellOpen && (
-            <div className="absolute left-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+            <div
+              ref={dropdownRef}
+              style={{ top: bellPos.top, left: bellPos.left }}
+              className="fixed w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-200 overflow-hidden"
+            >
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">

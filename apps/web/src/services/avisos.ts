@@ -107,6 +107,14 @@ export async function createAviso(payload: CreateAvisoPayload): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function updateAviso(id: string, payload: Partial<CreateAvisoPayload>): Promise<void> {
+  const { error } = await supabase
+    .from("avisos")
+    .update({ ...payload, data_expiracao: payload.data_expiracao || null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteAviso(id: string): Promise<void> {
   const { error } = await supabase.from("avisos").delete().eq("id", id);
   if (error) throw new Error(error.message);

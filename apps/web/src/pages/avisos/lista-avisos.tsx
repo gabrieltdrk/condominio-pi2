@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ArrowDown, ArrowUp, ArrowUpDown,
-  Megaphone, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
+  Megaphone, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import AppLayout from "../../components/app-layout";
 import { getUser } from "../../services/auth";
@@ -11,6 +11,7 @@ import {
   listAvisos,
   toggleCurtidaAviso,
   toggleFixarAviso,
+  updateAviso,
   AVISO_TIPOS,
   AVISO_TIPO_COLORS,
   type Aviso,
@@ -54,7 +55,10 @@ function parseDate(d: string): Date {
 function fmt(d: string | null) {
   if (!d) return "—";
   const date = parseDate(d);
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(2);
+  return `${dd}/${mm}/${yy}`;
 }
 
 function isExpired(d: string | null) {
@@ -81,6 +85,11 @@ export default function ListaAvisos() {
   const [form, setForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const [editando, setEditando] = useState<Aviso | null>(null);
+  const [editForm, setEditForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const [detalhe, setDetalhe] = useState<Aviso | null>(null);
 
@@ -136,6 +145,29 @@ export default function ListaAvisos() {
       setFormError(err instanceof Error ? err.message : "Erro ao criar aviso.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function openEditar(a: Aviso) {
+    setEditando(a);
+    setEditForm({ titulo: a.titulo, descricao: a.descricao, tipo: a.tipo, data_expiracao: a.data_expiracao ?? "", arquivo_url: a.arquivo_url ?? "" });
+    setEditError("");
+    setDetalhe(null);
+  }
+
+  async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editando) return;
+    setEditSubmitting(true);
+    setEditError("");
+    try {
+      await updateAviso(editando.id, { ...editForm, data_expiracao: editForm.data_expiracao || undefined });
+      setEditando(null);
+      load();
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -305,6 +337,13 @@ export default function ListaAvisos() {
                           <td className="px-3 py-3 border-b border-gray-100" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1.5">
                               <button
+                                onClick={() => openEditar(a)}
+                                title="Editar"
+                                className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-gray-400 cursor-pointer transition-colors"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
                                 onClick={() => handleFixar(a)}
                                 title={a.fixado ? "Desafixar" : "Fixar"}
                                 className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${a.fixado ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-white border-gray-200 text-gray-400 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600"}`}
@@ -438,12 +477,20 @@ export default function ListaAvisos() {
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-semibold text-gray-600">Data de expiração <span className="text-gray-400 font-normal">(opcional)</span></label>
-                  <input
-                    type="date"
-                    value={form.data_expiracao}
-                    onChange={(e) => setForm({ ...form, data_expiracao: e.target.value })}
-                    className={inputCls}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={form.data_expiracao}
+                      onChange={(e) => setForm({ ...form, data_expiracao: e.target.value })}
+                      className={inputCls}
+                    />
+                    {form.data_expiracao && (
+                      <button type="button" onClick={() => setForm({ ...form, data_expiracao: "" })}
+                        className="px-3 rounded-lg border border-gray-200 bg-white text-gray-400 hover:text-rose-500 hover:border-rose-200 cursor-pointer text-xs shrink-0 transition-colors">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -526,9 +573,16 @@ export default function ListaAvisos() {
                 {detalhe.curtidas_count > 0 ? `${detalhe.curtidas_count} curtida${detalhe.curtidas_count !== 1 ? "s" : ""}` : "Curtir"}
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {isAdmin && (
                   <>
+                    <button
+                      onClick={() => openEditar(detalhe)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-gray-600 text-sm font-semibold cursor-pointer transition-colors"
+                    >
+                      <Pencil size={14} />
+                      Editar
+                    </button>
                     <button
                       onClick={() => { handleFixar(detalhe); setDetalhe(null); }}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${detalhe.fixado ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-white border-gray-200 text-gray-600 hover:bg-indigo-50"}`}
@@ -550,6 +604,62 @@ export default function ListaAvisos() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal — Editar aviso ── */}
+      {editando && (
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setEditando(null)}>
+          <div
+            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="m-0 text-lg font-semibold text-gray-900">Editar Aviso</h3>
+              <button className="p-1.5 rounded-lg border-none bg-transparent text-gray-400 hover:bg-gray-100 cursor-pointer" onClick={() => setEditando(null)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form className="grid gap-4" onSubmit={handleEdit}>
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-gray-600">Título</label>
+                <input type="text" value={editForm.titulo} onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })} required maxLength={120} className={inputCls} />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-gray-600">Descrição</label>
+                <textarea value={editForm.descricao} onChange={(e) => setEditForm({ ...editForm, descricao: e.target.value })} required rows={4} className={`${inputCls} resize-none`} />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold text-gray-600">Tipo</label>
+                  <select value={editForm.tipo} onChange={(e) => setEditForm({ ...editForm, tipo: e.target.value as AvisoTipo })} className={inputCls}>
+                    {AVISO_TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold text-gray-600">Data de expiração <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <div className="flex gap-2">
+                    <input type="date" value={editForm.data_expiracao} onChange={(e) => setEditForm({ ...editForm, data_expiracao: e.target.value })} className={inputCls} />
+                    {editForm.data_expiracao && (
+                      <button type="button" onClick={() => setEditForm({ ...editForm, data_expiracao: "" })}
+                        className="px-3 rounded-lg border border-gray-200 bg-white text-gray-400 hover:text-rose-500 hover:border-rose-200 cursor-pointer text-xs shrink-0 transition-colors">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {editError && <p className="text-sm text-red-500 m-0">{editError}</p>}
+              <div className="flex justify-end gap-3 mt-1">
+                <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setEditando(null)} disabled={editSubmitting}>
+                  Cancelar
+                </button>
+                <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={editSubmitting}>
+                  {editSubmitting ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
