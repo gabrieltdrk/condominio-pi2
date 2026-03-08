@@ -208,7 +208,7 @@ export default function DashboardAdmin() {
               <LineChart data={financeiroTrend} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
                 <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip content={<ChartTooltip />} />
                 <Line type="monotone" dataKey="receitas" stroke="#6366f1" strokeWidth={2.5} dot={false} />
                 <Line type="monotone" dataKey="despesas" stroke="#f43f5e" strokeWidth={2} dot={false} strokeDasharray="4 3" />
