@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
-  ClipboardList, Plus, ThumbsUp, X,
+  ClipboardList, Lock, Plus, ThumbsUp, X,
 } from "lucide-react";
 import AppLayout from "../../components/app-layout";
 import { getUser } from "../../services/auth";
 import {
   createOcorrencia,
+  getCurrentUserId,
   listOcorrencias,
   toggleCurtida,
   updateOcorrencia,
+  updateOcorrenciaMorador,
   PRIORIDADE_POR_CATEGORIA,
   type CreateOcorrenciaPayload,
   type Ocorrencia,
@@ -40,6 +42,13 @@ const URGENCIA_COLORS: Record<OcorrenciaUrgencia, string> = {
   Alta: "bg-red-50 text-red-700 border-red-200",
 };
 
+// Cor da barra lateral da linha por urgência
+const URGENCIA_BAR: Record<OcorrenciaUrgencia, string> = {
+  Alta: "bg-red-400",
+  Média: "bg-amber-400",
+  Baixa: "bg-green-400",
+};
+
 const CURTIDAS_DESTAQUE = 3;
 
 type SortKey = "protocolo" | "author_name" | "assunto" | "categoria" | "urgencia" | "status" | "created_at" | "curtidas_count";
@@ -50,6 +59,7 @@ const EMPTY_FORM: CreateOcorrenciaPayload = {
   assunto: "",
   descricao: "",
   urgencia: PRIORIDADE_POR_CATEGORIA[CATEGORIAS[0]],
+  privado: false,
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -69,6 +79,27 @@ const STATUS_ORDER: Record<OcorrenciaStatus, number> = {
   "Pendente Terceiros": 3, Concluído: 4, Cancelado: 5,
 };
 
+// ── Toggle switch ──────────────────────────────────────────────────────────
+function Toggle({ checked, onChange, label, sublabel }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string; sublabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-between w-full p-3 rounded-xl border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors cursor-pointer bg-white"
+    >
+      <div className="text-left">
+        <p className="text-sm font-semibold text-gray-700">{label}</p>
+        {sublabel && <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>}
+      </div>
+      <div className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ml-4 ${checked ? "bg-indigo-600" : "bg-gray-200"}`}>
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${checked ? "translate-x-5" : "translate-x-0"}`} />
+      </div>
+    </button>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ListaOcorrencias() {
   const user = getUser();
@@ -77,6 +108,7 @@ export default function ListaOcorrencias() {
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Filters
   const [filterStatus, setFilterStatus] = useState<OcorrenciaStatus[]>([]);
@@ -94,10 +126,17 @@ export default function ListaOcorrencias() {
 
   // Detalhe modal
   const [detalhe, setDetalhe] = useState<Ocorrencia | null>(null);
+  // Admin fields
   const [editStatus, setEditStatus] = useState<OcorrenciaStatus>("Aberto");
   const [editResponsavel, setEditResponsavel] = useState("");
   const [editRespostaInterna, setEditRespostaInterna] = useState("");
   const [editRespostaMorador, setEditRespostaMorador] = useState("");
+  // Morador edit fields
+  const [editAssunto, setEditAssunto] = useState("");
+  const [editDescricao, setEditDescricao] = useState("");
+  const [editCategoria, setEditCategoria] = useState("");
+  const [editPrivado, setEditPrivado] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -110,7 +149,10 @@ export default function ListaOcorrencias() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    getCurrentUserId().then(setCurrentUserId);
+  }, []);
 
   // ── Filters + Sort ────────────────────────────────────────────────────────
   const filtered = ocorrencias.filter((o) => {
@@ -166,14 +208,20 @@ export default function ListaOcorrencias() {
 
   function openDetalhe(o: Ocorrencia) {
     setDetalhe(o);
+    // Admin fields
     setEditStatus(o.status);
     setEditResponsavel(o.responsavel ?? "");
     setEditRespostaInterna(o.resposta_interna ?? "");
     setEditRespostaMorador(o.resposta_morador ?? "");
+    // Morador fields
+    setEditAssunto(o.assunto);
+    setEditDescricao(o.descricao);
+    setEditCategoria(o.categoria);
+    setEditPrivado(o.privado);
     setSaveError("");
   }
 
-  async function handleSaveGestao(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSaveAdmin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!detalhe) return;
     setSaving(true);
@@ -194,8 +242,29 @@ export default function ListaOcorrencias() {
     }
   }
 
+  async function handleSaveMorador(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!detalhe) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await updateOcorrenciaMorador(detalhe.id, {
+        assunto: editAssunto || undefined,
+        descricao: editDescricao || undefined,
+        categoria: editCategoria || undefined,
+        privado: editPrivado,
+      });
+      setDetalhe(null);
+      load();
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleCurtir(e: React.MouseEvent, o: Ocorrencia) {
-    e.stopPropagation(); // não abre o modal ao curtir
+    e.stopPropagation();
     setOcorrencias((prev) =>
       prev.map((item) =>
         item.id !== o.id ? item : {
@@ -219,6 +288,8 @@ export default function ListaOcorrencias() {
   const fmt = (d: string) =>
     new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
+  const isOwner = (o: Ocorrencia) => !!currentUserId && o.created_by === currentUserId;
+
   // ── Sort header ────────────────────────────────────────────────────────────
   function SortIcon({ col }: { col: SortKey }) {
     if (sortKey !== col) return <ArrowUpDown size={13} className="opacity-30 shrink-0" />;
@@ -230,7 +301,7 @@ export default function ListaOcorrencias() {
   function SortTh({ col, label }: { col: SortKey; label: string }) {
     return (
       <th
-        className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-gray-800"
+        className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => handleSort(col)}
       >
         <span className="flex items-center gap-1">
@@ -245,18 +316,17 @@ export default function ListaOcorrencias() {
     <AppLayout title={isAdmin ? "Gestão de Ocorrências" : "Minhas Ocorrências"}>
       <div className="grid gap-4">
 
-        {/* ── Header: contagem + filtro categoria + botão ── */}
+        {/* ── Header ── */}
         <div className="grid gap-2">
-          {/* Linha 1: contagem + botão Nova Ocorrência */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <ClipboardList size={18} className="text-gray-400" />
+              <ClipboardList size={18} className="text-indigo-400" />
               <span className="text-sm text-gray-500">
                 {loading ? "Carregando..." : `${displayed.length} ocorrência${displayed.length !== 1 ? "s" : ""}`}
               </span>
             </div>
             <button
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold cursor-pointer border-none transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold cursor-pointer border-none transition-all shrink-0 shadow-sm shadow-indigo-200"
               onClick={() => { setForm(EMPTY_FORM); setFormError(""); setNovaOpen(true); }}
             >
               <Plus size={15} />
@@ -264,7 +334,6 @@ export default function ListaOcorrencias() {
             </button>
           </div>
 
-          {/* Linha 2: filtro categoria (admin) */}
           {isAdmin && (
             <select
               value={filterCategoria}
@@ -277,7 +346,7 @@ export default function ListaOcorrencias() {
           )}
         </div>
 
-        {/* ── Filtros de status (chips multi-select, scroll horizontal) ── */}
+        {/* ── Filtros de status ── */}
         <div className="flex items-center gap-2 overflow-hidden">
           <span className="text-xs text-gray-400 font-semibold shrink-0">Status:</span>
           <div
@@ -286,7 +355,7 @@ export default function ListaOcorrencias() {
           >
             <button
               onClick={() => setFilterStatus([])}
-              className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-colors shrink-0 ${
+              className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-all shrink-0 ${
                 filterStatus.length === 0
                   ? "bg-gray-900 text-white border-gray-900"
                   : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
@@ -300,7 +369,7 @@ export default function ListaOcorrencias() {
                 <button
                   key={s}
                   onClick={() => toggleStatusFilter(s)}
-                  className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-colors shrink-0 ${
+                  className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-all shrink-0 ${
                     active ? STATUS_COLORS[s] : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
                   }`}
                 >
@@ -334,7 +403,8 @@ export default function ListaOcorrencias() {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-gray-50">
+                  <tr className="bg-linear-to-r from-gray-50 to-indigo-50/30">
+                    <th className="w-1 p-0 border-b border-gray-100" />
                     <SortTh col="protocolo" label="Protocolo" />
                     {isAdmin && <SortTh col="author_name" label="Morador" />}
                     <SortTh col="assunto" label="Assunto" />
@@ -346,20 +416,26 @@ export default function ListaOcorrencias() {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayed.map((o) => {
+                  {displayed.map((o, idx) => {
                     const destaque = o.curtidas_count >= CURTIDAS_DESTAQUE;
                     return (
                       <tr
                         key={o.id}
                         onClick={() => openDetalhe(o)}
-                        className={`cursor-pointer transition-colors hover:bg-indigo-50/40 ${destaque ? "bg-amber-50/40" : ""}`}
+                        style={{ animationDelay: `${idx * 30}ms` }}
+                        className={`cursor-pointer transition-all duration-150 hover:bg-indigo-50/50 hover:shadow-sm group ${destaque ? "bg-amber-50/40" : ""}`}
                       >
+                        {/* Barra colorida por urgência */}
+                        <td className="p-0 w-1 border-b border-gray-100">
+                          <div className={`w-1 h-full min-h-12 rounded-sm ${URGENCIA_BAR[o.urgencia]} opacity-70 group-hover:opacity-100 transition-opacity`} />
+                        </td>
                         <td className="px-3 py-3 border-b border-gray-100 font-mono text-xs text-gray-500 whitespace-nowrap">
                           {destaque && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 mb-0.5" />}
+                          {o.privado && <Lock size={10} className="inline mr-1 text-gray-400 mb-0.5" />}
                           {o.protocolo}
                         </td>
                         {isAdmin && <td className="px-3 py-3 border-b border-gray-100 font-medium text-gray-800 whitespace-nowrap">{o.author_name}</td>}
-                        <td className="px-3 py-3 border-b border-gray-100 max-w-56 truncate text-gray-700">{o.assunto}</td>
+                        <td className="px-3 py-3 border-b border-gray-100 max-w-56 truncate text-gray-700 font-medium">{o.assunto}</td>
                         {isAdmin && <td className="px-3 py-3 border-b border-gray-100 text-gray-500 whitespace-nowrap">{o.categoria}</td>}
                         <td className="px-3 py-3 border-b border-gray-100">
                           <Badge text={o.urgencia} cls={URGENCIA_COLORS[o.urgencia]} />
@@ -378,7 +454,7 @@ export default function ListaOcorrencias() {
                             <button
                               onClick={(e) => handleCurtir(e, o)}
                               title={o.user_curtiu ? "Remover curtida" : "Curtir"}
-                              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm font-semibold cursor-pointer transition-all
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm font-semibold cursor-pointer transition-all active:scale-95
                                 ${o.user_curtiu
                                   ? "bg-indigo-50 border-indigo-200 text-indigo-600"
                                   : "bg-white border-gray-200 text-gray-400 hover:border-indigo-200 hover:text-indigo-500"
@@ -401,54 +477,61 @@ export default function ListaOcorrencias() {
         {/* ── Cards — mobile (< md) ── */}
         {displayed.length > 0 && (
           <div className="md:hidden grid gap-3">
-            {displayed.map((o) => {
+            {displayed.map((o, idx) => {
               const destaque = o.curtidas_count >= CURTIDAS_DESTAQUE;
               return (
                 <div
                   key={o.id}
                   onClick={() => openDetalhe(o)}
-                  className={`bg-white border rounded-2xl p-4 shadow-sm transition-all cursor-pointer active:scale-[0.99]
-                    ${destaque ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-indigo-200"}`}
+                  style={{ animationDelay: `${idx * 40}ms` }}
+                  className={`bg-white border rounded-2xl p-4 shadow-sm transition-all cursor-pointer active:scale-[0.99] overflow-hidden relative
+                    ${destaque ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-indigo-200 hover:shadow-md"}`}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="min-w-0">
-                      <p className="font-mono text-xs text-gray-400 truncate">
-                        {o.protocolo}{o.author_name && o.author_name !== "—" ? ` — ${o.author_name}` : ""}
-                      </p>
-                      <p className="text-base font-semibold text-gray-800 mt-0.5 leading-snug">{o.assunto}</p>
-                    </div>
-                    <Badge text={o.urgencia} cls={URGENCIA_COLORS[o.urgencia]} />
-                  </div>
+                  {/* Barra colorida à esquerda */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${URGENCIA_BAR[o.urgencia]}`} />
 
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    <Badge text={o.status} cls={STATUS_COLORS[o.status]} />
-                    {isAdmin && (
-                      <span className="text-xs font-medium text-gray-500 border border-gray-200 px-2.5 py-0.5 rounded-full">
-                        {o.categoria}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-400">{fmt(o.created_at)}</span>
-                    {isAdmin ? (
-                      <div className="flex items-center gap-1 text-sm text-gray-400">
-                        <ThumbsUp size={13} />
-                        {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                  <div className="pl-2">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs text-gray-400 truncate flex items-center gap-1">
+                          {o.privado && <Lock size={10} className="shrink-0" />}
+                          {o.protocolo}{o.author_name && o.author_name !== "—" ? ` — ${o.author_name}` : ""}
+                        </p>
+                        <p className="text-base font-semibold text-gray-800 mt-0.5 leading-snug">{o.assunto}</p>
                       </div>
-                    ) : (
-                      <button
-                        onClick={(e) => handleCurtir(e, o)}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm font-semibold cursor-pointer transition-all
-                          ${o.user_curtiu
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-600"
-                            : "bg-white border-gray-200 text-gray-400"
-                          }`}
-                      >
-                        <ThumbsUp size={13} />
-                        {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
-                      </button>
-                    )}
+                      <Badge text={o.urgencia} cls={URGENCIA_COLORS[o.urgencia]} />
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      <Badge text={o.status} cls={STATUS_COLORS[o.status]} />
+                      {isAdmin && (
+                        <span className="text-xs font-medium text-gray-500 border border-gray-200 px-2.5 py-0.5 rounded-full">
+                          {o.categoria}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-400">{fmt(o.created_at)}</span>
+                      {isAdmin ? (
+                        <div className="flex items-center gap-1 text-sm text-gray-400">
+                          <ThumbsUp size={13} />
+                          {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => handleCurtir(e, o)}
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm font-semibold cursor-pointer transition-all active:scale-95
+                            ${o.user_curtiu
+                              ? "bg-indigo-50 border-indigo-200 text-indigo-600"
+                              : "bg-white border-gray-200 text-gray-400"
+                            }`}
+                        >
+                          <ThumbsUp size={13} />
+                          {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -512,13 +595,19 @@ export default function ListaOcorrencias() {
                 />
               </div>
 
-              <div className="grid gap-2">
-                <label className="text-sm font-semibold text-gray-600">Prioridade</label>
-                <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg">
-                  <Badge text={form.urgencia} cls={URGENCIA_COLORS[form.urgencia]} />
-                  <span className="text-sm text-gray-400">definida automaticamente pela categoria</span>
-                </div>
+              {/* Prioridade — somente leitura, sem caixa */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-600">Prioridade:</span>
+                <Badge text={form.urgencia} cls={URGENCIA_COLORS[form.urgencia]} />
               </div>
+
+              {/* Flag privado */}
+              <Toggle
+                checked={form.privado}
+                onChange={(v) => setForm({ ...form, privado: v })}
+                label="Ocorrência privada"
+                sublabel="Somente administradores poderão visualizar"
+              />
 
               {formError && <p className="text-sm text-red-500 m-0">{formError}</p>}
 
@@ -526,7 +615,7 @@ export default function ListaOcorrencias() {
                 <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setNovaOpen(false)} disabled={submitting}>
                   Cancelar
                 </button>
-                <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-colors" disabled={submitting}>
+                <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={submitting}>
                   {submitting ? "Enviando..." : "Enviar ocorrência"}
                 </button>
               </div>
@@ -542,9 +631,18 @@ export default function ListaOcorrencias() {
             className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Cabeçalho — sem badges de prioridade/status */}
+            {/* Barra colorida no topo */}
+            <div className={`-mx-6 -mt-6 h-1 rounded-t-2xl mb-6 ${URGENCIA_BAR[detalhe.urgencia]}`} />
+
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
+                <div className="flex items-center gap-2 mb-1">
+                  {detalhe.privado && (
+                    <span className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full">
+                      <Lock size={10} /> Privado
+                    </span>
+                  )}
+                </div>
                 <h3 className="m-0 text-lg font-semibold text-gray-900">{detalhe.assunto}</h3>
                 <p className="mt-1 text-sm text-gray-400">
                   {detalhe.protocolo} · {detalhe.categoria} · {detalhe.localizacao}
@@ -556,7 +654,7 @@ export default function ListaOcorrencias() {
             </div>
 
             {/* Descrição */}
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
               <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
             </div>
@@ -569,9 +667,9 @@ export default function ListaOcorrencias() {
               </div>
             )}
 
-            {/* Admin form */}
+            {/* ── Form ADMIN ── */}
             {isAdmin && (
-              <form className="grid gap-4" onSubmit={handleSaveGestao}>
+              <form className="grid gap-4" onSubmit={handleSaveAdmin}>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div className="grid gap-2">
                     <label className="text-sm font-semibold text-gray-600">Status</label>
@@ -597,14 +695,49 @@ export default function ListaOcorrencias() {
                 {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
                 <div className="flex justify-end gap-3">
                   <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-colors" disabled={saving}>
+                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
                     {saving ? "Salvando..." : "Salvar alterações"}
                   </button>
                 </div>
               </form>
             )}
 
-            {!isAdmin && (
+            {/* ── Form MORADOR (dono) ── */}
+            {!isAdmin && isOwner(detalhe) && (
+              <form className="grid gap-4 border-t border-gray-100 pt-4" onSubmit={handleSaveMorador}>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide m-0">Editar ocorrência</p>
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold text-gray-600">Assunto</label>
+                  <input type="text" value={editAssunto} onChange={(e) => setEditAssunto(e.target.value)} className={inputCls} maxLength={100} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold text-gray-600">Descrição</label>
+                  <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold text-gray-600">Categoria</label>
+                  <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} className={inputCls}>
+                    {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <Toggle
+                  checked={editPrivado}
+                  onChange={setEditPrivado}
+                  label="Ocorrência privada"
+                  sublabel="Somente administradores poderão visualizar"
+                />
+                {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
+                <div className="flex justify-end gap-3">
+                  <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
+                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
+                    {saving ? "Salvando..." : "Salvar alterações"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── Morador não dono — só fechar ── */}
+            {!isAdmin && !isOwner(detalhe) && (
               <div className="flex justify-end">
                 <button className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)}>
                   Fechar

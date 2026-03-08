@@ -20,6 +20,7 @@ export type Ocorrencia = {
   descricao: string;
   urgencia: OcorrenciaUrgencia;
   status: OcorrenciaStatus;
+  privado: boolean;
   created_by: string;
   responsavel: string | null;
   resposta_interna: string | null;
@@ -37,6 +38,7 @@ export type CreateOcorrenciaPayload = {
   assunto: string;
   descricao: string;
   urgencia: OcorrenciaUrgencia;
+  privado: boolean;
 };
 
 export type UpdateOcorrenciaPayload = {
@@ -44,6 +46,13 @@ export type UpdateOcorrenciaPayload = {
   responsavel?: string;
   resposta_interna?: string;
   resposta_morador?: string;
+};
+
+export type UpdateOcorrenciaMoradorPayload = {
+  assunto?: string;
+  descricao?: string;
+  categoria?: string;
+  privado?: boolean;
 };
 
 // Prioridade automática por categoria
@@ -55,12 +64,15 @@ export const PRIORIDADE_POR_CATEGORIA: Record<string, OcorrenciaUrgencia> = {
   Dúvida: "Baixa",
 };
 
+export async function getCurrentUserId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user.id ?? null;
+}
 
 export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
 
-  // Query principal — apenas ocorrências + perfil do autor
   let q = supabase
     .from("ocorrencias")
     .select("*, profiles!created_by(name)")
@@ -82,7 +94,6 @@ export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
 
   if (ocorrencias.length === 0) return ocorrencias;
 
-  // Busca curtidas separado — não quebra se a tabela não existir
   const ids = ocorrencias.map((o) => o.id);
   const { data: curtidas } = await supabase
     .from("ocorrencia_curtidas")
@@ -126,6 +137,19 @@ export async function updateOcorrencia(id: string, payload: UpdateOcorrenciaPayl
     .from("ocorrencias")
     .update({ ...payload, updated_at: new Date().toISOString() })
     .eq("id", id);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function updateOcorrenciaMorador(id: string, payload: UpdateOcorrenciaMoradorPayload): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado.");
+
+  const { error } = await supabase
+    .from("ocorrencias")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("created_by", user.id);
 
   if (error) throw new Error(error.message);
 }
