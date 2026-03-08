@@ -74,10 +74,11 @@ html.dark #root { background-color: #0f172a; }
   html.dark header               { background-color: #0f172a; border-color: #1e293b; }
 
   /* Tabelas */
-  html.dark table thead tr       { background-color: #0f172a; }
+  html.dark table thead tr       { background-color: #0f172a; background-image: none; }
   html.dark table tbody tr:hover { background-color: #334155; }
   html.dark table td,
   html.dark table th             { border-color: #1e293b; }
+  html.dark table th             { color: #f1f5f9; font-weight: 700; }
 
   /* Hover estados */
   html.dark .hover\:bg-gray-50:hover  { background-color: #1e293b; }
