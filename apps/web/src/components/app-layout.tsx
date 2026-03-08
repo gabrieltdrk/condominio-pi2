@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, Building2, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, User, X } from "lucide-react";
+import { Bell, Building2, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, Sun, User, X } from "lucide-react";
 import { logout, getUser } from "../services/auth";
 import {
   listNotificacoes,
@@ -70,16 +70,25 @@ export default function AppLayout({ title, children }: { title: string; children
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Marcar como lida E remover da lista
+  // Marcar como lida: remove da UI imediatamente, tenta DB em background
   async function handleMarcarLida(id: string) {
-    await marcarNotificacaoLida(id);
     setNotifs((prev) => prev.filter((n) => n.id !== id));
+    marcarNotificacaoLida(id).catch(() => {});
   }
 
   async function handleMarcarTodas() {
-    await marcarTodasLidas();
     setNotifs([]);
+    marcarTodasLidas().catch(() => {});
   }
+
+  // ── Dark mode ─────────────────────────────────────────────────────────
+  const [dark, setDark] = useState(() => localStorage.getItem("darkMode") === "true");
+
+  useEffect(() => {
+    if (dark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+    localStorage.setItem("darkMode", String(dark));
+  }, [dark]);
 
   // ── Gear (configurações) ──────────────────────────────────────────────
   const [gearOpen, setGearOpen] = useState(false);
@@ -260,12 +269,11 @@ export default function AppLayout({ title, children }: { title: string; children
                   Alterar dados pessoais
                 </button>
                 <button
-                  onClick={() => { setGearOpen(false); alert("Modo escuro em desenvolvimento"); }}
+                  onClick={() => { setDark((v) => !v); setGearOpen(false); }}
                   className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer border-none bg-transparent text-left transition-colors"
                 >
-                  <Moon size={15} className="text-gray-400" />
-                  Modo escuro
-                  <span className="ml-auto text-[10px] text-gray-300 border border-gray-200 px-1.5 py-0.5 rounded-full">em breve</span>
+                  {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-gray-400" />}
+                  {dark ? "Modo claro" : "Modo escuro"}
                 </button>
                 <div className="border-t border-gray-100 my-1" />
                 <button

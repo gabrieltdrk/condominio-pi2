@@ -169,6 +169,7 @@ export async function listNotificacoes(): Promise<Notificacao[]> {
   const { data, error } = await supabase
     .from("notificacoes")
     .select("*, avisos(titulo, tipo)")
+    .eq("lida", false)
     .order("created_at", { ascending: false })
     .limit(30);
 
