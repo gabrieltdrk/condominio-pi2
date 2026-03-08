@@ -130,6 +130,14 @@ export default function AppLayout({ title, children }: { title: string; children
               </span>
             )}
           </button>
+
+          {/* Fechar sidebar — só visível no mobile */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 cursor-pointer border-none bg-transparent"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Nav links */}
@@ -218,9 +226,6 @@ export default function AppLayout({ title, children }: { title: string; children
         <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-xl transition-transform duration-300 md:hidden ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <button onClick={() => setSidebarOpen(false)} className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 cursor-pointer border-none bg-transparent">
-          <X size={18} />
-        </button>
         {SidebarContent()}
       </aside>
 
