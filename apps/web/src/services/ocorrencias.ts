@@ -68,7 +68,7 @@ export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
   if (limit) q = q.limit(limit);
 
   const { data, error } = await q;
-  if (error) throw new Error("Erro ao carregar ocorrências.");
+  if (error) throw new Error(`[${error.code}] ${error.message}`);
 
   const ocorrencias: Ocorrencia[] = (
     data as unknown as Array<Omit<Ocorrencia, "author_name" | "curtidas_count" | "user_curtiu"> & { profiles: { name: string } | null }>
