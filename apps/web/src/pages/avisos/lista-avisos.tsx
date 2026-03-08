@@ -480,6 +480,7 @@ export default function ListaAvisos() {
                   <div className="flex gap-2">
                     <input
                       type="date"
+                      lang="pt-BR"
                       value={form.data_expiracao}
                       onChange={(e) => setForm({ ...form, data_expiracao: e.target.value })}
                       className={inputCls}
