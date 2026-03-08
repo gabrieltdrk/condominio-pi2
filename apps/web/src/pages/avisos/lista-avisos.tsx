@@ -42,14 +42,26 @@ function Badge({ text, cls }: { text: string; cls: string }) {
   );
 }
 
+// Parseia "yyyy-mm-dd" ou ISO sem conversão de timezone
+function parseDate(d: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, m - 1, day);
+  }
+  return new Date(d);
+}
+
 function fmt(d: string | null) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const date = parseDate(d);
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
 function isExpired(d: string | null) {
   if (!d) return false;
-  return new Date(d) < new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parseDate(d) < today;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
