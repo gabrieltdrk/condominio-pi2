@@ -63,12 +63,12 @@ export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
   // Query principal — apenas ocorrências + perfil do autor
   let q = supabase
     .from("ocorrencias")
-    .select("*, profiles(name)")
+    .select("*, profiles!created_by(name)")
     .order("created_at", { ascending: false });
   if (limit) q = q.limit(limit);
 
   const { data, error } = await q;
-  if (error) throw new Error(`[${error.code}] ${error.message}`);
+  if (error) throw new Error("Erro ao carregar ocorrências.");
 
   const ocorrencias: Ocorrencia[] = (
     data as unknown as Array<Omit<Ocorrencia, "author_name" | "curtidas_count" | "user_curtiu"> & { profiles: { name: string } | null }>
