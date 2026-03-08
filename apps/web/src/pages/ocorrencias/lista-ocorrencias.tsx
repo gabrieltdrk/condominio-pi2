@@ -347,11 +347,11 @@ export default function ListaOcorrencias() {
         </div>
 
         {/* ── Filtros de status ── */}
-        <div className="flex items-center gap-2 overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs text-gray-400 font-semibold shrink-0">Status:</span>
           <div
-            className="flex gap-2 overflow-x-auto py-1 flex-1"
-            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+            className="flex gap-2 overflow-x-auto py-1 min-w-0 flex-1"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
           >
             <button
               onClick={() => setFilterStatus([])}
