@@ -55,44 +55,54 @@ export const PRIORIDADE_POR_CATEGORIA: Record<string, OcorrenciaUrgencia> = {
   Dúvida: "Baixa",
 };
 
-type RawOcorrencia = Omit<Ocorrencia, "author_name" | "curtidas_count" | "user_curtiu"> & {
-  profiles: { name: string } | null;
-  ocorrencia_curtidas: Array<{ user_id: string }> | null;
-};
 
 export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
 
-  // Tenta com curtidas; se a tabela ainda não existir, cai no fallback
-  const buildQuery = (withCurtidas: boolean) => {
-    let q = supabase
-      .from("ocorrencias")
-      .select(withCurtidas ? "*, profiles(name), ocorrencia_curtidas(user_id)" : "*, profiles(name)")
-      .order("created_at", { ascending: false });
-    if (limit) q = q.limit(limit);
-    return q;
-  };
+  // Query principal — apenas ocorrências + perfil do autor
+  let q = supabase
+    .from("ocorrencias")
+    .select("*, profiles(name)")
+    .order("created_at", { ascending: false });
+  if (limit) q = q.limit(limit);
 
-  let { data, error } = await buildQuery(true);
-
-  if (error) {
-    // Provavelmente a tabela ocorrencia_curtidas ainda não foi criada — tenta sem ela
-    ({ data, error } = await buildQuery(false));
-  }
-
+  const { data, error } = await q;
   if (error) throw new Error("Erro ao carregar ocorrências.");
 
-  return (data as unknown as RawOcorrencia[]).map((o) => ({
+  const ocorrencias: Ocorrencia[] = (
+    data as unknown as Array<Omit<Ocorrencia, "author_name" | "curtidas_count" | "user_curtiu"> & { profiles: { name: string } | null }>
+  ).map((o) => ({
     ...o,
     author_name: o.profiles?.name ?? "—",
-    curtidas_count: o.ocorrencia_curtidas?.length ?? 0,
-    user_curtiu: uid
-      ? (o.ocorrencia_curtidas ?? []).some((c) => c.user_id === uid)
-      : false,
+    curtidas_count: 0,
+    user_curtiu: false,
     profiles: undefined,
-    ocorrencia_curtidas: undefined,
   })) as Ocorrencia[];
+
+  if (ocorrencias.length === 0) return ocorrencias;
+
+  // Busca curtidas separado — não quebra se a tabela não existir
+  const ids = ocorrencias.map((o) => o.id);
+  const { data: curtidas } = await supabase
+    .from("ocorrencia_curtidas")
+    .select("ocorrencia_id, user_id")
+    .in("ocorrencia_id", ids);
+
+  if (!curtidas) return ocorrencias;
+
+  const countMap: Record<string, number> = {};
+  const userLiked = new Set<string>();
+  for (const c of curtidas as Array<{ ocorrencia_id: string; user_id: string }>) {
+    countMap[c.ocorrencia_id] = (countMap[c.ocorrencia_id] ?? 0) + 1;
+    if (uid && c.user_id === uid) userLiked.add(c.ocorrencia_id);
+  }
+
+  return ocorrencias.map((o) => ({
+    ...o,
+    curtidas_count: countMap[o.id] ?? 0,
+    user_curtiu: userLiked.has(o.id),
+  }));
 }
 
 export async function createOcorrencia(payload: CreateOcorrenciaPayload): Promise<Ocorrencia> {
