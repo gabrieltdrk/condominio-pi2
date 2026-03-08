@@ -20,7 +20,6 @@ import {
 // ── Constants ──────────────────────────────────────────────────────────────
 const CATEGORIAS = ["Manutenção", "Barulho", "Reclamação", "Sugestão", "Dúvida"];
 const LOCALIZACOES = ["Áreas comuns", "Minha unidade", "Garagem", "Portaria"];
-const URGENCIAS: OcorrenciaUrgencia[] = ["Baixa", "Média", "Alta"];
 const STATUS_OPTIONS: OcorrenciaStatus[] = [
   "Aberto", "Em Análise", "Em Atendimento",
   "Pendente Terceiros", "Concluído", "Cancelado",
@@ -279,32 +278,34 @@ export default function ListaOcorrencias() {
         </div>
 
         {/* ── Filtros de status (chips multi-select) ── */}
-        <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-[11px] text-gray-400 font-medium mr-1">Status:</span>
-          <button
-            onClick={() => setFilterStatus([])}
-            className={`text-[11px] font-semibold border px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
-              filterStatus.length === 0
-                ? "bg-gray-900 text-white border-gray-900"
-                : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-            }`}
-          >
-            Todos
-          </button>
-          {STATUS_OPTIONS.map((s) => {
-            const active = filterStatus.includes(s);
-            return (
-              <button
-                key={s}
-                onClick={() => toggleStatusFilter(s)}
-                className={`text-[11px] font-semibold border px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
-                  active ? STATUS_COLORS[s] : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-                }`}
-              >
-                {s}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-400 font-medium shrink-0">Status:</span>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+            <button
+              onClick={() => setFilterStatus([])}
+              className={`text-[11px] font-semibold border px-2.5 py-1 rounded-full cursor-pointer transition-colors shrink-0 ${
+                filterStatus.length === 0
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              Todos
+            </button>
+            {STATUS_OPTIONS.map((s) => {
+              const active = filterStatus.includes(s);
+              return (
+                <button
+                  key={s}
+                  onClick={() => toggleStatusFilter(s)}
+                  className={`text-[11px] font-semibold border px-2.5 py-1 rounded-full cursor-pointer transition-colors shrink-0 ${
+                    active ? STATUS_COLORS[s] : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                  }`}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Empty state ── */}
@@ -369,18 +370,25 @@ export default function ListaOcorrencias() {
                         </td>
                         <td className="px-3 py-2.5 border-b border-gray-100 text-gray-400 text-xs whitespace-nowrap">{fmt(o.created_at)}</td>
                         <td className="px-3 py-2.5 border-b border-gray-100">
-                          <button
-                            onClick={() => handleCurtir(o)}
-                            title={o.user_curtiu ? "Remover curtida" : "Curtir"}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-all
-                              ${o.user_curtiu
-                                ? "bg-indigo-50 border-indigo-200 text-indigo-600"
-                                : "bg-white border-gray-200 text-gray-400 hover:border-indigo-200 hover:text-indigo-500"
-                              }`}
-                          >
-                            <ThumbsUp size={12} />
-                            {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
-                          </button>
+                          {isAdmin ? (
+                            <div className="flex items-center gap-1 text-xs text-gray-400">
+                              <ThumbsUp size={12} />
+                              {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleCurtir(o)}
+                              title={o.user_curtiu ? "Remover curtida" : "Curtir"}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-all
+                                ${o.user_curtiu
+                                  ? "bg-indigo-50 border-indigo-200 text-indigo-600"
+                                  : "bg-white border-gray-200 text-gray-400 hover:border-indigo-200 hover:text-indigo-500"
+                                }`}
+                            >
+                              <ThumbsUp size={12} />
+                              {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                            </button>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 border-b border-gray-100">
                           <div className="flex gap-1.5 justify-end">
@@ -443,17 +451,24 @@ export default function ListaOcorrencias() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] text-gray-400">{fmt(o.created_at)}</span>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleCurtir(o)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all
-                          ${o.user_curtiu
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-600"
-                            : "bg-white border-gray-200 text-gray-400"
-                          }`}
-                      >
-                        <ThumbsUp size={12} />
-                        {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
-                      </button>
+                      {isAdmin ? (
+                        <div className="flex items-center gap-1 text-xs text-gray-400 px-1">
+                          <ThumbsUp size={12} />
+                          {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleCurtir(o)}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all
+                            ${o.user_curtiu
+                              ? "bg-indigo-50 border-indigo-200 text-indigo-600"
+                              : "bg-white border-gray-200 text-gray-400"
+                            }`}
+                        >
+                          <ThumbsUp size={12} />
+                          {o.curtidas_count > 0 && <span>{o.curtidas_count}</span>}
+                        </button>
+                      )}
                       <button
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-gray-500 text-xs font-medium cursor-pointer transition-colors"
                         onClick={() => openDetalhe(o)}
@@ -535,29 +550,12 @@ export default function ListaOcorrencias() {
                 />
               </div>
 
-              {/* Urgência — auto-definida, mas editável */}
+              {/* Prioridade — somente leitura, definida pela categoria */}
               <div className="grid gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Prioridade</label>
-                  <span className="text-[11px] text-gray-400">definida pela categoria • pode alterar</span>
-                </div>
-                <div className="flex gap-2">
-                  {URGENCIAS.map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      onClick={() => setForm({ ...form, urgencia: u })}
-                      className={`flex-1 py-2 rounded-xl border text-[13px] font-semibold cursor-pointer transition-colors
-                        ${form.urgencia === u
-                          ? u === "Alta" ? "bg-red-500 text-white border-red-500"
-                            : u === "Média" ? "bg-amber-500 text-white border-amber-500"
-                            : "bg-green-600 text-white border-green-600"
-                          : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
-                        }`}
-                    >
-                      {u}
-                    </button>
-                  ))}
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Prioridade</label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                  <Badge text={form.urgencia} cls={URGENCIA_COLORS[form.urgencia]} />
+                  <span className="text-[11px] text-gray-400">definida automaticamente pela categoria</span>
                 </div>
               </div>
 

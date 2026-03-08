@@ -125,7 +125,7 @@ export default function AppLayout({
           >
             <Menu size={20} />
           </button>
-          <h1 className="m-0 text-sm font-semibold text-gray-600 truncate">{title}</h1>
+          <h1 className="m-0 text-base font-semibold text-gray-800 truncate">{title}</h1>
         </header>
 
         {/* Scrollable content */}
