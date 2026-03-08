@@ -671,7 +671,7 @@ export default function DashboardAdmin() {
 
       {/* ── Modal — Novo usuário ── */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-1000 p-4" onClick={closeModal}>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-1000 p-4">
           <div
             className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-md p-6"
             onClick={(e) => e.stopPropagation()}

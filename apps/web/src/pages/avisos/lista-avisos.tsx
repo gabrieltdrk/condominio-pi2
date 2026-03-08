@@ -457,7 +457,7 @@ export default function ListaAvisos() {
 
       {/* ── Modal — Novo aviso ── */}
       {novoOpen && (
-        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setNovoOpen(false)}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
             className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
@@ -656,7 +656,7 @@ export default function ListaAvisos() {
       )}
       {/* ── Modal — Editar aviso ── */}
       {editando && (
-        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setEditando(null)}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
             className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}

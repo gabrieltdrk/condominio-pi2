@@ -549,7 +549,7 @@ export default function ListaOcorrencias() {
 
       {/* ── Modal — Nova ocorrência ── */}
       {novaOpen && (
-        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setNovaOpen(false)}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
             className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
@@ -633,7 +633,7 @@ export default function ListaOcorrencias() {
 
       {/* ── Modal — Detalhe / Gestão ── */}
       {detalhe && (
-        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setDetalhe(null)}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
             className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
