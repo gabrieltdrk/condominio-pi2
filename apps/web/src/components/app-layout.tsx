@@ -102,7 +102,7 @@ export default function AppLayout({ title, children }: { title: string; children
       <>
         {/* Logo + Bell */}
         <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+            <img src="/Logo.png" alt="Logo" className="w-full h-full object-contain" />
         </div>
           <span className="font-bold text-sm text-gray-900 dark:text-gray-100 leading-none flex-1">OmniLar</span>
 
