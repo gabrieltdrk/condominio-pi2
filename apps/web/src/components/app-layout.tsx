@@ -101,10 +101,9 @@ export default function AppLayout({ title, children }: { title: string; children
     return (
       <>
         {/* Logo + Bell */}
-        <div className="flex items-center gap-2 px-4 h-16 border-b border-gray-100 dark:border-gray-800 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-            <Building2 size={16} className="text-white" />
-          </div>
+        <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+        </div>
           <span className="font-bold text-sm text-gray-900 dark:text-gray-100 leading-none flex-1">OmniLar</span>
 
           {/* Sininho */}
