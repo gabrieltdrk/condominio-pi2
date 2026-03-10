@@ -52,6 +52,10 @@ const URGENCIA_BAR: Record<OcorrenciaUrgencia, string> = {
 
 const CURTIDAS_DESTAQUE = 3;
 
+function isImageUrl(url: string) {
+  return /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
+}
+
 type SortKey = "protocolo" | "author_name" | "assunto" | "categoria" | "urgencia" | "status" | "created_at" | "curtidas_count";
 
 const EMPTY_FORM: CreateOcorrenciaPayload = {
@@ -674,12 +678,13 @@ export default function ListaOcorrencias() {
       {detalhe && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
-            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto"
+            className={`bg-white border border-gray-200 rounded-2xl shadow-2xl w-full p-6 max-h-[90vh] overflow-y-auto ${detalhe.arquivo_url ? "max-w-3xl" : "max-w-xl"}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Barra colorida no topo */}
             <div className={`-mx-6 -mt-6 h-1 rounded-t-2xl mb-6 ${URGENCIA_BAR[detalhe.urgencia]}`} />
 
+            {/* Header — full width */}
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -699,139 +704,156 @@ export default function ListaOcorrencias() {
               </button>
             </div>
 
-            {/* Descrição */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
-              <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
-            </div>
+            {/* Body — duas colunas quando há anexo */}
+            <div className={detalhe.arquivo_url ? "grid lg:grid-cols-[260px_1fr] gap-6 items-start" : ""}>
 
-            {/* Resposta ao morador */}
-            {detalhe.resposta_morador && !isAdmin && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-4">
-                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
-                <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
-              </div>
-            )}
+              {/* Coluna esquerda — imagem da ocorrência */}
+              {detalhe.arquivo_url && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Imagem da ocorrência</p>
+                  {isImageUrl(detalhe.arquivo_url) ? (
+                    <a href={detalhe.arquivo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                      <img
+                        src={detalhe.arquivo_url}
+                        alt="Imagem da ocorrência"
+                        className="w-full rounded-xl border border-gray-200 object-contain max-h-80 cursor-zoom-in hover:opacity-90 transition-opacity"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      href={detalhe.arquivo_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-2.5 p-4 rounded-xl border border-indigo-100 bg-indigo-50/40 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition-colors"
+                    >
+                      <Paperclip size={16} className="shrink-0" />
+                      <span className="truncate">Ver anexo</span>
+                      <ExternalLink size={13} className="shrink-0 ml-auto" />
+                    </a>
+                  )}
+                </div>
+              )}
 
-            {/* Motivo de cancelamento — visível a todos */}
-            {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
-                <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
-              </div>
-            )}
-
-            {/* Anexo */}
-            {detalhe.arquivo_url && (
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 mb-4 flex items-center gap-3">
-                <Paperclip size={15} className="text-indigo-500 shrink-0" />
-                <span className="text-sm text-gray-700 flex-1 truncate">Anexo da ocorrência</span>
-                <a
-                  href={detalhe.arquivo_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink size={12} />
-                  Abrir
-                </a>
-              </div>
-            )}
-
-            {/* ── Form ADMIN ── */}
-            {isAdmin && (
-              <form className="grid gap-4" onSubmit={handleSaveAdmin}>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div className="grid gap-2">
-                    <label className="text-sm font-semibold text-gray-600">Status</label>
-                    <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as OcorrenciaStatus)} className={inputCls}>
-                      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-semibold text-gray-600">Responsável</label>
-                    <input type="text" placeholder="Ex: Zelador João" value={editResponsavel} onChange={(e) => setEditResponsavel(e.target.value)} className={inputCls} />
-                  </div>
+              {/* Coluna direita — info + formulários */}
+              <div className="grid gap-4">
+                {/* Descrição */}
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
+                  <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
                 </div>
 
-                {editStatus === "Cancelado" && (
-                  <div className="grid gap-2">
-                    <label className="text-sm font-semibold text-gray-600">
-                      Motivo do cancelamento <span className="text-rose-500">*</span>
-                    </label>
-                    <textarea
-                      value={editMotivoCancelamento}
-                      onChange={(e) => setEditMotivoCancelamento(e.target.value)}
-                      rows={2}
-                      required
-                      placeholder="Descreva o motivo pelo qual a ocorrência está sendo cancelada..."
-                      className={`${inputCls} resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-100`}
-                    />
+                {/* Resposta ao morador */}
+                {detalhe.resposta_morador && !isAdmin && (
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
+                    <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
                   </div>
                 )}
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">
-                    Nota interna <span className="text-gray-400 font-normal">(não visível ao morador)</span>
-                  </label>
-                  <textarea value={editRespostaInterna} onChange={(e) => setEditRespostaInterna(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Observações internas..." />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">Resposta ao morador</label>
-                  <textarea value={editRespostaMorador} onChange={(e) => setEditRespostaMorador(e.target.value)} rows={3} className={`${inputCls} resize-none`} placeholder="Mensagem que o morador verá..." />
-                </div>
-                {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
-                <div className="flex justify-end gap-3">
-                  <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
-                    {saving ? "Salvando..." : "Salvar alterações"}
-                  </button>
-                </div>
-              </form>
-            )}
 
-            {/* ── Form MORADOR (dono) ── */}
-            {!isAdmin && isOwner(detalhe) && (
-              <form className="grid gap-4 border-t border-gray-100 pt-4" onSubmit={handleSaveMorador}>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide m-0">Editar ocorrência</p>
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">Assunto</label>
-                  <input type="text" value={editAssunto} onChange={(e) => setEditAssunto(e.target.value)} className={inputCls} maxLength={100} />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">Descrição</label>
-                  <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">Categoria</label>
-                  <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} className={inputCls}>
-                    {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <Toggle
-                  checked={editPrivado}
-                  onChange={setEditPrivado}
-                  label="Ocorrência privada"
-                  sublabel="Somente administradores poderão visualizar"
-                />
-                {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
-                <div className="flex justify-end gap-3">
-                  <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
-                    {saving ? "Salvando..." : "Salvar alterações"}
-                  </button>
-                </div>
-              </form>
-            )}
+                {/* Motivo de cancelamento — visível a todos */}
+                {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
+                    <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
+                  </div>
+                )}
 
-            {/* ── Morador não dono — só fechar ── */}
-            {!isAdmin && !isOwner(detalhe) && (
-              <div className="flex justify-end">
-                <button className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)}>
-                  Fechar
-                </button>
+                {/* ── Form ADMIN ── */}
+                {isAdmin && (
+                  <form className="grid gap-4" onSubmit={handleSaveAdmin}>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-gray-600">Status</label>
+                        <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as OcorrenciaStatus)} className={inputCls}>
+                          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-gray-600">Responsável</label>
+                        <input type="text" placeholder="Ex: Zelador João" value={editResponsavel} onChange={(e) => setEditResponsavel(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+
+                    {editStatus === "Cancelado" && (
+                      <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-gray-600">
+                          Motivo do cancelamento <span className="text-rose-500">*</span>
+                        </label>
+                        <textarea
+                          value={editMotivoCancelamento}
+                          onChange={(e) => setEditMotivoCancelamento(e.target.value)}
+                          rows={2}
+                          required
+                          placeholder="Descreva o motivo pelo qual a ocorrência está sendo cancelada..."
+                          className={`${inputCls} resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-100`}
+                        />
+                      </div>
+                    )}
+                    <div className="grid gap-2">
+                      <label className="text-sm font-semibold text-gray-600">
+                        Nota interna <span className="text-gray-400 font-normal">(não visível ao morador)</span>
+                      </label>
+                      <textarea value={editRespostaInterna} onChange={(e) => setEditRespostaInterna(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Observações internas..." />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-semibold text-gray-600">Resposta ao morador</label>
+                      <textarea value={editRespostaMorador} onChange={(e) => setEditRespostaMorador(e.target.value)} rows={3} className={`${inputCls} resize-none`} placeholder="Mensagem que o morador verá..." />
+                    </div>
+                    {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
+                    <div className="flex justify-end gap-3">
+                      <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
+                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
+                        {saving ? "Salvando..." : "Salvar alterações"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* ── Form MORADOR (dono) ── */}
+                {!isAdmin && isOwner(detalhe) && (
+                  <form className="grid gap-4 border-t border-gray-100 pt-4" onSubmit={handleSaveMorador}>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide m-0">Editar ocorrência</p>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-semibold text-gray-600">Assunto</label>
+                      <input type="text" value={editAssunto} onChange={(e) => setEditAssunto(e.target.value)} className={inputCls} maxLength={100} />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-semibold text-gray-600">Descrição</label>
+                      <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-semibold text-gray-600">Categoria</label>
+                      <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} className={inputCls}>
+                        {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <Toggle
+                      checked={editPrivado}
+                      onChange={setEditPrivado}
+                      label="Ocorrência privada"
+                      sublabel="Somente administradores poderão visualizar"
+                    />
+                    {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
+                    <div className="flex justify-end gap-3">
+                      <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
+                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
+                        {saving ? "Salvando..." : "Salvar alterações"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* ── Morador não dono — só fechar ── */}
+                {!isAdmin && !isOwner(detalhe) && (
+                  <div className="flex justify-end">
+                    <button className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)}>
+                      Fechar
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
