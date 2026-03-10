@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
-  ClipboardList, ExternalLink, Lock, Paperclip, Plus, ThumbsUp, X,
+  ClipboardList, Lock, Paperclip, Plus, ThumbsUp, X,
 } from "lucide-react";
 import AppLayout from "../../components/app-layout";
 import { getUser } from "../../services/auth";
@@ -674,7 +674,7 @@ export default function ListaOcorrencias() {
       {detalhe && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
-            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto"
+            className={`bg-white border border-gray-200 rounded-2xl shadow-2xl w-full p-6 max-h-[90vh] overflow-y-auto ${detalhe.arquivo_url ? "max-w-xl md:max-w-5xl" : "max-w-xl"}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Barra colorida no topo */}
@@ -700,47 +700,52 @@ export default function ListaOcorrencias() {
               </button>
             </div>
 
-            {/* Descrição */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
-              <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
-            </div>
+            {/* Body — duas colunas no desktop quando há imagem */}
+            <div className={detalhe.arquivo_url ? "grid md:grid-cols-[360px_1fr] gap-6 items-start" : "grid gap-4"}>
 
-            {/* Resposta ao morador */}
-            {detalhe.resposta_morador && !isAdmin && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-4">
-                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
-                <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
-              </div>
-            )}
+              {/* Coluna esquerda — imagem */}
+              {detalhe.arquivo_url && (
+                <div className="flex flex-col gap-2 items-center">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide self-start">Imagem da ocorrência</p>
+                  <a
+                    href={detalhe.arquivo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full flex justify-center"
+                  >
+                    <img
+                      src={detalhe.arquivo_url}
+                      alt="Imagem da ocorrência"
+                      className="w-full rounded-xl border border-gray-200 object-contain max-h-96 cursor-zoom-in hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                </div>
+              )}
 
-            {/* Motivo de cancelamento — visível a todos */}
-            {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
-                <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
-              </div>
-            )}
+              {/* Coluna direita — info + formulários */}
+              <div className="grid gap-4">
+                {/* Descrição */}
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
+                  <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
+                </div>
 
-            {/* Anexo */}
-            {detalhe.arquivo_url && (
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 mb-4 flex items-center gap-3">
-                <Paperclip size={15} className="text-indigo-500 shrink-0" />
-                <span className="text-sm text-gray-700 flex-1 truncate">Anexo da ocorrência</span>
-                <a
-                  href={detalhe.arquivo_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink size={12} />
-                  Abrir
-                </a>
-              </div>
-            )}
+                {/* Resposta ao morador */}
+                {detalhe.resposta_morador && !isAdmin && (
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
+                    <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
+                  </div>
+                )}
 
-            <div className="grid gap-4">
+                {/* Motivo de cancelamento */}
+                {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
+                    <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
+                  </div>
+                )}
 
                 {/* ── Form ADMIN ── */}
                 {isAdmin && (
@@ -757,20 +762,12 @@ export default function ListaOcorrencias() {
                         <input type="text" placeholder="Ex: Zelador João" value={editResponsavel} onChange={(e) => setEditResponsavel(e.target.value)} className={inputCls} />
                       </div>
                     </div>
-
                     {editStatus === "Cancelado" && (
                       <div className="grid gap-2">
                         <label className="text-sm font-semibold text-gray-600">
                           Motivo do cancelamento <span className="text-rose-500">*</span>
                         </label>
-                        <textarea
-                          value={editMotivoCancelamento}
-                          onChange={(e) => setEditMotivoCancelamento(e.target.value)}
-                          rows={2}
-                          required
-                          placeholder="Descreva o motivo pelo qual a ocorrência está sendo cancelada..."
-                          className={`${inputCls} resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-100`}
-                        />
+                        <textarea value={editMotivoCancelamento} onChange={(e) => setEditMotivoCancelamento(e.target.value)} rows={2} required placeholder="Descreva o motivo pelo qual a ocorrência está sendo cancelada..." className={`${inputCls} resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-100`} />
                       </div>
                     )}
                     <div className="grid gap-2">
@@ -811,12 +808,7 @@ export default function ListaOcorrencias() {
                         {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
-                    <Toggle
-                      checked={editPrivado}
-                      onChange={setEditPrivado}
-                      label="Ocorrência privada"
-                      sublabel="Somente administradores poderão visualizar"
-                    />
+                    <Toggle checked={editPrivado} onChange={setEditPrivado} label="Ocorrência privada" sublabel="Somente administradores poderão visualizar" />
                     {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
                     <div className="flex justify-end gap-3">
                       <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
@@ -835,6 +827,7 @@ export default function ListaOcorrencias() {
                     </button>
                   </div>
                 )}
+              </div>
             </div>
           </div>
         </div>
