@@ -52,10 +52,6 @@ const URGENCIA_BAR: Record<OcorrenciaUrgencia, string> = {
 
 const CURTIDAS_DESTAQUE = 3;
 
-function isImageUrl(url: string) {
-  return /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
-}
-
 type SortKey = "protocolo" | "author_name" | "assunto" | "categoria" | "urgencia" | "status" | "created_at" | "curtidas_count";
 
 const EMPTY_FORM: CreateOcorrenciaPayload = {
@@ -704,57 +700,47 @@ export default function ListaOcorrencias() {
               </button>
             </div>
 
-            <div className="grid gap-4">
+            {/* Descrição */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
+              <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
+            </div>
 
-              {/* Descrição */}
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
-                <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
+            {/* Resposta ao morador */}
+            {detalhe.resposta_morador && !isAdmin && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-4">
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
+                <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
               </div>
+            )}
 
-              {/* Anexo — entre descrição e formulários */}
-              {detalhe.arquivo_url && (
-                isImageUrl(detalhe.arquivo_url) ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Imagem da ocorrência</p>
-                    <a href={detalhe.arquivo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex justify-center">
-                      <img
-                        src={detalhe.arquivo_url}
-                        alt="Imagem da ocorrência"
-                        className="w-full rounded-xl border border-gray-200 object-contain max-h-72 cursor-zoom-in hover:opacity-90 transition-opacity"
-                      />
-                    </a>
-                  </div>
-                ) : (
-                  <a
-                    href={detalhe.arquivo_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2.5 px-4 py-3 rounded-xl border border-indigo-100 bg-indigo-50/40 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition-colors"
-                  >
-                    <Paperclip size={15} className="shrink-0" />
-                    <span className="truncate flex-1">Anexo da ocorrência</span>
-                    <ExternalLink size={13} className="shrink-0" />
-                  </a>
-                )
-              )}
+            {/* Motivo de cancelamento — visível a todos */}
+            {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
+                <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
+              </div>
+            )}
 
-              {/* Resposta ao morador */}
-              {detalhe.resposta_morador && !isAdmin && (
-                <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                  <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
-                  <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
-                </div>
-              )}
+            {/* Anexo */}
+            {detalhe.arquivo_url && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 mb-4 flex items-center gap-3">
+                <Paperclip size={15} className="text-indigo-500 shrink-0" />
+                <span className="text-sm text-gray-700 flex-1 truncate">Anexo da ocorrência</span>
+                <a
+                  href={detalhe.arquivo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink size={12} />
+                  Abrir
+                </a>
+              </div>
+            )}
 
-              {/* Motivo de cancelamento — visível a todos */}
-              {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
-                  <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
-                </div>
-              )}
+            <div className="grid gap-4">
 
                 {/* ── Form ADMIN ── */}
                 {isAdmin && (

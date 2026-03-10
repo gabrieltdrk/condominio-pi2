@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, ArrowUpDown,
-  Megaphone, Paperclip, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
+  ExternalLink, Megaphone, Paperclip, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import AppLayout from "../../components/app-layout";
 import { getUser } from "../../services/auth";
@@ -22,6 +22,10 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const CURTIDAS_DESTAQUE = 3;
+
+function isImageUrl(url: string) {
+  return /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
+}
 
 // Barra lateral colorida por tipo (mesmo padrão das ocorrências)
 const AVISO_TIPO_BAR: Record<AvisoTipo, string> = {
@@ -609,6 +613,32 @@ export default function ListaAvisos() {
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-4">
               <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{detalhe.descricao}</p>
             </div>
+
+            {/* Anexo */}
+            {detalhe.arquivo_url && (
+              <div className="mb-4">
+                {isImageUrl(detalhe.arquivo_url) ? (
+                  <a href={detalhe.arquivo_url} target="_blank" rel="noreferrer">
+                    <img
+                      src={detalhe.arquivo_url}
+                      alt="Anexo do aviso"
+                      className="w-full rounded-xl border border-gray-200 object-contain max-h-72 cursor-zoom-in hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                ) : (
+                  <a
+                    href={detalhe.arquivo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2.5 px-4 py-3 rounded-xl border border-indigo-100 bg-indigo-50/40 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition-colors"
+                  >
+                    <Paperclip size={15} className="shrink-0" />
+                    <span className="truncate flex-1">Ver anexo</span>
+                    <ExternalLink size={13} className="shrink-0" />
+                  </a>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <button
