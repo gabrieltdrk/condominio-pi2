@@ -1,25 +1,19 @@
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
-  ClipboardList, Lock, Paperclip, Plus, ThumbsUp, X,
+  ClipboardList, Lock, Plus, ThumbsUp,
 } from "lucide-react";
 import AppLayout from "../../features/layout/components/app-layout";
 import { Badge } from "../../components/ui/badge";
-import { Toggle } from "../../components/ui/toggle";
-import {
-  type OcorrenciaStatus,
-} from "../../features/ocorrencias/services/ocorrencias";
 import {
   CATEGORIAS,
-  LOCALIZACOES,
   STATUS_COLORS,
   URGENCIA_COLORS,
   URGENCIA_BAR,
   type SortKey,
 } from "../../features/ocorrencias/constants/ocorrencias.constants";
 import { useOcorrencias } from "../../features/ocorrencias/hooks/use-ocorrencias";
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-const inputCls = "px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
+import { OcorrenciaCriarModal } from "../../features/ocorrencias/components/ocorrencia-criar-modal";
+import { OcorrenciaDetalheModal } from "../../features/ocorrencias/components/ocorrencia-detalhe-modal";
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ListaOcorrencias() {
@@ -190,7 +184,6 @@ export default function ListaOcorrencias() {
                         style={{ animationDelay: `${idx * 30}ms` }}
                         className={`cursor-pointer transition-all duration-150 hover:bg-indigo-50/50 hover:shadow-sm group ${destaque ? "bg-amber-50/40" : ""}`}
                       >
-                        {/* Barra colorida por urgência */}
                         <td className="p-0 w-1 border-b border-gray-100">
                           <div className={`w-1 h-full min-h-12 rounded-sm ${URGENCIA_BAR[o.urgencia]} opacity-70 group-hover:opacity-100 transition-opacity`} />
                         </td>
@@ -252,7 +245,6 @@ export default function ListaOcorrencias() {
                   className={`bg-white border rounded-2xl p-4 shadow-sm transition-all cursor-pointer active:scale-[0.99] overflow-hidden relative
                     ${destaque ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-indigo-200 hover:shadow-md"}`}
                 >
-                  {/* Barra colorida à esquerda */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${URGENCIA_BAR[o.urgencia]}`} />
 
                   <div className="pl-2">
@@ -306,283 +298,49 @@ export default function ListaOcorrencias() {
       </div>
 
       {/* ── Modal — Nova ocorrência ── */}
-      {novaOpen && (
-        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-          <div
-            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="m-0 text-lg font-semibold text-gray-900">Nova Ocorrência</h3>
-              <button className="p-1.5 rounded-lg border-none bg-transparent text-gray-400 hover:bg-gray-100 cursor-pointer" onClick={() => setNovaOpen(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form className="grid gap-4" onSubmit={handleCreate}>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">Categoria</label>
-                  <select value={form.categoria} onChange={(e) => onCategoriaChange(e.target.value)} className={inputCls} required>
-                    {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-semibold text-gray-600">Localização</label>
-                  <select value={form.localizacao} onChange={(e) => setForm({ ...form, localizacao: e.target.value })} className={inputCls} required>
-                    {LOCALIZACOES.map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-sm font-semibold text-gray-600">Assunto</label>
-                <input
-                  type="text"
-                  placeholder="Título curto do problema"
-                  value={form.assunto}
-                  onChange={(e) => setForm({ ...form, assunto: e.target.value })}
-                  required
-                  maxLength={100}
-                  className={inputCls}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-sm font-semibold text-gray-600">Descrição detalhada</label>
-                <textarea
-                  placeholder="Descreva o ocorrido com o máximo de detalhes..."
-                  value={form.descricao}
-                  onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-                  required
-                  rows={4}
-                  className={`${inputCls} resize-none`}
-                />
-              </div>
-
-              {/* Prioridade — somente leitura, sem caixa */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-600">Prioridade:</span>
-                <Badge text={form.urgencia} cls={URGENCIA_COLORS[form.urgencia]} />
-              </div>
-
-              {/* Flag privado */}
-              <Toggle
-                checked={form.privado}
-                onChange={(v) => setForm({ ...form, privado: v })}
-                label="Ocorrência privada"
-                sublabel="Somente administradores poderão visualizar"
-              />
-
-              {/* Anexo */}
-              <div className="grid gap-2">
-                <label className="text-sm font-semibold text-gray-600">
-                  Anexo <span className="text-gray-400 font-normal">(PDF, Word, Imagem — máx 10MB)</span>
-                </label>
-                <div
-                  className="flex items-center gap-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip size={16} className="text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-500 flex-1 truncate">
-                    {anexoFile ? anexoFile.name : "Clique para selecionar um arquivo"}
-                  </span>
-                  {anexoFile && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setAnexoFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                      className="text-gray-400 hover:text-rose-500 shrink-0 border-none bg-transparent cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                  className="hidden"
-                  onChange={(e) => setAnexoFile(e.target.files?.[0] ?? null)}
-                />
-              </div>
-
-              {formError && <p className="text-sm text-red-500 m-0">{formError}</p>}
-
-              <div className="flex justify-end gap-3 mt-1">
-                <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setNovaOpen(false)} disabled={submitting}>
-                  Cancelar
-                </button>
-                <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={submitting}>
-                  {submitting ? "Enviando..." : "Enviar ocorrência"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <OcorrenciaCriarModal
+        open={novaOpen}
+        form={form}
+        onCategoriaChange={onCategoriaChange}
+        onFieldChange={(updates) => setForm({ ...form, ...updates })}
+        onSubmit={handleCreate}
+        onClose={() => setNovaOpen(false)}
+        submitting={submitting}
+        formError={formError}
+        anexoFile={anexoFile}
+        onAnexoChange={setAnexoFile}
+        fileInputRef={fileInputRef}
+      />
 
       {/* ── Modal — Detalhe / Gestão ── */}
-      {detalhe && (
-        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-          <div
-            className={`bg-white border border-gray-200 rounded-2xl shadow-2xl w-full p-6 max-h-[90vh] overflow-y-auto ${detalhe.arquivo_url ? "max-w-xl md:max-w-5xl" : "max-w-xl"}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Barra colorida no topo */}
-            <div className={`-mx-6 -mt-6 h-1 rounded-t-2xl mb-6 ${URGENCIA_BAR[detalhe.urgencia]}`} />
-
-            {/* Header — full width */}
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {detalhe.privado && (
-                    <span className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full">
-                      <Lock size={10} /> Privado
-                    </span>
-                  )}
-                </div>
-                <h3 className="m-0 text-lg font-semibold text-gray-900">{detalhe.assunto}</h3>
-                <p className="mt-1 text-sm text-gray-400">
-                  {detalhe.protocolo} · {detalhe.categoria} · {detalhe.localizacao}
-                </p>
-              </div>
-              <button className="p-1.5 rounded-lg border-none bg-transparent text-gray-400 hover:bg-gray-100 cursor-pointer shrink-0" onClick={() => setDetalhe(null)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Body — duas colunas no desktop quando há imagem */}
-            <div className={detalhe.arquivo_url ? "grid md:grid-cols-[360px_1fr] gap-6 items-start" : "grid gap-4"}>
-
-              {/* Coluna esquerda — imagem */}
-              {detalhe.arquivo_url && (
-                <div className="flex flex-col gap-2 items-center">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide self-start">Imagem da ocorrência</p>
-                  <a
-                    href={detalhe.arquivo_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full flex justify-center"
-                  >
-                    <img
-                      src={detalhe.arquivo_url}
-                      alt="Imagem da ocorrência"
-                      className="w-full rounded-xl border border-gray-200 object-contain max-h-96 cursor-zoom-in hover:opacity-90 transition-opacity"
-                    />
-                  </a>
-                </div>
-              )}
-
-              {/* Coluna direita — info + formulários */}
-              <div className="grid gap-4">
-                {/* Descrição */}
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descrição</p>
-                  <p className="text-sm text-gray-800 m-0 leading-relaxed">{detalhe.descricao}</p>
-                </div>
-
-                {/* Resposta ao morador */}
-                {detalhe.resposta_morador && !isAdmin && (
-                  <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Resposta da administração</p>
-                    <p className="text-sm text-green-900 m-0">{detalhe.resposta_morador}</p>
-                  </div>
-                )}
-
-                {/* Motivo de cancelamento */}
-                {detalhe.status === "Cancelado" && detalhe.motivo_cancelamento && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
-                    <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
-                  </div>
-                )}
-
-                {/* ── Form ADMIN ── */}
-                {isAdmin && (
-                  <form className="grid gap-4" onSubmit={handleSaveAdmin}>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <div className="grid gap-2">
-                        <label className="text-sm font-semibold text-gray-600">Status</label>
-                        <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as OcorrenciaStatus)} className={inputCls}>
-                          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      <div className="grid gap-2">
-                        <label className="text-sm font-semibold text-gray-600">Responsável</label>
-                        <input type="text" placeholder="Ex: Zelador João" value={editResponsavel} onChange={(e) => setEditResponsavel(e.target.value)} className={inputCls} />
-                      </div>
-                    </div>
-                    {editStatus === "Cancelado" && (
-                      <div className="grid gap-2">
-                        <label className="text-sm font-semibold text-gray-600">
-                          Motivo do cancelamento <span className="text-rose-500">*</span>
-                        </label>
-                        <textarea value={editMotivoCancelamento} onChange={(e) => setEditMotivoCancelamento(e.target.value)} rows={2} required placeholder="Descreva o motivo pelo qual a ocorrência está sendo cancelada..." className={`${inputCls} resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-100`} />
-                      </div>
-                    )}
-                    <div className="grid gap-2">
-                      <label className="text-sm font-semibold text-gray-600">
-                        Nota interna <span className="text-gray-400 font-normal">(não visível ao morador)</span>
-                      </label>
-                      <textarea value={editRespostaInterna} onChange={(e) => setEditRespostaInterna(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Observações internas..." />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-sm font-semibold text-gray-600">Resposta ao morador</label>
-                      <textarea value={editRespostaMorador} onChange={(e) => setEditRespostaMorador(e.target.value)} rows={3} className={`${inputCls} resize-none`} placeholder="Mensagem que o morador verá..." />
-                    </div>
-                    {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
-                    <div className="flex justify-end gap-3">
-                      <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
-                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
-                        {saving ? "Salvando..." : "Salvar alterações"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* ── Form MORADOR (dono) ── */}
-                {!isAdmin && isOwner(detalhe) && (
-                  <form className="grid gap-4 border-t border-gray-100 pt-4" onSubmit={handleSaveMorador}>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide m-0">Editar ocorrência</p>
-                    <div className="grid gap-2">
-                      <label className="text-sm font-semibold text-gray-600">Assunto</label>
-                      <input type="text" value={editAssunto} onChange={(e) => setEditAssunto(e.target.value)} className={inputCls} maxLength={100} />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-sm font-semibold text-gray-600">Descrição</label>
-                      <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-sm font-semibold text-gray-600">Categoria</label>
-                      <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} className={inputCls}>
-                        {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <Toggle checked={editPrivado} onChange={setEditPrivado} label="Ocorrência privada" sublabel="Somente administradores poderão visualizar" />
-                    {saveError && <p className="text-sm text-red-500 m-0">{saveError}</p>}
-                    <div className="flex justify-end gap-3">
-                      <button type="button" className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)} disabled={saving}>Fechar</button>
-                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-all" disabled={saving}>
-                        {saving ? "Salvando..." : "Salvar alterações"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* ── Morador não dono — só fechar ── */}
-                {!isAdmin && !isOwner(detalhe) && (
-                  <div className="flex justify-end">
-                    <button className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors" onClick={() => setDetalhe(null)}>
-                      Fechar
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <OcorrenciaDetalheModal
+        detalhe={detalhe}
+        isAdmin={isAdmin}
+        isOwner={isOwner}
+        onClose={() => setDetalhe(null)}
+        editStatus={editStatus}
+        setEditStatus={setEditStatus}
+        editResponsavel={editResponsavel}
+        setEditResponsavel={setEditResponsavel}
+        editRespostaInterna={editRespostaInterna}
+        setEditRespostaInterna={setEditRespostaInterna}
+        editRespostaMorador={editRespostaMorador}
+        setEditRespostaMorador={setEditRespostaMorador}
+        editMotivoCancelamento={editMotivoCancelamento}
+        setEditMotivoCancelamento={setEditMotivoCancelamento}
+        editAssunto={editAssunto}
+        setEditAssunto={setEditAssunto}
+        editDescricao={editDescricao}
+        setEditDescricao={setEditDescricao}
+        editCategoria={editCategoria}
+        setEditCategoria={setEditCategoria}
+        editPrivado={editPrivado}
+        setEditPrivado={setEditPrivado}
+        onSaveAdmin={handleSaveAdmin}
+        onSaveMorador={handleSaveMorador}
+        saving={saving}
+        saveError={saveError}
+      />
     </AppLayout>
   );
 }
