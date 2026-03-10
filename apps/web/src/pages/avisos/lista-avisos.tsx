@@ -3,8 +3,9 @@ import {
   ArrowDown, ArrowUp, ArrowUpDown,
   ExternalLink, Megaphone, Paperclip, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
 } from "lucide-react";
-import AppLayout from "../../components/app-layout";
-import { getUser } from "../../services/auth";
+import AppLayout from "../../features/layout/components/app-layout";
+import { getUser } from "../../features/auth/services/auth";
+import { Badge } from "../../components/ui/badge";
 import {
   createAviso,
   deleteAviso,
@@ -18,25 +19,16 @@ import {
   type Aviso,
   type AvisoTipo,
   type CreateAvisoPayload,
-} from "../../services/avisos";
-
-// ── Constants ──────────────────────────────────────────────────────────────
-const CURTIDAS_DESTAQUE = 3;
+} from "../../features/avisos/services/avisos";
+import {
+  CURTIDAS_DESTAQUE,
+  AVISO_TIPO_BAR,
+  type AvisoSortKey as SortKey,
+} from "../../features/avisos/constants/avisos.constants";
 
 function isImageUrl(url: string) {
   return /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
 }
-
-// Barra lateral colorida por tipo (mesmo padrão das ocorrências)
-const AVISO_TIPO_BAR: Record<AvisoTipo, string> = {
-  Informativo:  "bg-blue-400",
-  Manutenção:   "bg-amber-400",
-  Assembleia:   "bg-indigo-400",
-  Segurança:    "bg-red-400",
-  Eventos:      "bg-emerald-400",
-};
-
-type SortKey = "titulo" | "tipo" | "created_at" | "data_expiracao" | "curtidas_count";
 
 const EMPTY_FORM: CreateAvisoPayload = {
   titulo: "",
@@ -48,14 +40,6 @@ const EMPTY_FORM: CreateAvisoPayload = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const inputCls = "px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
-
-function Badge({ text, cls }: { text: string; cls: string }) {
-  return (
-    <span className={`text-xs font-semibold border px-2.5 py-0.5 rounded-full whitespace-nowrap ${cls}`}>
-      {text}
-    </span>
-  );
-}
 
 // Parseia "yyyy-mm-dd" ou ISO sem conversão de timezone
 function parseDate(d: string): Date {

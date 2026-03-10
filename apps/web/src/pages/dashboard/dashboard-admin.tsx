@@ -14,9 +14,9 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import AppLayout from "../../components/app-layout";
-import { createUser, listUsers, type CreateUserPayload, type UserRecord } from "../../services/users";
-import { listOcorrencias, type Ocorrencia } from "../../services/ocorrencias";
+import AppLayout from "../../features/layout/components/app-layout";
+import { createUser, listUsers, type CreateUserPayload, type UserRecord } from "../../features/dashboard/services/users";
+import { listOcorrencias, type Ocorrencia } from "../../features/ocorrencias/services/ocorrencias";
 
 type Pending = { title: string; subtitle: string; tag: string; tagColor: string };
 

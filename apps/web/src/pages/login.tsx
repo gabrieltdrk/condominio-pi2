@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { login, loginWithGoogle, checkOAuthSession, resetPassword } from "../services/auth";
+import { login, loginWithGoogle, checkOAuthSession, resetPassword } from "../features/auth/services/auth";
 import loginBg from "../assets/login.jpg";
 
 function GoogleIcon() {

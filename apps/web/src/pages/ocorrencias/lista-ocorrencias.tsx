@@ -3,8 +3,10 @@ import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
   ClipboardList, Lock, Paperclip, Plus, ThumbsUp, X,
 } from "lucide-react";
-import AppLayout from "../../components/app-layout";
-import { getUser } from "../../services/auth";
+import AppLayout from "../../features/layout/components/app-layout";
+import { getUser } from "../../features/auth/services/auth";
+import { Badge } from "../../components/ui/badge";
+import { Toggle } from "../../components/ui/toggle";
 import {
   createOcorrencia,
   getCurrentUserId,
@@ -17,42 +19,19 @@ import {
   type CreateOcorrenciaPayload,
   type Ocorrencia,
   type OcorrenciaStatus,
-  type OcorrenciaUrgencia,
-} from "../../services/ocorrencias";
-
-// ── Constants ──────────────────────────────────────────────────────────────
-const CATEGORIAS = ["Manutenção", "Barulho", "Reclamação", "Sugestão", "Dúvida"];
-const LOCALIZACOES = ["Áreas comuns", "Minha unidade", "Garagem", "Portaria"];
-const STATUS_OPTIONS: OcorrenciaStatus[] = [
-  "Aberto", "Em Análise", "Em Atendimento",
-  "Pendente Terceiros", "Concluído", "Cancelado",
-];
-
-const STATUS_COLORS: Record<OcorrenciaStatus, string> = {
-  Aberto: "bg-blue-50 text-blue-700 border-blue-200",
-  "Em Análise": "bg-yellow-50 text-yellow-700 border-yellow-200",
-  "Em Atendimento": "bg-orange-50 text-orange-700 border-orange-200",
-  "Pendente Terceiros": "bg-purple-50 text-purple-700 border-purple-200",
-  Concluído: "bg-green-50 text-green-700 border-green-200",
-  Cancelado: "bg-gray-100 text-gray-500 border-gray-200",
-};
-
-const URGENCIA_COLORS: Record<OcorrenciaUrgencia, string> = {
-  Baixa: "bg-green-50 text-green-700 border-green-200",
-  Média: "bg-amber-50 text-amber-700 border-amber-200",
-  Alta: "bg-red-50 text-red-700 border-red-200",
-};
-
-// Cor da barra lateral da linha por urgência
-const URGENCIA_BAR: Record<OcorrenciaUrgencia, string> = {
-  Alta: "bg-red-400",
-  Média: "bg-amber-400",
-  Baixa: "bg-green-400",
-};
-
-const CURTIDAS_DESTAQUE = 3;
-
-type SortKey = "protocolo" | "author_name" | "assunto" | "categoria" | "urgencia" | "status" | "created_at" | "curtidas_count";
+} from "../../features/ocorrencias/services/ocorrencias";
+import {
+  CATEGORIAS,
+  LOCALIZACOES,
+  STATUS_OPTIONS,
+  STATUS_COLORS,
+  URGENCIA_COLORS,
+  URGENCIA_BAR,
+  CURTIDAS_DESTAQUE,
+  URGENCIA_ORDER,
+  STATUS_ORDER,
+  type SortKey,
+} from "../../features/ocorrencias/constants/ocorrencias.constants";
 
 const EMPTY_FORM: CreateOcorrenciaPayload = {
   categoria: CATEGORIAS[0],
@@ -65,41 +44,6 @@ const EMPTY_FORM: CreateOcorrenciaPayload = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const inputCls = "px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
-
-function Badge({ text, cls }: { text: string; cls: string }) {
-  return (
-    <span className={`text-xs font-semibold border px-2.5 py-0.5 rounded-full whitespace-nowrap ${cls}`}>
-      {text}
-    </span>
-  );
-}
-
-const URGENCIA_ORDER: Record<OcorrenciaUrgencia, number> = { Alta: 0, Média: 1, Baixa: 2 };
-const STATUS_ORDER: Record<OcorrenciaStatus, number> = {
-  Aberto: 0, "Em Análise": 1, "Em Atendimento": 2,
-  "Pendente Terceiros": 3, Concluído: 4, Cancelado: 5,
-};
-
-// ── Toggle switch ──────────────────────────────────────────────────────────
-function Toggle({ checked, onChange, label, sublabel }: {
-  checked: boolean; onChange: (v: boolean) => void; label: string; sublabel?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex items-center justify-between w-full p-3 rounded-xl border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors cursor-pointer bg-white"
-    >
-      <div className="text-left">
-        <p className="text-sm font-semibold text-gray-700">{label}</p>
-        {sublabel && <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>}
-      </div>
-      <div className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ml-4 ${checked ? "bg-indigo-600" : "bg-gray-200"}`}>
-        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${checked ? "translate-x-5" : "translate-x-0"}`} />
-      </div>
-    </button>
-  );
-}
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ListaOcorrencias() {

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getUser } from "../services/auth";
+import { getUser } from "../features/auth/services/auth";
 import DashboardAdmin from "./dashboard/dashboard-admin";
 import DashboardUser from "./dashboard/dashboard-user";
 

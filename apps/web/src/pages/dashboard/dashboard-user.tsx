@@ -4,9 +4,9 @@ import {
   ClipboardList, Phone, Plus, Receipt, Wrench,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import AppLayout from "../../components/app-layout";
-import { getUser } from "../../services/auth";
-import { listOcorrencias, type Ocorrencia, type OcorrenciaStatus } from "../../services/ocorrencias";
+import AppLayout from "../../features/layout/components/app-layout";
+import { getUser } from "../../features/auth/services/auth";
+import { listOcorrencias, type Ocorrencia, type OcorrenciaStatus } from "../../features/ocorrencias/services/ocorrencias";
 
 const STATUS_COLORS: Record<OcorrenciaStatus, string> = {
   Aberto: "bg-blue-50 text-blue-700 border-blue-200",

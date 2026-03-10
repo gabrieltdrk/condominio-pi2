@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { getToken } from "../services/auth";
+import { getToken } from "../features/auth/services/auth";
 
 type Props = {
   children: ReactNode;
