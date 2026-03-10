@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
-  ClipboardList, Lock, Plus, ThumbsUp, X,
+  ClipboardList, ExternalLink, Lock, Paperclip, Plus, ThumbsUp, X,
 } from "lucide-react";
 import AppLayout from "../../components/app-layout";
 import { getUser } from "../../services/auth";
@@ -12,6 +12,7 @@ import {
   toggleCurtida,
   updateOcorrencia,
   updateOcorrenciaMorador,
+  uploadOcorrenciaAnexo,
   PRIORIDADE_POR_CATEGORIA,
   type CreateOcorrenciaPayload,
   type Ocorrencia,
@@ -123,6 +124,8 @@ export default function ListaOcorrencias() {
   const [form, setForm] = useState<CreateOcorrenciaPayload>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [anexoFile, setAnexoFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Detalhe modal
   const [detalhe, setDetalhe] = useState<Ocorrencia | null>(null);
@@ -192,9 +195,13 @@ export default function ListaOcorrencias() {
     setSubmitting(true);
     setFormError("");
     try {
-      await createOcorrencia(form);
+      let arquivo_url: string | undefined;
+      if (anexoFile) arquivo_url = await uploadOcorrenciaAnexo(anexoFile);
+      await createOcorrencia({ ...form, arquivo_url });
       setNovaOpen(false);
       setForm(EMPTY_FORM);
+      setAnexoFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       load();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Erro ao criar ocorrência.");
@@ -616,6 +623,38 @@ export default function ListaOcorrencias() {
                 sublabel="Somente administradores poderão visualizar"
               />
 
+              {/* Anexo */}
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-gray-600">
+                  Anexo <span className="text-gray-400 font-normal">(PDF, Word, Imagem — máx 10MB)</span>
+                </label>
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 border border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={16} className="text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-500 flex-1 truncate">
+                    {anexoFile ? anexoFile.name : "Clique para selecionar um arquivo"}
+                  </span>
+                  {anexoFile && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setAnexoFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                      className="text-gray-400 hover:text-rose-500 shrink-0 border-none bg-transparent cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                  className="hidden"
+                  onChange={(e) => setAnexoFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+
               {formError && <p className="text-sm text-red-500 m-0">{formError}</p>}
 
               <div className="flex justify-end gap-3 mt-1">
@@ -679,6 +718,24 @@ export default function ListaOcorrencias() {
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Motivo do cancelamento</p>
                 <p className="text-sm text-gray-700 m-0">{detalhe.motivo_cancelamento}</p>
+              </div>
+            )}
+
+            {/* Anexo */}
+            {detalhe.arquivo_url && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 mb-4 flex items-center gap-3">
+                <Paperclip size={15} className="text-indigo-500 shrink-0" />
+                <span className="text-sm text-gray-700 flex-1 truncate">Anexo da ocorrência</span>
+                <a
+                  href={detalhe.arquivo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink size={12} />
+                  Abrir
+                </a>
               </div>
             )}
 

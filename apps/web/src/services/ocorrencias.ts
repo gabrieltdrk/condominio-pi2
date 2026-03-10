@@ -26,6 +26,7 @@ export type Ocorrencia = {
   resposta_interna: string | null;
   resposta_morador: string | null;
   motivo_cancelamento: string | null;
+  arquivo_url: string | null;
   created_at: string;
   updated_at: string;
   author_name?: string;
@@ -40,6 +41,7 @@ export type CreateOcorrenciaPayload = {
   descricao: string;
   urgencia: OcorrenciaUrgencia;
   privado: boolean;
+  arquivo_url?: string;
 };
 
 export type UpdateOcorrenciaPayload = {
@@ -132,6 +134,15 @@ export async function createOcorrencia(payload: CreateOcorrenciaPayload): Promis
 
   if (error) throw new Error(error.message);
   return { ...(data as Ocorrencia), curtidas_count: 0, user_curtiu: false };
+}
+
+export async function uploadOcorrenciaAnexo(file: File): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "bin";
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabase.storage.from("ocorrencias-anexos").upload(path, file, { upsert: false });
+  if (error) throw new Error(`Erro no upload: ${error.message}`);
+  const { data } = supabase.storage.from("ocorrencias-anexos").getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function updateOcorrencia(id: string, payload: UpdateOcorrenciaPayload): Promise<void> {
