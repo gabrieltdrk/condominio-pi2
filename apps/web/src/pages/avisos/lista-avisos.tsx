@@ -1,42 +1,23 @@
-import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, ArrowUpDown,
   ExternalLink, Megaphone, Paperclip, Pencil, Pin, PinOff, Plus, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import AppLayout from "../../features/layout/components/app-layout";
-import { getUser } from "../../features/auth/services/auth";
 import { Badge } from "../../components/ui/badge";
 import {
-  createAviso,
-  deleteAviso,
-  listAvisos,
-  toggleCurtidaAviso,
-  toggleFixarAviso,
-  updateAviso,
-  uploadAvisoAnexo,
   AVISO_TIPOS,
   AVISO_TIPO_COLORS,
-  type Aviso,
   type AvisoTipo,
-  type CreateAvisoPayload,
 } from "../../features/avisos/services/avisos";
 import {
-  CURTIDAS_DESTAQUE,
   AVISO_TIPO_BAR,
   type AvisoSortKey as SortKey,
 } from "../../features/avisos/constants/avisos.constants";
+import { useAvisos } from "../../features/avisos/hooks/use-avisos";
 
 function isImageUrl(url: string) {
   return /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
 }
-
-const EMPTY_FORM: CreateAvisoPayload = {
-  titulo: "",
-  descricao: "",
-  tipo: "Informativo",
-  data_expiracao: "",
-  arquivo_url: "",
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const inputCls = "px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
@@ -68,152 +49,25 @@ function isExpired(d: string | null) {
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ListaAvisos() {
-  const user = getUser();
-  const isAdmin = user?.role === "ADMIN";
-
-  const [avisos, setAvisos] = useState<Aviso[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const [filterTipo, setFilterTipo] = useState<AvisoTipo | "">("");
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
-  const [novoOpen, setNovoOpen] = useState(false);
-  const [form, setForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
-  const [anexoFile, setAnexoFile] = useState<File | null>(null);
-  const [editAnexoFile, setEditAnexoFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const editFileInputRef = useRef<HTMLInputElement>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState("");
-
-  const [editando, setEditando] = useState<Aviso | null>(null);
-  const [editForm, setEditForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
-  const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editError, setEditError] = useState("");
-
-  const [detalhe, setDetalhe] = useState<Aviso | null>(null);
-
-  function load() {
-    setLoading(true);
-    setError("");
-    listAvisos()
-      .then(setAvisos)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => { load(); }, []);
-
-  // ── Filters + Sort ────────────────────────────────────────────────────────
-  const filtered = avisos.filter((a) => {
-    if (filterTipo && a.tipo !== filterTipo) return false;
-    return true;
-  });
-
-  // Fixados sempre primeiro, depois sort
-  const displayed = [...filtered].sort((a, b) => {
-    if (a.fixado !== b.fixado) return a.fixado ? -1 : 1;
-    let cmp = 0;
-    if (sortKey === "titulo") cmp = a.titulo.localeCompare(b.titulo);
-    else if (sortKey === "tipo") cmp = a.tipo.localeCompare(b.tipo);
-    else if (sortKey === "created_at") cmp = a.created_at.localeCompare(b.created_at);
-    else if (sortKey === "data_expiracao") cmp = (a.data_expiracao ?? "").localeCompare(b.data_expiracao ?? "");
-    else if (sortKey === "curtidas_count") cmp = a.curtidas_count - b.curtidas_count;
-    return sortDir === "asc" ? cmp : -cmp;
-  });
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("desc"); }
-  }
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSubmitting(true);
-    setFormError("");
-    try {
-      let arquivo_url = form.arquivo_url || undefined;
-      if (anexoFile) arquivo_url = await uploadAvisoAnexo(anexoFile);
-      await createAviso({ ...form, data_expiracao: form.data_expiracao || undefined, arquivo_url });
-      setNovoOpen(false);
-      setForm(EMPTY_FORM);
-      setAnexoFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      load();
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Erro ao criar aviso.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function openEditar(a: Aviso) {
-    setEditando(a);
-    setEditForm({ titulo: a.titulo, descricao: a.descricao, tipo: a.tipo, data_expiracao: a.data_expiracao ?? "", arquivo_url: a.arquivo_url ?? "" });
-    setEditAnexoFile(null);
-    setEditError("");
-    setDetalhe(null);
-  }
-
-  async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!editando) return;
-    setEditSubmitting(true);
-    setEditError("");
-    try {
-      let arquivo_url = editForm.arquivo_url || undefined;
-      if (editAnexoFile) arquivo_url = await uploadAvisoAnexo(editAnexoFile);
-      await updateAviso(editando.id, { ...editForm, data_expiracao: editForm.data_expiracao || undefined, arquivo_url });
-      setEditando(null);
-      setEditAnexoFile(null);
-      load();
-    } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : "Erro ao salvar.");
-    } finally {
-      setEditSubmitting(false);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("Deseja excluir este aviso?")) return;
-    try {
-      await deleteAviso(id);
-      setDetalhe(null);
-      load();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Erro ao excluir.");
-    }
-  }
-
-  async function handleFixar(a: Aviso) {
-    try {
-      await toggleFixarAviso(a.id, a.fixado);
-      load();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Erro ao fixar.");
-    }
-  }
-
-  async function handleCurtir(e: React.MouseEvent, a: Aviso) {
-    e.stopPropagation();
-    setAvisos((prev) => prev.map((item) =>
-      item.id !== a.id ? item : {
-        ...item,
-        user_curtiu: !item.user_curtiu,
-        curtidas_count: item.user_curtiu ? item.curtidas_count - 1 : item.curtidas_count + 1,
-      }
-    ));
-    try {
-      await toggleCurtidaAviso(a.id);
-    } catch {
-      setAvisos((prev) => prev.map((item) =>
-        item.id !== a.id ? item : { ...item, user_curtiu: a.user_curtiu, curtidas_count: a.curtidas_count }
-      ));
-    }
-  }
+  const {
+    loading, error,
+    filterTipo, setFilterTipo,
+    sortKey, sortDir,
+    novoOpen, setNovoOpen,
+    form, setForm,
+    anexoFile, setAnexoFile,
+    editAnexoFile, setEditAnexoFile,
+    fileInputRef, editFileInputRef,
+    submitting, formError,
+    editando, setEditando,
+    editForm, setEditForm,
+    editSubmitting, editError,
+    detalhe, setDetalhe,
+    displayed,
+    CURTIDAS_DESTAQUE,
+    isAdmin,
+    handleSort, handleCreate, openEditar, handleEdit, handleDelete, handleFixar, handleCurtir,
+  } = useAvisos();
 
   // ── Sort header ────────────────────────────────────────────────────────────
   function SortIcon({ col }: { col: SortKey }) {
@@ -259,7 +113,7 @@ export default function ListaAvisos() {
             {isAdmin && (
               <button
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold cursor-pointer border-none transition-all shrink-0 shadow-sm shadow-indigo-200"
-                onClick={() => { setForm(EMPTY_FORM); setFormError(""); setNovoOpen(true); }}
+                onClick={() => { setForm({ titulo: "", descricao: "", tipo: "Informativo", data_expiracao: "", arquivo_url: "" }); setNovoOpen(true); }}
               >
                 <Plus size={15} />
                 Novo Aviso

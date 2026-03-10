@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, Sun, User, X } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
 import {
-  listNotificacoes,
-  marcarNotificacaoLida,
-  marcarTodasLidas,
-  type Notificacao,
   AVISO_TIPO_COLORS,
   type AvisoTipo,
 } from "../../avisos/services/avisos";
+import { useDarkMode } from "../hooks/use-dark-mode";
+import { useNotifications } from "../hooks/use-notifications";
 
 const navLinks = [
   { label: "Dashboard",   path: "/dashboard",   icon: Home },
@@ -27,16 +25,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-// ── Dark mode helpers (DOM direto — sem risco de closure stale) ───────────
-function isDarkMode() {
-  return document.documentElement.classList.contains("dark");
-}
-function applyDark(on: boolean) {
-  if (on) document.documentElement.classList.add("dark");
-  else    document.documentElement.classList.remove("dark");
-  localStorage.setItem("darkMode", String(on));
-}
-
 export default function AppLayout({ title, children }: { title: string; children: ReactNode }) {
   const nav = useNavigate();
   const location = useLocation();
@@ -44,48 +32,10 @@ export default function AppLayout({ title, children }: { title: string; children
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // ── Notificações ──────────────────────────────────────────────────────
-  const [notifs, setNotifs] = useState<Notificacao[]>([]);
-  const [bellOpen, setBellOpen] = useState(false);
-  const [bellPos, setBellPos] = useState({ top: 0, left: 0 });
-  const bellRef = useRef<HTMLButtonElement>(null);
-  const unread = notifs.filter((n) => !n.lida).length;
-
-  const loadNotifs = useCallback(() => {
-    listNotificacoes().then(setNotifs).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    loadNotifs();
-    const interval = setInterval(loadNotifs, 30000);
-    return () => clearInterval(interval);
-  }, [loadNotifs]);
-
-  function openBell() {
-    if (bellRef.current) {
-      const rect = bellRef.current.getBoundingClientRect();
-      setBellPos({ top: rect.bottom + 8, left: Math.min(rect.left, window.innerWidth - 336) });
-    }
-    setBellOpen((v) => !v);
-  }
-
-  function handleMarcarLida(id: string) {
-    setNotifs((prev) => prev.filter((n) => n.id !== id));
-    marcarNotificacaoLida(id).catch(() => {});
-  }
-
-  function handleMarcarTodas() {
-    setNotifs([]);
-    marcarTodasLidas().catch(() => {});
-  }
+  const { notifs, bellOpen, setBellOpen, bellPos, bellRef, unread, openBell, handleMarcarLida, handleMarcarTodas } = useNotifications();
 
   // ── Dark mode ─────────────────────────────────────────────────────────
-  const [dark, setDark] = useState(isDarkMode);
-
-  function toggleDark() {
-    const next = !isDarkMode();
-    applyDark(next);
-    setDark(next);
-  }
+  const { dark, toggleDark } = useDarkMode();
 
   // ── Gear ─────────────────────────────────────────────────────────────
   const [gearOpen, setGearOpen] = useState(false);
