@@ -678,7 +678,7 @@ export default function ListaOcorrencias() {
       {detalhe && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div
-            className={`bg-white border border-gray-200 rounded-2xl shadow-2xl w-full p-6 max-h-[90vh] overflow-y-auto ${detalhe.arquivo_url ? "max-w-3xl" : "max-w-xl"}`}
+            className={`bg-white border border-gray-200 rounded-2xl shadow-2xl w-full p-6 max-h-[90vh] overflow-y-auto ${detalhe.arquivo_url ? "max-w-xl md:max-w-5xl" : "max-w-xl"}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Barra colorida no topo */}
@@ -705,18 +705,18 @@ export default function ListaOcorrencias() {
             </div>
 
             {/* Body — duas colunas quando há anexo */}
-            <div className={detalhe.arquivo_url ? "grid lg:grid-cols-[260px_1fr] gap-6 items-start" : ""}>
+            <div className={detalhe.arquivo_url ? "grid lg:grid-cols-[380px_1fr] gap-8 items-start" : ""}>
 
               {/* Coluna esquerda — imagem da ocorrência */}
               {detalhe.arquivo_url && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Imagem da ocorrência</p>
                   {isImageUrl(detalhe.arquivo_url) ? (
-                    <a href={detalhe.arquivo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                    <a href={detalhe.arquivo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
                       <img
                         src={detalhe.arquivo_url}
                         alt="Imagem da ocorrência"
-                        className="w-full rounded-xl border border-gray-200 object-contain max-h-80 cursor-zoom-in hover:opacity-90 transition-opacity"
+                        className="w-full rounded-xl border border-gray-200 object-contain max-h-96 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
                       />
                     </a>
                   ) : (
