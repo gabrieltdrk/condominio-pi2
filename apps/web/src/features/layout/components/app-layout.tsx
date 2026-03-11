@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, Sun, User, X } from "lucide-react";
+import { Bell, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, Sun, User, X, Building2 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
 import {
   AVISO_TIPO_COLORS,
@@ -13,6 +13,7 @@ const navLinks = [
   { label: "Dashboard",   path: "/dashboard",   icon: Home },
   { label: "Avisos",      path: "/avisos",       icon: Megaphone },
   { label: "Ocorrências", path: "/ocorrencias",  icon: ClipboardList },
+  { label: "Prédio",      path: "/predio",       icon: Building2 },
 ];
 
 function timeAgo(iso: string): string {
