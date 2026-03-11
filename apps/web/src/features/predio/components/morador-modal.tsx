@@ -34,7 +34,7 @@ export function MoradorModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-200 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div

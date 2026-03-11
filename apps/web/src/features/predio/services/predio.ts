@@ -24,6 +24,26 @@ export function getMockBuilding(): Floor[] {
   const floors: Floor[] = [
     {
       tower: "Torre A",
+      level: 7,
+      apartments: [
+        { id: "A-701", number: "701", floor: 7, resident: { name: "Fernanda Nascimento", email: "fernanda.nascimento@example.com", phone: "(11) 99999-0051", status: "Proprietário" } },
+        { id: "A-702", number: "702", floor: 7, resident: { name: "Ricardo Lima", email: "ricardo.lima@example.com", phone: "(11) 99999-0052", status: "Inquilino" } },
+        { id: "A-703", number: "703", floor: 7, resident: null },
+        { id: "A-704", number: "704", floor: 7, resident: { name: "Patrícia Alves", email: "patricia.alves@example.com", phone: "(11) 99999-0054", status: "Visitante" } },
+      ],
+    },
+    {
+      tower: "Torre A",
+      level: 6,
+      apartments: [
+        { id: "A-601", number: "601", floor: 6, resident: { name: "Bruno Costa", email: "bruno.costa@example.com", phone: "(11) 99999-0061", status: "Proprietário" } },
+        { id: "A-602", number: "602", floor: 6, resident: { name: "Juliana Freitas", email: "juliana.freitas@example.com", phone: "(11) 99999-0062", status: "Inquilino" } },
+        { id: "A-603", number: "603", floor: 6, resident: null },
+        { id: "A-604", number: "604", floor: 6, resident: { name: "Marco Silva", email: "marco.silva@example.com", phone: "(11) 99999-0064", status: "Proprietário" } },
+      ],
+    },
+    {
+      tower: "Torre A",
       level: 5,
       apartments: [
         { id: "A-501", number: "501", floor: 5, resident: { name: "Carlos Souza", email: "carlos.souza@example.com", phone: "(11) 99999-0001", status: "Proprietário" } },
@@ -73,6 +93,26 @@ export function getMockBuilding(): Floor[] {
       ],
     },
 
+    {
+      tower: "Torre B",
+      level: 7,
+      apartments: [
+        { id: "B-701", number: "701", floor: 7, resident: { name: "Ana Rita", email: "ana.rita@example.com", phone: "(11) 98888-0051", status: "Proprietário" } },
+        { id: "B-702", number: "702", floor: 7, resident: null },
+        { id: "B-703", number: "703", floor: 7, resident: { name: "Rafael Santos", email: "rafael.santos@example.com", phone: "(11) 98888-0053", status: "Inquilino" } },
+        { id: "B-704", number: "704", floor: 7, resident: { name: "Lívia Gomes", email: "livia.gomes@example.com", phone: "(11) 98888-0054", status: "Visitante" } },
+      ],
+    },
+    {
+      tower: "Torre B",
+      level: 6,
+      apartments: [
+        { id: "B-601", number: "601", floor: 6, resident: { name: "Eduardo Pires", email: "eduardo.pires@example.com", phone: "(11) 98888-0061", status: "Proprietário" } },
+        { id: "B-602", number: "602", floor: 6, resident: { name: "Mariana Costa", email: "mariana.costa@example.com", phone: "(11) 98888-0062", status: "Inquilino" } },
+        { id: "B-603", number: "603", floor: 6, resident: null },
+        { id: "B-604", number: "604", floor: 6, resident: { name: "Caio Rocha", email: "caio.rocha@example.com", phone: "(11) 98888-0064", status: "Proprietário" } },
+      ],
+    },
     {
       tower: "Torre B",
       level: 5,
