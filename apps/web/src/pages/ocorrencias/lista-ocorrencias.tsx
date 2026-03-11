@@ -1,6 +1,6 @@
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
-  ClipboardList, Lock, Plus, ThumbsUp,
+  ClipboardList, Lock, Plus, ThumbsUp, X,
 } from "lucide-react";
 import AppLayout from "../../features/layout/components/app-layout";
 import { Badge } from "../../components/ui/badge";
@@ -76,75 +76,116 @@ export default function ListaOcorrencias() {
       <div className="grid gap-4">
 
         {/* ── Header ── */}
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ClipboardList size={18} className="text-indigo-400" />
-              <span className="text-sm text-gray-500">
-                {loading ? "Carregando..." : `${displayed.length} ocorrência${displayed.length !== 1 ? "s" : ""}`}
-              </span>
-            </div>
-            <button
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold cursor-pointer border-none transition-all shrink-0 shadow-sm shadow-indigo-200"
-              onClick={() => { setForm(EMPTY_FORM); setNovaOpen(true); }}
-            >
-              <Plus size={15} />
-              Nova Ocorrência
-            </button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList size={18} className="text-indigo-400" />
+            <span className={`text-sm font-medium ${(filterStatus.length > 0 || filterCategoria) ? "text-indigo-600" : "text-gray-500"}`}>
+              {loading ? "Carregando..." : `${displayed.length} ocorrência${displayed.length !== 1 ? "s" : ""}${(filterStatus.length > 0 || filterCategoria) ? " encontradas" : ""}`}
+            </span>
           </div>
-
-          {isAdmin && (
-            <select
-              value={filterCategoria}
-              onChange={(e) => setFilterCategoria(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm font-medium outline-none focus:border-indigo-400 cursor-pointer"
-            >
-              <option value="">Todas as categorias</option>
-              {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
+          <button
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold cursor-pointer border-none transition-all shrink-0 shadow-sm shadow-indigo-200"
+            onClick={() => { setForm(EMPTY_FORM); setNovaOpen(true); }}
+          >
+            <Plus size={15} />
+            Nova Ocorrência
+          </button>
         </div>
 
-        {/* ── Filtros de status ── */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs text-gray-400 font-semibold shrink-0">Status:</span>
-          <div
-            className="flex gap-2 overflow-x-auto py-1 min-w-0 flex-1"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
-          >
-            <button
-              onClick={() => setFilterStatus([])}
-              className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-all shrink-0 ${
-                filterStatus.length === 0
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-              }`}
+        {/* ── Barra de filtros ── */}
+        <div className="grid gap-2">
+          {/* Status + Categoria na mesma linha */}
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-xs text-gray-400 font-semibold shrink-0">Status:</span>
+            <div
+              className="flex gap-1.5 overflow-x-auto py-1 min-w-0 flex-1"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
             >
-              Todos
-            </button>
-            {STATUS_OPTIONS.map((s) => {
-              const active = filterStatus.includes(s);
-              return (
+              <button
+                onClick={() => setFilterStatus([])}
+                className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-all shrink-0 ${
+                  filterStatus.length === 0
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                }`}
+              >
+                Todos
+              </button>
+              {STATUS_OPTIONS.map((s) => {
+                const active = filterStatus.includes(s);
+                return (
+                  <button
+                    key={s}
+                    onClick={() => toggleStatusFilter(s)}
+                    className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-all shrink-0 ${
+                      active ? STATUS_COLORS[s] : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+            {isAdmin && (
+              <select
+                value={filterCategoria}
+                onChange={(e) => setFilterCategoria(e.target.value)}
+                className="px-3 py-1.5 border border-gray-200 rounded-xl bg-white text-gray-700 text-xs font-medium outline-none focus:border-indigo-400 cursor-pointer shrink-0"
+              >
+                <option value="">Todas categorias</option>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+          </div>
+
+          {/* Filtros ativos — aparece só quando há filtro selecionado */}
+          {(filterStatus.length > 0 || filterCategoria) && (
+            <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-gray-100">
+              <span className="text-xs text-gray-400 shrink-0">Filtros ativos:</span>
+              {filterStatus.map((s) => (
                 <button
                   key={s}
                   onClick={() => toggleStatusFilter(s)}
-                  className={`text-xs font-semibold border px-3 py-1.5 rounded-full cursor-pointer transition-all shrink-0 ${
-                    active ? STATUS_COLORS[s] : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-                  }`}
+                  className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
                 >
-                  {s}
+                  {s} <X size={10} className="shrink-0" />
                 </button>
-              );
-            })}
-          </div>
+              ))}
+              {filterCategoria && (
+                <button
+                  onClick={() => setFilterCategoria("")}
+                  className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
+                >
+                  {filterCategoria} <X size={10} className="shrink-0" />
+                </button>
+              )}
+              <button
+                onClick={() => { setFilterStatus([]); setFilterCategoria(""); }}
+                className="text-xs text-rose-500 hover:text-rose-700 font-semibold cursor-pointer border-none bg-transparent ml-1"
+              >
+                Limpar tudo
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Empty / Error ── */}
         {!loading && displayed.length === 0 && !error && (
           <div className="bg-white border border-gray-200 rounded-2xl p-12 flex flex-col items-center gap-3 text-center shadow-sm">
             <AlertCircle size={36} className="text-gray-300" />
-            <p className="text-base text-gray-500">Nenhuma ocorrência encontrada.</p>
-            {!isAdmin && (
+            <p className="text-base text-gray-500">
+              {(filterStatus.length > 0 || filterCategoria)
+                ? "Nenhuma ocorrência para os filtros selecionados."
+                : "Nenhuma ocorrência encontrada."}
+            </p>
+            {(filterStatus.length > 0 || filterCategoria) ? (
+              <button
+                className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors"
+                onClick={() => { setFilterStatus([]); setFilterCategoria(""); }}
+              >
+                Limpar filtros
+              </button>
+            ) : !isAdmin && (
               <button
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold cursor-pointer border-none transition-colors"
                 onClick={() => { setForm(EMPTY_FORM); setNovaOpen(true); }}
