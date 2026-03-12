@@ -3,10 +3,11 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
-  Banknote,
-  CalendarClock,
-  CircleDollarSign,
+  BadgeCheck,
+  Building2,
+  CalendarRange,
   CreditCard,
+  FileText,
   Landmark,
   PiggyBank,
   PlusCircle,
@@ -18,104 +19,275 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import AppLayout from "../features/layout/components/app-layout";
+import { fetchBuilding, getMockBuilding, type Floor } from "../features/predio/services/predio";
+
+type RevenueCategory =
+  | "Taxa condominial"
+  | "Multa"
+  | "Juros por atraso"
+  | "Aluguel areas comuns";
+
+type RevenuePaymentMethod = "Pix" | "Boleto";
+type RevenueStatus = "Recebido" | "Em aberto" | "Atrasado";
+
+type ExpenseCategory =
+  | "Funcionarios"
+  | "Energia"
+  | "Agua"
+  | "Manutencao"
+  | "Limpeza"
+  | "Seguranca"
+  | "Outros";
+
+type ExpensePaymentMethod = "Pix" | "Boleto";
+type ExpenseStatus = "Pago" | "Pendente" | "Em negociacao";
+
+type Revenue = {
+  id: string;
+  identifier: string;
+  description: string;
+  amount: number;
+  receivedDate: string;
+  unit: string;
+  resident: string;
+  category: RevenueCategory;
+  paymentMethod: RevenuePaymentMethod;
+  status: RevenueStatus;
+  documentName: string;
+  notes: string;
+};
 
 type Expense = {
   id: string;
-  title: string;
+  identifier: string;
+  description: string;
   amount: number;
-  category: string;
+  issueDate: string;
   dueDate: string;
+  supplier: string;
+  category: ExpenseCategory;
+  paymentMethod: ExpensePaymentMethod;
+  status: ExpenseStatus;
+  documentName: string;
+  notes: string;
 };
 
-type Bill = {
-  id: string;
+type RevenueFormState = {
+  identifier: string;
+  description: string;
+  amount: string;
+  receivedDate: string;
+  unit: string;
   resident: string;
-  apartment: string;
-  amount: number;
+  category: RevenueCategory;
+  paymentMethod: RevenuePaymentMethod;
+  status: RevenueStatus;
+  documentName: string;
+  notes: string;
+};
+
+type ExpenseFormState = {
+  identifier: string;
+  description: string;
+  amount: string;
+  issueDate: string;
   dueDate: string;
-  status: "Em aberto" | "Pago" | "Atrasado";
+  supplier: string;
+  category: ExpenseCategory;
+  paymentMethod: ExpensePaymentMethod;
+  status: ExpenseStatus;
+  documentName: string;
+  notes: string;
 };
 
-type MonthlyPoint = {
-  mes: string;
-  entradas: number;
-  saidas: number;
+type UnitOption = {
+  value: string;
+  label: string;
+  resident: string;
 };
 
-const EXPENSES_STORAGE_KEY = "omni:finance:expenses:v1";
-const BILLS_STORAGE_KEY = "omni:finance:bills:v1";
+type MonthlySeries = {
+  month: string;
+  receitas: number;
+  despesas: number;
+};
 
-const chartData: MonthlyPoint[] = [
-  { mes: "Out", entradas: 39200, saidas: 24800 },
-  { mes: "Nov", entradas: 41800, saidas: 25900 },
-  { mes: "Dez", entradas: 40500, saidas: 28100 },
-  { mes: "Jan", entradas: 43100, saidas: 26700 },
-  { mes: "Fev", entradas: 42780, saidas: 25450 },
-  { mes: "Mar", entradas: 45200, saidas: 26450 },
+const REVENUES_STORAGE_KEY = "omni:finance:revenues:v2";
+const EXPENSES_STORAGE_KEY = "omni:finance:expenses:v2";
+
+const revenueCategories: RevenueCategory[] = [
+  "Taxa condominial",
+  "Multa",
+  "Juros por atraso",
+  "Aluguel areas comuns",
+];
+
+const expenseCategories: ExpenseCategory[] = [
+  "Funcionarios",
+  "Energia",
+  "Agua",
+  "Manutencao",
+  "Limpeza",
+  "Seguranca",
+  "Outros",
+];
+
+const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" });
+
+const defaultRevenues: Revenue[] = [
+  {
+    id: "rev-1",
+    identifier: "REC-2026-001",
+    description: "Taxa condominial de marco",
+    amount: 780,
+    receivedDate: "2026-03-05",
+    unit: "Torre A - Ap 101",
+    resident: "Gabriel Ferreira",
+    category: "Taxa condominial",
+    paymentMethod: "Pix",
+    status: "Recebido",
+    documentName: "comprovante-marco-101.pdf",
+    notes: "Pagamento dentro do prazo.",
+  },
+  {
+    id: "rev-2",
+    identifier: "REC-2026-002",
+    description: "Taxa condominial de marco",
+    amount: 780,
+    receivedDate: "2026-03-08",
+    unit: "Torre B - Ap 101",
+    resident: "Helena Moraes",
+    category: "Taxa condominial",
+    paymentMethod: "Boleto",
+    status: "Recebido",
+    documentName: "boleto-pago-101-marco.pdf",
+    notes: "",
+  },
+  {
+    id: "rev-3",
+    identifier: "REC-2026-003",
+    description: "Taxa condominial de fevereiro",
+    amount: 1240,
+    receivedDate: "2026-02-23",
+    unit: "Torre A - Ap 203",
+    resident: "Carlos Henrique",
+    category: "Taxa condominial",
+    paymentMethod: "Boleto",
+    status: "Atrasado",
+    documentName: "boleto-fevereiro-203.pdf",
+    notes: "Aguardando retorno do morador.",
+  },
+  {
+    id: "rev-4",
+    identifier: "REC-2026-004",
+    description: "Multa por uso indevido da vaga",
+    amount: 180,
+    receivedDate: "2026-03-10",
+    unit: "Torre B - Ap 504",
+    resident: "Fernanda Souza",
+    category: "Multa",
+    paymentMethod: "Pix",
+    status: "Em aberto",
+    documentName: "auto-infracao-504.pdf",
+    notes: "Prazo de recurso ate 15/03.",
+  },
+  {
+    id: "rev-5",
+    identifier: "REC-2026-005",
+    description: "Aluguel do salao de festas",
+    amount: 450,
+    receivedDate: "2026-03-11",
+    unit: "Area comum",
+    resident: "Reserva eventual",
+    category: "Aluguel areas comuns",
+    paymentMethod: "Pix",
+    status: "Recebido",
+    documentName: "contrato-salao-marco.pdf",
+    notes: "",
+  },
 ];
 
 const defaultExpenses: Expense[] = [
-  { id: "exp-1", title: "Conta de energia das áreas comuns", amount: 2480, category: "Consumo", dueDate: "2026-03-14" },
-  { id: "exp-2", title: "Contrato da portaria remota", amount: 6900, category: "Operação", dueDate: "2026-03-16" },
-  { id: "exp-3", title: "Manutenção dos elevadores", amount: 1950, category: "Preventiva", dueDate: "2026-03-18" },
-  { id: "exp-4", title: "Internet do condomínio", amount: 389, category: "Serviços", dueDate: "2026-03-20" },
-];
-
-const defaultBills: Bill[] = [
-  { id: "bill-1", resident: "Carlos Henrique", apartment: "Bloco A • Ap 203", amount: 1240, dueDate: "2026-02-23", status: "Atrasado" },
-  { id: "bill-2", resident: "Fernanda Souza", apartment: "Bloco B • Ap 504", amount: 2480, dueDate: "2026-02-09", status: "Atrasado" },
-  { id: "bill-3", resident: "Marcos Vinicius", apartment: "Bloco C • Ap 102", amount: 620, dueDate: "2026-03-05", status: "Atrasado" },
-  { id: "bill-4", resident: "Juliana Rocha", apartment: "Bloco B • Ap 501", amount: 780, dueDate: "2026-03-19", status: "Em aberto" },
-  { id: "bill-5", resident: "Helena Moraes", apartment: "Bloco B • Ap 101", amount: 780, dueDate: "2026-03-08", status: "Pago" },
-];
-
-const recentMovements = [
-  { label: "Recebimento de taxas condominiais", type: "entry", amount: 18760, when: "Hoje, 09:20", detail: "25 unidades compensadas" },
-  { label: "Pagamento da equipe de limpeza", type: "exit", amount: 3200, when: "Hoje, 11:40", detail: "Fornecedor recorrente" },
-  { label: "Fundo de reserva aplicado", type: "entry", amount: 4500, when: "Ontem, 16:15", detail: "Transferência interna" },
-  { label: "Compra de materiais hidráulicos", type: "exit", amount: 890, when: "Ontem, 18:05", detail: "Reposição emergencial" },
-];
-
-const weeklyAgenda = [
-  "Emitir segunda rodada de cobrança para inadimplentes acima de 15 dias",
-  "Validar repasse da administradora até sexta-feira",
-  "Conferir nota fiscal da manutenção dos elevadores",
-  "Projetar fluxo de caixa para o fechamento do mês",
+  {
+    id: "exp-1",
+    identifier: "DES-2026-001",
+    description: "Folha da equipe de limpeza",
+    amount: 3200,
+    issueDate: "2026-03-01",
+    dueDate: "2026-03-10",
+    supplier: "LimpaForte Servicos",
+    category: "Limpeza",
+    paymentMethod: "Pix",
+    status: "Pago",
+    documentName: "nf-limpeza-marco.pdf",
+    notes: "Prestacao mensal recorrente.",
+  },
+  {
+    id: "exp-2",
+    identifier: "DES-2026-002",
+    description: "Conta de energia das areas comuns",
+    amount: 2480,
+    issueDate: "2026-03-04",
+    dueDate: "2026-03-18",
+    supplier: "Companhia de Energia",
+    category: "Energia",
+    paymentMethod: "Boleto",
+    status: "Pendente",
+    documentName: "boleto-energia-marco.pdf",
+    notes: "",
+  },
+  {
+    id: "exp-3",
+    identifier: "DES-2026-003",
+    description: "Manutencao preventiva dos elevadores",
+    amount: 1950,
+    issueDate: "2026-03-02",
+    dueDate: "2026-03-16",
+    supplier: "Elevadores Sigma",
+    category: "Manutencao",
+    paymentMethod: "Boleto",
+    status: "Pendente",
+    documentName: "nf-elevadores-0316.pdf",
+    notes: "Visita mensal contratada.",
+  },
+  {
+    id: "exp-4",
+    identifier: "DES-2026-004",
+    description: "Acordo emergencial de encanamento",
+    amount: 890,
+    issueDate: "2026-03-09",
+    dueDate: "2026-03-20",
+    supplier: "Hidro Plantao",
+    category: "Agua",
+    paymentMethod: "Pix",
+    status: "Em negociacao",
+    documentName: "recibo-hidraulica-plantao.pdf",
+    notes: "Parcelamento em avaliacao.",
+  },
 ];
 
 const inputClass =
   "h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100";
 
+const textAreaClass =
+  "min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100";
+
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   });
 }
 
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-  });
-}
-
-function daysUntil(date: string) {
-  const now = new Date("2026-03-12T12:00:00");
-  const due = new Date(date);
-  const diff = Math.ceil((due.getTime() - now.getTime()) / 86400000);
-  if (diff < 0) return `${Math.abs(diff)} dias atrasado`;
-  if (diff === 0) return "Vence hoje";
-  if (diff === 1) return "Vence amanhã";
-  return `Em ${diff} dias`;
+function formatDate(value: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR");
 }
 
 function buildId(prefix: string) {
@@ -134,7 +306,46 @@ function readStorage<T>(key: string, fallback: T): T {
   }
 }
 
-function FinanceTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number }>; label?: string }) {
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function monthDifference(fromDate: string, now = new Date("2026-03-12T12:00:00")) {
+  const source = new Date(`${fromDate}T12:00:00`);
+  return Math.max(0, (now.getFullYear() - source.getFullYear()) * 12 + now.getMonth() - source.getMonth());
+}
+
+function getMonthKey(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  return monthFormatter.format(new Date(year, month - 1, 1));
+}
+
+function getUnitOptions(floors: Floor[]): UnitOption[] {
+  return floors
+    .flatMap((floor) =>
+      floor.apartments.map((apartment) => ({
+        value: `${floor.tower} - Ap ${apartment.number}`,
+        label: `${floor.tower} - Ap ${apartment.number}${apartment.resident ? ` - ${apartment.resident.name}` : ""}`,
+        resident: apartment.resident?.name ?? "Morador nao informado",
+      })),
+    )
+    .sort((a, b) => a.value.localeCompare(b.value, "pt-BR", { numeric: true }));
+}
+
+function FinanceTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ color: string; name: string; value: number }>;
+  label?: string;
+}) {
   if (!active || !payload?.length) return null;
 
   return (
@@ -142,7 +353,7 @@ function FinanceTooltip({ active, payload, label }: { active?: boolean; payload?
       <p className="font-semibold text-slate-700">{label}</p>
       {payload.map((item) => (
         <p key={item.name} style={{ color: item.color }} className="mt-1">
-          {item.name === "entradas" ? "Entradas" : "Saídas"}: {formatCurrency(item.value)}
+          {item.name}: {formatCurrency(item.value)}
         </p>
       ))}
     </div>
@@ -150,118 +361,339 @@ function FinanceTooltip({ active, payload, label }: { active?: boolean; payload?
 }
 
 export default function FinanceiroPage() {
+  const [building, setBuilding] = useState<Floor[]>(() => getMockBuilding());
+  const [revenues, setRevenues] = useState<Revenue[]>(() => readStorage(REVENUES_STORAGE_KEY, defaultRevenues));
   const [expenses, setExpenses] = useState<Expense[]>(() => readStorage(EXPENSES_STORAGE_KEY, defaultExpenses));
-  const [bills, setBills] = useState<Bill[]>(() => readStorage(BILLS_STORAGE_KEY, defaultBills));
-  const [expenseForm, setExpenseForm] = useState({ title: "", amount: "", category: "", dueDate: "" });
-  const [billForm, setBillForm] = useState({ resident: "", apartment: "", amount: "", dueDate: "", status: "Em aberto" as Bill["status"] });
+  const [revenueForm, setRevenueForm] = useState<RevenueFormState>({
+    identifier: "",
+    description: "",
+    amount: "",
+    receivedDate: "2026-03-12",
+    unit: "",
+    resident: "",
+    category: "Taxa condominial",
+    paymentMethod: "Pix",
+    status: "Recebido",
+    documentName: "",
+    notes: "",
+  });
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormState>({
+    identifier: "",
+    description: "",
+    amount: "",
+    issueDate: "2026-03-12",
+    dueDate: "2026-03-20",
+    supplier: "",
+    category: "Energia",
+    paymentMethod: "Boleto",
+    status: "Pendente",
+    documentName: "",
+    notes: "",
+  });
+
+  useEffect(() => {
+    fetchBuilding()
+      .then(setBuilding)
+      .catch(() => setBuilding(getMockBuilding()));
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(REVENUES_STORAGE_KEY, JSON.stringify(revenues));
+  }, [revenues]);
 
   useEffect(() => {
     window.localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(expenses));
   }, [expenses]);
 
-  useEffect(() => {
-    window.localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(bills));
-  }, [bills]);
+  const unitOptions = useMemo(() => getUnitOptions(building), [building]);
 
-  const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
-  const openBills = bills.filter((item) => item.status !== "Pago");
-  const lateBills = bills.filter((item) => item.status === "Atrasado");
-  const billedRevenue = bills.reduce((sum, item) => sum + item.amount, 0);
-  const paidRevenue = bills.filter((item) => item.status === "Pago").reduce((sum, item) => sum + item.amount, 0);
-  const lateRevenue = lateBills.reduce((sum, item) => sum + item.amount, 0);
+  const paidRevenues = useMemo(
+    () => revenues.filter((item) => item.status === "Recebido").reduce((sum, item) => sum + item.amount, 0),
+    [revenues],
+  );
+  const openRevenues = useMemo(
+    () => revenues.filter((item) => item.status === "Em aberto").reduce((sum, item) => sum + item.amount, 0),
+    [revenues],
+  );
+  const lateRevenues = useMemo(
+    () => revenues.filter((item) => item.status === "Atrasado").reduce((sum, item) => sum + item.amount, 0),
+    [revenues],
+  );
+  const paidExpenses = useMemo(
+    () => expenses.filter((item) => item.status === "Pago").reduce((sum, item) => sum + item.amount, 0),
+    [expenses],
+  );
+  const pendingExpenses = useMemo(
+    () => expenses.filter((item) => item.status !== "Pago").reduce((sum, item) => sum + item.amount, 0),
+    [expenses],
+  );
+  const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses]);
+  const totalRevenues = useMemo(() => revenues.reduce((sum, item) => sum + item.amount, 0), [revenues]);
+  const balance = paidRevenues - paidExpenses;
 
-  const monthlySummary = useMemo(
-    () => [
-      { label: "Receita prevista", value: formatCurrency(billedRevenue), tone: "border-emerald-100 bg-emerald-50 text-emerald-700" },
-      { label: "Receita recebida", value: formatCurrency(paidRevenue), tone: "border-slate-100 bg-slate-50 text-slate-700" },
-      { label: "Despesas lançadas", value: formatCurrency(totalExpenses), tone: "border-slate-100 bg-slate-50 text-slate-700" },
-      { label: "Em atraso", value: formatCurrency(lateRevenue), tone: "border-amber-100 bg-amber-50 text-amber-700" },
-    ],
-    [billedRevenue, lateRevenue, paidRevenue, totalExpenses],
+  const monthlySeries = useMemo<MonthlySeries[]>(() => {
+    const currentMonth = startOfMonth(new Date("2026-03-12T12:00:00"));
+    const series = new Map<string, MonthlySeries>();
+
+    for (let index = 5; index >= 0; index -= 1) {
+      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - index, 1);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      series.set(key, {
+        month: formatMonthLabel(key),
+        receitas: 0,
+        despesas: 0,
+      });
+    }
+
+    for (const revenue of revenues) {
+      const key = getMonthKey(revenue.receivedDate);
+      const month = series.get(key);
+      if (month) month.receitas += revenue.amount;
+    }
+
+    for (const expense of expenses) {
+      const key = getMonthKey(expense.issueDate);
+      const month = series.get(key);
+      if (month) month.despesas += expense.amount;
+    }
+
+    return Array.from(series.values());
+  }, [expenses, revenues]);
+
+  const revenuesByMonth = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const revenue of revenues) {
+      const key = getMonthKey(revenue.receivedDate);
+      totals.set(key, (totals.get(key) ?? 0) + revenue.amount);
+    }
+
+    return Array.from(totals.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([month, total]) => ({ month, total }));
+  }, [revenues]);
+
+  const expensesByMonth = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const expense of expenses) {
+      const key = getMonthKey(expense.issueDate);
+      totals.set(key, (totals.get(key) ?? 0) + expense.amount);
+    }
+
+    return Array.from(totals.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([month, total]) => ({ month, total }));
+  }, [expenses]);
+
+  const revenuesByYear = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const revenue of revenues) {
+      const year = revenue.receivedDate.slice(0, 4);
+      totals.set(year, (totals.get(year) ?? 0) + revenue.amount);
+    }
+
+    return Array.from(totals.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([year, total]) => ({ year, total }));
+  }, [revenues]);
+
+  const expensesByYear = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const expense of expenses) {
+      const year = expense.issueDate.slice(0, 4);
+      totals.set(year, (totals.get(year) ?? 0) + expense.amount);
+    }
+
+    return Array.from(totals.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([year, total]) => ({ year, total }));
+  }, [expenses]);
+
+  const delinquencyRows = useMemo(
+    () =>
+      revenues
+        .filter((item) => item.category === "Taxa condominial" && item.status !== "Recebido")
+        .sort((a, b) => a.receivedDate.localeCompare(b.receivedDate))
+        .map((item) => ({
+          id: item.id,
+          apartment: item.unit,
+          resident: item.resident,
+          amount: item.amount,
+          status: item.status,
+          lateMonths: monthDifference(item.receivedDate),
+        })),
+    [revenues],
   );
 
-  const displayedExpenses = useMemo(
-    () => [...expenses].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+  const recentRevenues = useMemo(
+    () => [...revenues].sort((a, b) => b.receivedDate.localeCompare(a.receivedDate)).slice(0, 5),
+    [revenues],
+  );
+
+  const recentExpenses = useMemo(
+    () => [...expenses].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5),
     [expenses],
   );
 
-  const displayedBills = useMemo(
-    () =>
-      [...bills]
-        .filter((item) => item.status !== "Pago")
-        .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
-    [bills],
-  );
+  function handleRevenueUnitChange(value: string) {
+    const selected = unitOptions.find((option) => option.value === value);
+    setRevenueForm((current) => ({
+      ...current,
+      unit: value,
+      resident: selected?.resident ?? current.resident,
+    }));
+  }
+
+  function handleCreateRevenue(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (
+      !revenueForm.identifier.trim() ||
+      !revenueForm.description.trim() ||
+      !revenueForm.amount ||
+      !revenueForm.receivedDate ||
+      !revenueForm.unit.trim()
+    ) {
+      return;
+    }
+
+    setRevenues((current) => [
+      {
+        id: buildId("revenue"),
+        identifier: revenueForm.identifier.trim(),
+        description: revenueForm.description.trim(),
+        amount: Number(revenueForm.amount),
+        receivedDate: revenueForm.receivedDate,
+        unit: revenueForm.unit.trim(),
+        resident: revenueForm.resident.trim() || "Morador nao informado",
+        category: revenueForm.category,
+        paymentMethod: revenueForm.paymentMethod,
+        status: revenueForm.status,
+        documentName: revenueForm.documentName.trim(),
+        notes: revenueForm.notes.trim(),
+      },
+      ...current,
+    ]);
+
+    setRevenueForm({
+      identifier: "",
+      description: "",
+      amount: "",
+      receivedDate: "2026-03-12",
+      unit: "",
+      resident: "",
+      category: "Taxa condominial",
+      paymentMethod: "Pix",
+      status: "Recebido",
+      documentName: "",
+      notes: "",
+    });
+  }
 
   function handleCreateExpense(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!expenseForm.title.trim() || !expenseForm.amount || !expenseForm.category.trim() || !expenseForm.dueDate) return;
+
+    if (
+      !expenseForm.identifier.trim() ||
+      !expenseForm.description.trim() ||
+      !expenseForm.amount ||
+      !expenseForm.issueDate ||
+      !expenseForm.dueDate ||
+      !expenseForm.supplier.trim()
+    ) {
+      return;
+    }
 
     setExpenses((current) => [
       {
         id: buildId("expense"),
-        title: expenseForm.title.trim(),
+        identifier: expenseForm.identifier.trim(),
+        description: expenseForm.description.trim(),
         amount: Number(expenseForm.amount),
-        category: expenseForm.category.trim(),
+        issueDate: expenseForm.issueDate,
         dueDate: expenseForm.dueDate,
+        supplier: expenseForm.supplier.trim(),
+        category: expenseForm.category,
+        paymentMethod: expenseForm.paymentMethod,
+        status: expenseForm.status,
+        documentName: expenseForm.documentName.trim(),
+        notes: expenseForm.notes.trim(),
       },
       ...current,
     ]);
 
-    setExpenseForm({ title: "", amount: "", category: "", dueDate: "" });
-  }
-
-  function handleCreateBill(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!billForm.resident.trim() || !billForm.apartment.trim() || !billForm.amount || !billForm.dueDate) return;
-
-    setBills((current) => [
-      {
-        id: buildId("bill"),
-        resident: billForm.resident.trim(),
-        apartment: billForm.apartment.trim(),
-        amount: Number(billForm.amount),
-        dueDate: billForm.dueDate,
-        status: billForm.status,
-      },
-      ...current,
-    ]);
-
-    setBillForm({ resident: "", apartment: "", amount: "", dueDate: "", status: "Em aberto" });
+    setExpenseForm({
+      identifier: "",
+      description: "",
+      amount: "",
+      issueDate: "2026-03-12",
+      dueDate: "2026-03-20",
+      supplier: "",
+      category: "Energia",
+      paymentMethod: "Boleto",
+      status: "Pendente",
+      documentName: "",
+      notes: "",
+    });
   }
 
   return (
     <AppLayout title="Financeiro">
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         <section className="overflow-hidden rounded-3xl border border-emerald-100 bg-[radial-gradient(circle_at_top_left,_rgba(134,239,172,0.35),_transparent_34%),linear-gradient(135deg,_#ecfdf5_0%,_#ffffff_48%,_#f8fafc_100%)] p-5 shadow-sm">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
                 <Wallet size={13} />
-                Gestão financeira do condomínio
+                Gestao financeira do condominio
               </div>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Caixa, despesas e boletos com visão operacional</h2>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">
+                Cadastre receitas, despesas e acompanhe o saldo em tempo real
+              </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Cadastre despesas e boletos, acompanhe entradas versus saídas e identifique rapidamente os pontos de atenção do mês.
+                O painel concentra lancamentos, inadimplencia e relatorios mensais e anuais para apoiar a rotina administrativa.
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:min-w-[720px]">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:max-w-[760px]">
               {[
-                { icon: CircleDollarSign, label: "Receita prevista", value: formatCurrency(billedRevenue), hint: `${bills.length} boletos no período`, tone: "border-emerald-100 bg-white text-emerald-700" },
-                { icon: ArrowUpCircle, label: "Recebido", value: formatCurrency(paidRevenue), hint: `${bills.filter((item) => item.status === "Pago").length} boletos pagos`, tone: "border-slate-100 bg-white text-slate-700" },
-                { icon: ArrowDownCircle, label: "Despesas", value: formatCurrency(totalExpenses), hint: `${expenses.length} lançamentos`, tone: "border-slate-100 bg-white text-slate-700" },
-                { icon: AlertTriangle, label: "Inadimplência", value: formatCurrency(lateRevenue), hint: `${lateBills.length} boletos atrasados`, tone: "border-amber-100 bg-white text-amber-700" },
+                {
+                  icon: ArrowUpCircle,
+                  label: "Receitas recebidas",
+                  value: formatCurrency(paidRevenues),
+                  hint: `${revenues.filter((item) => item.status === "Recebido").length} registros`,
+                  tone: "border-emerald-100 bg-white text-emerald-700",
+                },
+                {
+                  icon: ArrowDownCircle,
+                  label: "Despesas pagas",
+                  value: formatCurrency(paidExpenses),
+                  hint: `${expenses.filter((item) => item.status === "Pago").length} registros`,
+                  tone: "border-slate-100 bg-white text-slate-700",
+                },
+                {
+                  icon: AlertTriangle,
+                  label: "Inadimplencia",
+                  value: formatCurrency(lateRevenues),
+                  hint: `${delinquencyRows.length} unidades com taxa em aberto`,
+                  tone: "border-amber-100 bg-white text-amber-700",
+                },
+                {
+                  icon: PiggyBank,
+                  label: "Saldo atual",
+                  value: formatCurrency(balance),
+                  hint: "Recebido menos pago",
+                  tone: "border-indigo-100 bg-white text-indigo-700",
+                },
               ].map((card) => {
                 const Icon = card.icon;
                 return (
-                  <div key={card.label} className={`rounded-2xl border p-4 shadow-sm ${card.tone}`}>
+                  <div key={card.label} className={`min-w-0 rounded-2xl border p-4 shadow-sm ${card.tone}`}>
                     <div className="flex items-center justify-between gap-3">
                       <Icon size={18} />
                       <span className="text-[11px] font-medium text-slate-400">{card.hint}</span>
                     </div>
                     <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-900">{card.value}</p>
+                    <p className="mt-1 break-words text-xl font-bold text-slate-900 sm:text-2xl">{card.value}</p>
                   </div>
                 );
               })}
@@ -269,100 +701,309 @@ export default function FinanceiroPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h3 className="m-0 text-sm font-semibold text-slate-900">Fluxo de caixa mensal</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Comparativo entre entradas e saídas para leitura rápida da margem operacional.</p>
+                <h3 className="m-0 text-sm font-semibold text-slate-900">Fluxo financeiro dos ultimos 6 meses</h3>
+                <p className="mt-0.5 text-xs text-slate-400">Receitas e despesas consolidadas a partir dos lancamentos cadastrados.</p>
               </div>
               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                Dados simulados do semestre
+                Base local da tela financeira
               </span>
             </div>
 
             <div className="mt-4 h-72 rounded-3xl border border-slate-100 bg-slate-50 p-3">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} barGap={10}>
+                <BarChart data={monthlySeries} barGap={10}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="mes" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(value) => `R$ ${Math.round(value / 1000)}k`} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    tickFormatter={(value) => `R$ ${Math.round(value / 1000)}k`}
+                  />
                   <Tooltip content={<FinanceTooltip />} />
-                  <Legend />
-                  <Bar dataKey="entradas" name="entradas" radius={[10, 10, 0, 0]}>
-                    {chartData.map((entry) => (
-                      <Cell key={`entry-${entry.mes}`} fill="#10b981" />
+                  <Bar dataKey="receitas" name="Receitas" radius={[10, 10, 0, 0]}>
+                    {monthlySeries.map((item) => (
+                      <Cell key={`receita-${item.month}`} fill="#10b981" />
                     ))}
                   </Bar>
-                  <Bar dataKey="saidas" name="saidas" radius={[10, 10, 0, 0]}>
-                    {chartData.map((entry) => (
-                      <Cell key={`exit-${entry.mes}`} fill="#f59e0b" />
+                  <Bar dataKey="despesas" name="Despesas" radius={[10, 10, 0, 0]}>
+                    {monthlySeries.map((item) => (
+                      <Cell key={`despesa-${item.month}`} fill="#f59e0b" />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {monthlySummary.map((item) => (
-                <div key={item.label} className={`rounded-2xl border p-4 ${item.tone}`}>
-                  <p className="m-0 text-[11px] font-semibold uppercase tracking-wide">{item.label}</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-900">{item.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <div className="flex items-center gap-2 text-slate-600">
                   <Landmark size={16} />
-                  <span className="text-xs font-semibold uppercase tracking-wide">Margem operacional</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide">Total de receitas</span>
                 </div>
-                <p className="mt-3 text-3xl font-bold text-slate-900">
-                  {billedRevenue > 0 ? `${Math.max(0, Math.round(((billedRevenue - totalExpenses) / billedRevenue) * 100))}%` : "0%"}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Baseada na receita prevista versus despesas lançadas.</p>
+                <p className="mt-3 break-words text-2xl font-bold text-slate-900 sm:text-3xl">{formatCurrency(totalRevenues)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{formatCurrency(openRevenues)} ainda em aberto.</p>
               </div>
 
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <div className="flex items-center gap-2 text-slate-600">
-                  <PiggyBank size={16} />
-                  <span className="text-xs font-semibold uppercase tracking-wide">Reserva simulada</span>
+                  <Receipt size={16} />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Total de despesas</span>
                 </div>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrency(121000 + paidRevenue - totalExpenses)}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Estimativa acumulada considerando repasses e saídas atuais.</p>
+                <p className="mt-3 break-words text-2xl font-bold text-slate-900 sm:text-3xl">{formatCurrency(totalExpenses)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{formatCurrency(pendingExpenses)} ainda pendente.</p>
               </div>
 
               <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                 <div className="flex items-center gap-2 text-amber-700">
-                  <CreditCard size={16} />
-                  <span className="text-xs font-semibold uppercase tracking-wide">Boletos em aberto</span>
+                  <CalendarRange size={16} />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Receitas atrasadas</span>
                 </div>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{openBills.length}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-600">{lateBills.length} já estão em atraso e pedem cobrança ativa.</p>
+                <p className="mt-3 break-words text-2xl font-bold text-slate-900 sm:text-3xl">{formatCurrency(lateRevenues)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Taxas condominiais e cobrancas com atraso.</p>
+              </div>
+
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                <div className="flex items-center gap-2 text-indigo-700">
+                  <BadgeCheck size={16} />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Saldo consolidado</span>
+                </div>
+                <p className="mt-3 break-words text-2xl font-bold text-slate-900 sm:text-3xl">{formatCurrency(balance)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Considera apenas o que ja foi recebido e pago.</p>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-4">
-            <form onSubmit={handleCreateExpense} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid min-w-0 gap-4">
+            <form onSubmit={handleCreateRevenue} className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <Wallet size={18} />
+                </div>
+                <div>
+                  <h3 className="m-0 text-sm font-semibold text-slate-900">Cadastro de receitas</h3>
+                  <p className="mt-0.5 text-xs text-slate-400">Lance entradas com categoria, unidade, documento e status.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    value={revenueForm.identifier}
+                    onChange={(event) => setRevenueForm((current) => ({ ...current, identifier: event.target.value }))}
+                    placeholder="No receita"
+                    className={inputClass}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={revenueForm.amount}
+                    onChange={(event) => setRevenueForm((current) => ({ ...current, amount: event.target.value }))}
+                    placeholder="Valor"
+                    className={inputClass}
+                  />
+                </div>
+
+                <input
+                  value={revenueForm.description}
+                  onChange={(event) => setRevenueForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Descricao da receita"
+                  className={inputClass}
+                />
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="date"
+                    value={revenueForm.receivedDate}
+                    onChange={(event) => setRevenueForm((current) => ({ ...current, receivedDate: event.target.value }))}
+                    className={inputClass}
+                  />
+                  <select value={revenueForm.unit} onChange={(event) => handleRevenueUnitChange(event.target.value)} className={inputClass}>
+                    <option value="">Selecione a unidade</option>
+                    <option value="Area comum">Area comum</option>
+                    {unitOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    value={revenueForm.resident}
+                    onChange={(event) => setRevenueForm((current) => ({ ...current, resident: event.target.value }))}
+                    placeholder="Morador"
+                    className={inputClass}
+                  />
+                  <select
+                    value={revenueForm.category}
+                    onChange={(event) => setRevenueForm((current) => ({ ...current, category: event.target.value as RevenueCategory }))}
+                    className={inputClass}
+                  >
+                    {revenueCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select
+                    value={revenueForm.paymentMethod}
+                    onChange={(event) =>
+                      setRevenueForm((current) => ({ ...current, paymentMethod: event.target.value as RevenuePaymentMethod }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="Pix">Pix</option>
+                    <option value="Boleto">Boleto</option>
+                  </select>
+                  <select
+                    value={revenueForm.status}
+                    onChange={(event) => setRevenueForm((current) => ({ ...current, status: event.target.value as RevenueStatus }))}
+                    className={inputClass}
+                  >
+                    <option value="Recebido">Recebido</option>
+                    <option value="Em aberto">Em aberto</option>
+                    <option value="Atrasado">Atrasado</option>
+                  </select>
+                </div>
+
+                <input
+                  value={revenueForm.documentName}
+                  onChange={(event) => setRevenueForm((current) => ({ ...current, documentName: event.target.value }))}
+                  placeholder="Documento associado"
+                  className={inputClass}
+                />
+
+                <textarea
+                  value={revenueForm.notes}
+                  onChange={(event) => setRevenueForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Observacoes"
+                  className={textAreaClass}
+                />
+
+                <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                  <PlusCircle size={16} />
+                  Adicionar receita
+                </button>
+              </div>
+            </form>
+
+            <form onSubmit={handleCreateExpense} className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
                   <Receipt size={18} />
                 </div>
                 <div>
-                  <h3 className="m-0 text-sm font-semibold text-slate-900">Cadastrar despesa</h3>
-                  <p className="mt-0.5 text-xs text-slate-400">Lance contas e saídas para refletir no painel.</p>
+                  <h3 className="m-0 text-sm font-semibold text-slate-900">Cadastro de despesas</h3>
+                  <p className="mt-0.5 text-xs text-slate-400">Controle emissao, vencimento, fornecedor e documentos fiscais.</p>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3">
-                <input value={expenseForm.title} onChange={(event) => setExpenseForm((current) => ({ ...current, title: event.target.value }))} placeholder="Descrição da despesa" className={inputClass} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <input value={expenseForm.category} onChange={(event) => setExpenseForm((current) => ({ ...current, category: event.target.value }))} placeholder="Categoria" className={inputClass} />
-                  <input type="number" min={0} value={expenseForm.amount} onChange={(event) => setExpenseForm((current) => ({ ...current, amount: event.target.value }))} placeholder="Valor" className={inputClass} />
+                  <input
+                    value={expenseForm.identifier}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, identifier: event.target.value }))}
+                    placeholder="No despesa"
+                    className={inputClass}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={expenseForm.amount}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, amount: event.target.value }))}
+                    placeholder="Valor"
+                    className={inputClass}
+                  />
                 </div>
-                <input type="date" value={expenseForm.dueDate} onChange={(event) => setExpenseForm((current) => ({ ...current, dueDate: event.target.value }))} className={inputClass} />
+
+                <input
+                  value={expenseForm.description}
+                  onChange={(event) => setExpenseForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Descricao da despesa"
+                  className={inputClass}
+                />
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="date"
+                    value={expenseForm.issueDate}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, issueDate: event.target.value }))}
+                    className={inputClass}
+                  />
+                  <input
+                    type="date"
+                    value={expenseForm.dueDate}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, dueDate: event.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    value={expenseForm.supplier}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, supplier: event.target.value }))}
+                    placeholder="Fornecedor"
+                    className={inputClass}
+                  />
+                  <select
+                    value={expenseForm.category}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, category: event.target.value as ExpenseCategory }))}
+                    className={inputClass}
+                  >
+                    {expenseCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select
+                    value={expenseForm.paymentMethod}
+                    onChange={(event) =>
+                      setExpenseForm((current) => ({ ...current, paymentMethod: event.target.value as ExpensePaymentMethod }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="Pix">Pix</option>
+                    <option value="Boleto">Boleto</option>
+                  </select>
+                  <select
+                    value={expenseForm.status}
+                    onChange={(event) => setExpenseForm((current) => ({ ...current, status: event.target.value as ExpenseStatus }))}
+                    className={inputClass}
+                  >
+                    <option value="Pago">Pago</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Em negociacao">Em negociacao</option>
+                  </select>
+                </div>
+
+                <input
+                  value={expenseForm.documentName}
+                  onChange={(event) => setExpenseForm((current) => ({ ...current, documentName: event.target.value }))}
+                  placeholder="Documento associado"
+                  className={inputClass}
+                />
+
+                <textarea
+                  value={expenseForm.notes}
+                  onChange={(event) => setExpenseForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Observacoes"
+                  className={textAreaClass}
+                />
 
                 <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-600">
                   <PlusCircle size={16} />
@@ -370,172 +1011,200 @@ export default function FinanceiroPage() {
                 </button>
               </div>
             </form>
-
-            <form onSubmit={handleCreateBill} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                  <Banknote size={18} />
-                </div>
-                <div>
-                  <h3 className="m-0 text-sm font-semibold text-slate-900">Cadastrar boleto</h3>
-                  <p className="mt-0.5 text-xs text-slate-400">Simule cobranças e acompanhe a inadimplência.</p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                <input value={billForm.resident} onChange={(event) => setBillForm((current) => ({ ...current, resident: event.target.value }))} placeholder="Nome do morador" className={inputClass} />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <input value={billForm.apartment} onChange={(event) => setBillForm((current) => ({ ...current, apartment: event.target.value }))} placeholder="Bloco / apartamento" className={inputClass} />
-                  <input type="number" min={0} value={billForm.amount} onChange={(event) => setBillForm((current) => ({ ...current, amount: event.target.value }))} placeholder="Valor" className={inputClass} />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <input type="date" value={billForm.dueDate} onChange={(event) => setBillForm((current) => ({ ...current, dueDate: event.target.value }))} className={inputClass} />
-                  <select value={billForm.status} onChange={(event) => setBillForm((current) => ({ ...current, status: event.target.value as Bill["status"] }))} className={inputClass}>
-                    <option value="Em aberto">Em aberto</option>
-                    <option value="Pago">Pago</option>
-                    <option value="Atrasado">Atrasado</option>
-                  </select>
-                </div>
-
-                <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
-                  <PlusCircle size={16} />
-                  Adicionar boleto
-                </button>
-              </div>
-            </form>
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="grid min-w-0 gap-4 xl:grid-cols-2">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-                <Receipt size={18} />
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <ArrowUpCircle size={18} />
               </div>
               <div>
-                <h3 className="m-0 text-sm font-semibold text-slate-900">Despesas a vencer</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Lançamentos ordenados por data de vencimento.</p>
+                <h3 className="m-0 text-sm font-semibold text-slate-900">Relatorio de receitas</h3>
+                <p className="mt-0.5 text-xs text-slate-400">Totais mensais, anuais e lancamentos recentes.</p>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {displayedExpenses.map((expense) => (
-                <div key={expense.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="m-0 text-sm font-semibold text-slate-800">{expense.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">{expense.category} • Vencimento: {formatDate(expense.dueDate)}</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mensal</p>
+                <div className="mt-3 space-y-2">
+                  {revenuesByMonth.map((item) => (
+                    <div key={item.month} className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                      <span>{formatMonthLabel(item.month)}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(item.total)}</span>
                     </div>
-                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                      {formatCurrency(expense.amount)}
-                    </span>
-                  </div>
-                  <div className="mt-3">
-                    <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                      {daysUntil(expense.dueDate)}
-                    </span>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Anual</p>
+                <div className="mt-3 space-y-2">
+                  {revenuesByYear.map((item) => (
+                    <div key={item.year} className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                      <span>{item.year}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(item.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100">
+              <div className="hidden grid-cols-[minmax(0,1fr)_auto_auto] gap-3 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
+                <span>Receita</span>
+                <span>Data</span>
+                <span>Total</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {recentRevenues.map((item) => (
+                  <div key={item.id} className="grid gap-2 px-4 py-3 text-sm text-slate-700 md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold text-slate-900">{item.identifier}</p>
+                      <p className="break-words text-xs text-slate-500">{item.description}</p>
+                    </div>
+                    <span className="text-xs text-slate-500 md:text-sm">{formatDate(item.receivedDate)}</span>
+                    <span className="break-words font-semibold text-emerald-700">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                <ArrowDownCircle size={18} />
+              </div>
+              <div>
+                <h3 className="m-0 text-sm font-semibold text-slate-900">Relatorio de despesas</h3>
+                <p className="mt-0.5 text-xs text-slate-400">Totais mensais, anuais e despesas com vencimento mais proximo.</p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mensal</p>
+                <div className="mt-3 space-y-2">
+                  {expensesByMonth.map((item) => (
+                    <div key={item.month} className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                      <span>{formatMonthLabel(item.month)}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(item.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Anual</p>
+                <div className="mt-3 space-y-2">
+                  {expensesByYear.map((item) => (
+                    <div key={item.year} className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                      <span>{item.year}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(item.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100">
+              <div className="hidden grid-cols-[minmax(0,1fr)_auto_auto] gap-3 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
+                <span>Despesa</span>
+                <span>Vencimento</span>
+                <span>Total</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {recentExpenses.map((item) => (
+                  <div key={item.id} className="grid gap-2 px-4 py-3 text-sm text-slate-700 md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold text-slate-900">{item.identifier}</p>
+                      <p className="break-words text-xs text-slate-500">{item.description}</p>
+                    </div>
+                    <span className="text-xs text-slate-500 md:text-sm">{formatDate(item.dueDate)}</span>
+                    <span className="break-words font-semibold text-amber-700">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
                 <AlertTriangle size={18} />
               </div>
               <div>
-                <h3 className="m-0 text-sm font-semibold text-slate-900">Boletos em aberto e atrasados</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Simulação de cobrança para acompanhamento da inadimplência.</p>
+                <h3 className="m-0 text-sm font-semibold text-slate-900">Relatorio de inadimplencia</h3>
+                <p className="mt-0.5 text-xs text-slate-400">Moradores com taxa condominial nao recebida.</p>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {displayedBills.map((bill) => (
-                <div key={bill.id} className="rounded-2xl border border-rose-100 bg-rose-50/70 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="m-0 text-sm font-semibold text-slate-800">{bill.resident}</p>
-                      <p className="mt-1 text-xs text-slate-500">{bill.apartment}</p>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100">
+              <div className="hidden grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_auto_auto] gap-3 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
+                <span>Apartamento</span>
+                <span>Morador</span>
+                <span>Atraso</span>
+                <span>Valor</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {delinquencyRows.length > 0 ? (
+                  delinquencyRows.map((item) => (
+                    <div key={item.id} className="grid gap-2 px-4 py-3 text-sm text-slate-700 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_auto_auto] md:gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold text-slate-900">{item.apartment}</p>
+                        <p className="text-xs text-slate-500">{item.status}</p>
+                      </div>
+                      <span className="break-words">{item.resident}</span>
+                      <span className="text-xs text-slate-500 md:text-sm">{item.lateMonths} mes(es)</span>
+                      <span className="break-words font-semibold text-rose-700">{formatCurrency(item.amount)}</span>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-                      bill.status === "Atrasado" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
-                    }`}>
-                      {bill.status}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-bold text-rose-700">{formatCurrency(bill.amount)}</p>
-                      <p className="mt-1 text-xs text-slate-500">Vencimento: {formatDate(bill.dueDate)} • {daysUntil(bill.dueDate)}</p>
-                    </div>
-                    <button className="rounded-full border border-rose-200 bg-white px-3 py-1 text-[11px] font-semibold text-rose-700 transition-colors hover:bg-rose-100">
-                      Cobrar agora
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  ))
+                ) : (
+                  <div className="px-4 py-6 text-sm text-slate-500">Nenhuma unidade inadimplente nas taxas condominiais.</div>
+                )}
+              </div>
             </div>
           </div>
-        </section>
 
-        <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                <CalendarClock size={18} />
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                <Building2 size={18} />
               </div>
               <div>
-                <h3 className="m-0 text-sm font-semibold text-slate-900">Movimentações recentes</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Eventos financeiros para leitura rápida do caixa.</p>
+                <h3 className="m-0 text-sm font-semibold text-slate-900">Relatorio financeiro</h3>
+                <p className="mt-0.5 text-xs text-slate-400">Visao consolidada de entradas, saidas e saldo.</p>
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
-              {recentMovements.map((movement) => {
-                const isEntry = movement.type === "entry";
+              {[
+                { icon: Wallet, label: "Receitas cadastradas", value: formatCurrency(totalRevenues), tone: "text-emerald-700 bg-emerald-50" },
+                { icon: CreditCard, label: "Despesas cadastradas", value: formatCurrency(totalExpenses), tone: "text-amber-700 bg-amber-50" },
+                { icon: FileText, label: "Documentos informados", value: `${revenues.filter((item) => item.documentName).length + expenses.filter((item) => item.documentName).length}`, tone: "text-slate-700 bg-slate-50" },
+                { icon: PiggyBank, label: "Saldo financeiro", value: formatCurrency(balance), tone: "text-indigo-700 bg-indigo-50" },
+              ].map((item) => {
+                const Icon = item.icon;
                 return (
-                  <div key={`${movement.label}-${movement.when}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${isEntry ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-                        {isEntry ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
+                  <div key={item.label} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${item.tone}`}>
+                        <Icon size={18} />
                       </div>
-                      <div>
-                        <p className="m-0 text-sm font-semibold text-slate-800">{movement.label}</p>
-                        <p className="mt-1 text-xs text-slate-500">{movement.when} • {movement.detail}</p>
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-semibold text-slate-900">{item.label}</p>
+                        <p className="text-xs text-slate-500">Atualizado a partir dos cadastros desta tela.</p>
                       </div>
                     </div>
-                    <span className={`text-sm font-bold ${isEntry ? "text-emerald-700" : "text-rose-700"}`}>
-                      {isEntry ? "+" : "-"} {formatCurrency(movement.amount)}
-                    </span>
+                    <span className="break-words text-lg font-bold text-slate-900">{item.value}</span>
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
-                <Banknote size={18} />
-              </div>
-              <div>
-                <h3 className="m-0 text-sm font-semibold text-slate-900">Plano desta semana</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Ações sugeridas para manter previsibilidade financeira.</p>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {weeklyAgenda.map((item, index) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">
-                    {index + 1}
-                  </div>
-                  <p className="m-0 text-sm leading-6 text-slate-700">{item}</p>
-                </div>
-              ))}
             </div>
           </div>
         </section>
