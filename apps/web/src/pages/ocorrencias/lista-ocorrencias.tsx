@@ -1,6 +1,6 @@
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown,
-  ClipboardList, Lock, Plus, ThumbsUp,
+  ClipboardList, Lock, Plus, ThumbsUp, UserRound,
 } from "lucide-react";
 import AppLayout from "../../features/layout/components/app-layout";
 import { Badge } from "../../components/ui/badge";
@@ -109,13 +109,20 @@ export default function ListaOcorrencias() {
             <button
               type="button"
               onClick={() => setOnlyMine((value: boolean) => !value)}
-              className={`w-full sm:w-auto px-3 py-2.5 border rounded-xl text-sm font-semibold transition-colors ${
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition-all ${
                 onlyMine
-                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
               }`}
             >
-              {onlyMine ? "Mostrando só as minhas" : "Mostrar só as minhas"}
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                  onlyMine ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                <UserRound size={14} />
+              </span>
+              <span>{onlyMine ? "Minhas ocorrências ativas" : "Mostrar só as minhas"}</span>
             </button>
           </div>
         </div>

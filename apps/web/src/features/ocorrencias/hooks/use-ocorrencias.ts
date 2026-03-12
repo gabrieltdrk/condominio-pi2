@@ -66,22 +66,24 @@ export function useOcorrencias() {
   const load = useCallback(() => {
     setLoading(true);
     setError("");
-    listOcorrencias()
+    listOcorrencias({ onlyMine })
       .then(setOcorrencias)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+  }, [onlyMine]);
+
+  useEffect(() => {
+    getCurrentUserId().then(setCurrentUserId);
   }, []);
 
   useEffect(() => {
     load();
-    getCurrentUserId().then(setCurrentUserId);
   }, [load]);
 
   // ── Filters + Sort ──────────────────────────────────────────────────────
   const filtered = ocorrencias.filter((o) => {
     if (filterStatus.length > 0 && !filterStatus.includes(o.status)) return false;
     if (filterCategoria && o.categoria !== filterCategoria) return false;
-    if (onlyMine && currentUserId && o.created_by !== currentUserId) return false;
     return true;
   });
 

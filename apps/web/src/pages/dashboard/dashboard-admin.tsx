@@ -104,7 +104,7 @@ export default function DashboardAdmin() {
 
   useEffect(() => {
     loadUsers();
-    listOcorrencias(4)
+    listOcorrencias({ limit: 4 })
       .then(setOcorrencias)
       .catch((e: Error) => setOcorrenciasError(e.message))
       .finally(() => setOcorrenciasLoading(false));

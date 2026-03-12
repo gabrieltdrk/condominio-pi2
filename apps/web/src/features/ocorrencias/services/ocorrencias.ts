@@ -73,14 +73,29 @@ export async function getCurrentUserId(): Promise<string | null> {
   return session?.user.id ?? null;
 }
 
-export async function listOcorrencias(limit?: number): Promise<Ocorrencia[]> {
+export type ListOcorrenciasOptions = {
+  limit?: number;
+  onlyMine?: boolean;
+};
+
+export async function listOcorrencias(options: ListOcorrenciasOptions = {}): Promise<Ocorrencia[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
+  const { limit, onlyMine = false } = options;
+
+  if (onlyMine && !uid) {
+    return [];
+  }
 
   let q = supabase
     .from("ocorrencias")
     .select("*, profiles!created_by(name)")
     .order("created_at", { ascending: false });
+
+  if (onlyMine && uid) {
+    q = q.eq("created_by", uid);
+  }
+
   if (limit) q = q.limit(limit);
 
   const { data, error } = await q;
