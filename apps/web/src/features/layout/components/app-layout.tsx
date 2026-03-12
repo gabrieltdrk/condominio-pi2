@@ -15,6 +15,7 @@ import {
   Sun,
   User,
   Users,
+  Waves,
   X,
 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
@@ -29,6 +30,7 @@ const navLinks = [
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
   { label: "Prédio", path: "/predio", icon: Building2 },
   { label: "Usuários", path: "/usuarios", icon: Users },
+  { label: "Maresia", path: "/maresia", icon: Waves },
 ];
 
 function timeAgo(iso: string): string {

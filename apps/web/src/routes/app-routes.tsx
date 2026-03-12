@@ -6,6 +6,7 @@ import ListaOcorrencias from "../pages/ocorrencias/lista-ocorrencias.tsx";
 import ListaAvisos from "../pages/avisos/lista-avisos.tsx";
 import MapaPredio from "../pages/predio/mapa-predio";
 import Agendamentos from "../pages/agendamentos";
+import MaresiaPage from "../pages/maresia";
 import Perfil from "../pages/perfil";
 import UsuariosPage from "../pages/usuarios";
 import ProtectedRoute from "./protected-route";
@@ -72,6 +73,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <UsuariosPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/maresia"
+          element={
+            <ProtectedRoute>
+              <MaresiaPage />
             </ProtectedRoute>
           }
         />
