@@ -165,6 +165,7 @@ export default function DashboardAdmin() {
   const abertas = ocorrencias.filter(
     (o) => o.status === "Aberto" || o.status === "Em Análise" || o.status === "Em Atendimento"
   );
+  const recentUsers = users.slice(0, 5);
 
   const pendencias: Pending[] = [
     { title: "Reserva • Salão de festas", subtitle: "Apto 32 • 15/03 • 20:00", tag: "Aprovar", tagColor: "bg-indigo-50 text-indigo-600 border-indigo-200" },
@@ -586,13 +587,19 @@ export default function DashboardAdmin() {
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <h3 className="m-0 text-sm font-semibold text-gray-900">Usuários cadastrados</h3>
-                <p className="mt-0.5 text-xs text-gray-400">Gerencie os acessos ao sistema</p>
+                <h3 className="m-0 text-sm font-semibold text-gray-900">Usuários recentes</h3>
+                <p className="mt-0.5 text-xs text-gray-400">Últimos cadastros com acesso rápido à edição</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-gray-400 border border-gray-200 px-2.5 py-1 rounded-full whitespace-nowrap">
-                  {users.length} usuários
+                  {recentUsers.length} recentes
                 </span>
+                <button
+                  className="px-3 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold cursor-pointer border border-gray-200 transition-colors"
+                  onClick={() => nav("/usuarios")}
+                >
+                  Ver todos
+                </button>
                 <button
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer border-none transition-colors"
                   onClick={openCreateModal}
@@ -621,7 +628,7 @@ export default function DashboardAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {recentUsers.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-3 py-2.5 border-b border-gray-100">
                         <p className="font-medium text-gray-800 m-0">{u.name}</p>

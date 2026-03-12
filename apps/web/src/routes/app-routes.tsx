@@ -7,6 +7,7 @@ import ListaAvisos from "../pages/avisos/lista-avisos.tsx";
 import MapaPredio from "../pages/predio/mapa-predio";
 import Agendamentos from "../pages/agendamentos";
 import Perfil from "../pages/perfil";
+import UsuariosPage from "../pages/usuarios";
 import ProtectedRoute from "./protected-route";
 
 export default function AppRoutes() {
@@ -63,6 +64,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <MapaPredio />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/usuarios"
+          element={
+            <ProtectedRoute>
+              <UsuariosPage />
             </ProtectedRoute>
           }
         />

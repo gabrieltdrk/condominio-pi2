@@ -64,9 +64,22 @@ export function MoradorModal({
     setError(null);
     try {
       await onAssign(apartmentId, selectedUserId);
-      setError(null);
     } catch (err: any) {
       setError(err?.message ?? "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleVacate() {
+    if (!onAssign || !apartmentId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onAssign(apartmentId, null);
+      setSelectedUserId(null);
+    } catch (err: any) {
+      setError(err?.message ?? "Erro ao remover vínculo.");
     } finally {
       setSaving(false);
     }
@@ -105,22 +118,41 @@ export function MoradorModal({
         {isAdmin && (
           <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
             <p className="text-sm font-semibold text-indigo-700">Vincular morador ao apartamento</p>
+
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <select
-                value={selectedUserId ?? ""}
-                onChange={(e) => setSelectedUserId(e.target.value || null)}
-                disabled={loadingUsers || users.length === 0}
-                className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-              >
-                <option value="">
-                  {loadingUsers ? "Carregando usuarios..." : users.length === 0 ? "Nenhum usuario disponivel" : "Nenhum (desvincular)"}
-                </option>
-                {users.map((u) => (
-                  <option key={u.id} value={String(u.id)}>
-                    {u.name} ({u.email})
+              <div className="flex w-full items-center gap-2">
+                <select
+                  value={selectedUserId ?? ""}
+                  onChange={(e) => setSelectedUserId(e.target.value || null)}
+                  disabled={loadingUsers || users.length === 0}
+                  className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                >
+                  <option value="">
+                    {loadingUsers
+                      ? "Carregando usuarios..."
+                      : users.length === 0
+                        ? "Nenhum usuario disponivel"
+                        : "Nenhum (desvincular)"}
                   </option>
-                ))}
-              </select>
+                  {users.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.email})
+                    </option>
+                  ))}
+                </select>
+
+                {resident && (
+                  <button
+                    type="button"
+                    onClick={handleVacate}
+                    disabled={saving}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-200 bg-white text-rose-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Deixar apartamento vago"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
 
               <button
                 type="button"
@@ -156,40 +188,16 @@ export function MoradorModal({
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <InfoItem
-                label="E-mail"
-                value={resident.email}
-                icon={<Mail size={14} />}
-              />
-              <InfoItem
-                label="Telefone"
-                value={resident.phone}
-                icon={<Phone size={14} />}
-              />
+              <InfoItem label="E-mail" value={resident.email} icon={<Mail size={14} />} />
+              <InfoItem label="Telefone" value={resident.phone} icon={<Phone size={14} />} />
               {resident.carPlate ? (
-                <InfoItem
-                  label="Placa do carro"
-                  value={resident.carPlate}
-                  icon={<Car size={14} />}
-                />
+                <InfoItem label="Placa do carro" value={resident.carPlate} icon={<Car size={14} />} />
               ) : null}
               {typeof resident.petsCount === "number" ? (
-                <InfoItem
-                  label="Número de pets"
-                  value={String(resident.petsCount)}
-                  icon={<Heart size={14} />}
-                />
+                <InfoItem label="Número de pets" value={String(resident.petsCount)} icon={<Heart size={14} />} />
               ) : null}
-              <InfoItem
-                label="Apartamento"
-                value={apartment.number}
-                icon={<Home size={14} />}
-              />
-              <InfoItem
-                label="Status"
-                value={resident.status}
-                icon={<UserRound size={14} />}
-              />
+              <InfoItem label="Apartamento" value={apartment.number} icon={<Home size={14} />} />
+              <InfoItem label="Status" value={resident.status} icon={<UserRound size={14} />} />
             </div>
           </div>
         ) : (

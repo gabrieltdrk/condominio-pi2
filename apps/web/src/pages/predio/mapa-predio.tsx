@@ -48,8 +48,12 @@ function getStatusColor(status: ResidentStatus) {
 export default function MapaPredio() {
   const [building, setBuilding] = useState<Floor[]>(() => getMockBuilding());
   const [selectedApt, setSelectedApt] = useState<Apartment | null>(null);
-  const [selectedFloor, setSelectedFloor] =
-    useState<{ level: number; tower: string } | null>(null);
+  const [selectedFloor, setSelectedFloor] = useState<{ level: number; tower: string } | null>(null);
+  const [selectedTower, setSelectedTower] = useState<string>("Todas");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ResidentStatus | "Todos">("Todos");
+  const [viewMode, setViewMode] = useState<ViewMode>("single");
+  const [miniPage, setMiniPage] = useState(0);
 
   const loadBuilding = async () => {
     const data = await fetchBuilding();
@@ -60,11 +64,9 @@ export default function MapaPredio() {
   async function handleAssign(apartmentId: string, userId: string | null) {
     await assignApartment(apartmentId, userId);
     const refreshed = await loadBuilding();
-    // If currently open modal pertains to this apartment, refresh it
+
     if (selectedApt?.id === apartmentId) {
-      const updated = refreshed
-        .flatMap((f) => f.apartments)
-        .find((a) => a.id === apartmentId);
+      const updated = refreshed.flatMap((floor) => floor.apartments).find((item) => item.id === apartmentId);
       setSelectedApt(updated ?? null);
     }
   }
@@ -72,11 +74,6 @@ export default function MapaPredio() {
   useEffect(() => {
     loadBuilding();
   }, []);
-  const [selectedTower, setSelectedTower] = useState<string>("Todas");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ResidentStatus | "Todos">("Todos");
-  const [viewMode, setViewMode] = useState<ViewMode>("single");
-  const [miniPage, setMiniPage] = useState(0);
 
   const towers = useMemo(() => {
     const uniqueTowers = Array.from(new Set(building.map((floor) => floor.tower)));
@@ -120,8 +117,7 @@ export default function MapaPredio() {
   const currentMiniIndex = useMemo(() => {
     if (!selectedFloor) return 0;
     const index = floors.findIndex(
-      (floor) =>
-        floor.level === selectedFloor.level && floor.tower === selectedFloor.tower,
+      (floor) => floor.level === selectedFloor.level && floor.tower === selectedFloor.tower,
     );
     return index >= 0 ? index : 0;
   }, [floors, selectedFloor]);
@@ -164,8 +160,7 @@ export default function MapaPredio() {
           const residentName = apt.resident?.name ?? "";
           const residentEmail = apt.resident?.email ?? "";
 
-          const matchesStatus =
-            statusFilter === "Todos" ? true : residentStatus === statusFilter;
+          const matchesStatus = statusFilter === "Todos" ? true : residentStatus === statusFilter;
 
           const term = search.trim().toLowerCase();
           const matchesSearch =
@@ -177,10 +172,7 @@ export default function MapaPredio() {
           return matchesStatus && matchesSearch;
         });
 
-        return {
-          ...floor,
-          apartments,
-        };
+        return { ...floor, apartments };
       })
       .filter((floor) => floor.apartments.length > 0 || search || statusFilter !== "Todos");
   }, [floors, currentFloor, search, statusFilter, viewMode]);
@@ -288,45 +280,46 @@ export default function MapaPredio() {
             </div>
           </div>
 
-          <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Legenda</h3>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {STATUS_OPTIONS.map((status) => (
-                <div key={status} className="flex items-center gap-2 text-xs text-slate-600">
-                  <span className={`h-3 w-3 rounded-full ${getStatusColor(status)}`} />
-                  <span>{status}</span>
-                </div>
-              ))}
+          <div className="mt-3 flex flex-col gap-2.5">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <h3 className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Legenda</h3>
+                {STATUS_OPTIONS.map((status) => (
+                  <div key={status} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                    <span className={`h-2.5 w-2.5 rounded-full ${getStatusColor(status)}`} />
+                    <span>{status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+              <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-slate-500">Total</p>
+                <p className="mt-0.5 text-xl font-semibold text-slate-900">{buildingStats.total}</p>
+              </div>
+
+              <div className="rounded-xl bg-indigo-50 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-indigo-600">Proprietários</p>
+                <p className="mt-0.5 text-xl font-semibold text-indigo-700">{buildingStats.proprietarios}</p>
+              </div>
+
+              <div className="rounded-xl bg-emerald-50 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-emerald-600">Inquilinos</p>
+                <p className="mt-0.5 text-xl font-semibold text-emerald-700">{buildingStats.inquilinos}</p>
+              </div>
+
+              <div className="rounded-xl bg-amber-50 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-amber-600">Visitantes</p>
+                <p className="mt-0.5 text-xl font-semibold text-amber-700">{buildingStats.visitantes}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-slate-500">Vagos</p>
+                <p className="mt-0.5 text-xl font-semibold text-slate-700">{buildingStats.vagos}</p>
+              </div>
             </div>
           </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-xs font-medium text-slate-500">Total</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">{buildingStats.total}</p>
-            </div>
-
-            <div className="rounded-2xl bg-indigo-50 px-4 py-3">
-              <p className="text-xs font-medium text-indigo-600">Proprietários</p>
-              <p className="mt-1 text-2xl font-semibold text-indigo-700">{buildingStats.proprietarios}</p>
-            </div>
-
-            <div className="rounded-2xl bg-emerald-50 px-4 py-3">
-              <p className="text-xs font-medium text-emerald-600">Inquilinos</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-700">{buildingStats.inquilinos}</p>
-            </div>
-
-            <div className="rounded-2xl bg-amber-50 px-4 py-3">
-              <p className="text-xs font-medium text-amber-600">Visitantes</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-700">{buildingStats.visitantes}</p>
-            </div>
-
-            <div className="rounded-2xl bg-slate-100 px-4 py-3">
-              <p className="text-xs font-medium text-slate-500">Vagos</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-700">{buildingStats.vagos}</p>
-            </div>
-          </div>
-
         </section>
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
@@ -357,9 +350,7 @@ export default function MapaPredio() {
                     </button>
 
                     <span className="flex-1 text-center text-[11px] font-semibold text-slate-500 whitespace-nowrap">
-                      {miniFloors.length === 0
-                        ? "0 andares"
-                        : `${currentMiniIndex + 1} de ${miniFloors.length}`}
+                      {miniFloors.length === 0 ? "0 andares" : `${currentMiniIndex + 1} de ${miniFloors.length}`}
                     </span>
 
                     <button
@@ -375,9 +366,7 @@ export default function MapaPredio() {
 
                   <div className="space-y-2">
                     {paginatedMiniFloors.map((floor) => {
-                      const isActive =
-                        currentFloor?.level === floor.level &&
-                        currentFloor?.tower === floor.tower;
+                      const isActive = currentFloor?.level === floor.level && currentFloor?.tower === floor.tower;
 
                       return (
                         <button
@@ -436,7 +425,6 @@ export default function MapaPredio() {
                 </div>
               </div>
             </section>
-
           </aside>
 
           <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
@@ -448,8 +436,8 @@ export default function MapaPredio() {
                       ? "Prédio completo"
                       : `${selectedTower} completa`
                     : currentFloor
-                    ? `${formatFloorLabel(currentFloor.level)} • ${currentFloor.tower}`
-                    : "Andar"}
+                      ? `${formatFloorLabel(currentFloor.level)} • ${currentFloor.tower}`
+                      : "Andar"}
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-500">
@@ -516,9 +504,7 @@ export default function MapaPredio() {
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-                  <p className="text-sm font-semibold text-slate-700">
-                    Nenhum apartamento encontrado
-                  </p>
+                  <p className="text-sm font-semibold text-slate-700">Nenhum apartamento encontrado</p>
                   <p className="mt-2 text-xs text-slate-500">
                     Tente ajustar a busca, o filtro de status ou a torre.
                   </p>
