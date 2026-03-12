@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import AppLayout from "../../features/layout/components/app-layout";
 import {
+  assignApartment,
+  fetchBuilding,
   getMockBuilding,
   type Apartment,
   type Floor,
@@ -24,6 +27,10 @@ function formatFloorLabel(level: number) {
   return `${level}º andar`;
 }
 
+function getShortTowerName(tower: string) {
+  return tower.replace(/^Torre\s*/i, "").trim();
+}
+
 function getStatusColor(status: ResidentStatus) {
   switch (status) {
     case "Proprietário":
@@ -39,9 +46,32 @@ function getStatusColor(status: ResidentStatus) {
 }
 
 export default function MapaPredio() {
-  const building = useMemo<Floor[]>(() => getMockBuilding(), []);
+  const [building, setBuilding] = useState<Floor[]>(() => getMockBuilding());
   const [selectedApt, setSelectedApt] = useState<Apartment | null>(null);
-  const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
+  const [selectedFloor, setSelectedFloor] =
+    useState<{ level: number; tower: string } | null>(null);
+
+  const loadBuilding = async () => {
+    const data = await fetchBuilding();
+    setBuilding(data);
+    return data;
+  };
+
+  async function handleAssign(apartmentId: string, userId: string | null) {
+    await assignApartment(apartmentId, userId);
+    const refreshed = await loadBuilding();
+    // If currently open modal pertains to this apartment, refresh it
+    if (selectedApt?.id === apartmentId) {
+      const updated = refreshed
+        .flatMap((f) => f.apartments)
+        .find((a) => a.id === apartmentId);
+      setSelectedApt(updated ?? null);
+    }
+  }
+
+  useEffect(() => {
+    loadBuilding();
+  }, []);
   const [selectedTower, setSelectedTower] = useState<string>("Todas");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ResidentStatus | "Todos">("Todos");
@@ -59,13 +89,26 @@ export default function MapaPredio() {
   }, [building, selectedTower]);
 
   const floors = useMemo(() => {
-    return [...buildingByTower].sort((a, b) => b.level - a.level);
+    return [...buildingByTower].sort((a, b) => {
+      if (a.level === b.level) return a.tower.localeCompare(b.tower);
+      return b.level - a.level;
+    });
   }, [buildingByTower]);
+
+  const miniFloors = useMemo(() => floors, [floors]);
 
   useEffect(() => {
     setMiniPage(0);
-    setSelectedFloor(null);
-  }, [selectedTower]);
+    setSelectedApt(null);
+
+    if (floors.length > 0) {
+      const firstFloor = floors[0];
+      setSelectedFloor({ level: firstFloor.level, tower: firstFloor.tower });
+      setViewMode("single");
+    } else {
+      setSelectedFloor(null);
+    }
+  }, [selectedTower, floors]);
 
   const totalMiniPages = Math.ceil(floors.length / FLOORS_PER_PAGE);
 
@@ -74,12 +117,16 @@ export default function MapaPredio() {
     return floors.slice(start, start + FLOORS_PER_PAGE);
   }, [floors, miniPage]);
 
-  const currentFloor = useMemo(() => {
-    if (selectedFloor !== null) {
-      return floors.find((floor) => floor.level === selectedFloor) ?? floors[0];
-    }
-    return floors[0];
+  const currentMiniIndex = useMemo(() => {
+    if (!selectedFloor) return 0;
+    const index = floors.findIndex(
+      (floor) =>
+        floor.level === selectedFloor.level && floor.tower === selectedFloor.tower,
+    );
+    return index >= 0 ? index : 0;
   }, [floors, selectedFloor]);
+
+  const currentFloor = floors[currentMiniIndex] ?? floors[0];
 
   const buildingStats = useMemo(() => {
     const allApartments = floors.flatMap((floor) => floor.apartments);
@@ -104,9 +151,8 @@ export default function MapaPredio() {
     };
   }, [currentFloor]);
 
-  const floorIndex = floors.findIndex((f) => f.level === currentFloor?.level);
-  const hasPrevFloor = floorIndex > 0;
-  const hasNextFloor = floorIndex >= 0 && floorIndex < floors.length - 1;
+  const hasPrevFloor = currentMiniIndex > 0;
+  const hasNextFloor = currentMiniIndex >= 0 && currentMiniIndex < floors.length - 1;
 
   const filteredFloors = useMemo(() => {
     const baseFloors = viewMode === "all" ? floors : currentFloor ? [currentFloor] : [];
@@ -140,25 +186,29 @@ export default function MapaPredio() {
   }, [floors, currentFloor, search, statusFilter, viewMode]);
 
   useEffect(() => {
-    if (floorIndex >= 0) {
-      setMiniPage(Math.floor(floorIndex / FLOORS_PER_PAGE));
+    if (currentMiniIndex >= 0) {
+      setMiniPage(Math.floor(currentMiniIndex / FLOORS_PER_PAGE));
     }
-  }, [floorIndex]);
+  }, [currentMiniIndex]);
 
   function goToPrevFloor() {
     if (!hasPrevFloor) return;
-    const nextFloor = floors[floorIndex - 1];
-    setSelectedFloor(nextFloor.level);
+    const newIndex = Math.max(0, currentMiniIndex - 1);
+    const nextFloor = floors[newIndex];
+    setSelectedFloor({ level: nextFloor.level, tower: nextFloor.tower });
     setSelectedApt(null);
     setViewMode("single");
+    setMiniPage(Math.floor(newIndex / FLOORS_PER_PAGE));
   }
 
   function goToNextFloor() {
     if (!hasNextFloor) return;
-    const nextFloor = floors[floorIndex + 1];
-    setSelectedFloor(nextFloor.level);
+    const newIndex = Math.min(floors.length - 1, currentMiniIndex + 1);
+    const nextFloor = floors[newIndex];
+    setSelectedFloor({ level: nextFloor.level, tower: nextFloor.tower });
     setSelectedApt(null);
     setViewMode("single");
+    setMiniPage(Math.floor(newIndex / FLOORS_PER_PAGE));
   }
 
   return (
@@ -238,6 +288,18 @@ export default function MapaPredio() {
             </div>
           </div>
 
+          <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Legenda</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {STATUS_OPTIONS.map((status) => (
+                <div key={status} className="flex items-center gap-2 text-xs text-slate-600">
+                  <span className={`h-3 w-3 rounded-full ${getStatusColor(status)}`} />
+                  <span>{status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
             <div className="rounded-2xl bg-slate-50 px-4 py-3">
               <p className="text-xs font-medium text-slate-500">Total</p>
@@ -264,6 +326,7 @@ export default function MapaPredio() {
               <p className="mt-1 text-2xl font-semibold text-slate-700">{buildingStats.vagos}</p>
             </div>
           </div>
+
         </section>
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
@@ -278,46 +341,50 @@ export default function MapaPredio() {
 
               <div className="overflow-hidden rounded-[24px] bg-slate-100 p-3">
                 <div className="mx-auto mb-3 w-full max-w-[150px] rounded-t-3xl bg-slate-300 px-4 py-2 text-center text-xs font-semibold text-slate-700">
-                  {selectedTower === "Todas" ? "Edifício" : selectedTower}
+                  {selectedTower === "Todas" ? "Edifício" : getShortTowerName(selectedTower)}
                 </div>
 
                 <div className="overflow-hidden rounded-[22px] bg-slate-50 p-3">
-                  <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="mb-3 flex flex-nowrap items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={goToPrevFloor}
                       disabled={!hasPrevFloor}
-                      className="flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Andar anterior"
+                      className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Anterior
+                      <ChevronLeft size={18} />
                     </button>
 
-                    <span className="text-center text-[11px] font-semibold text-slate-500">
-                      {floors.length === 0
+                    <span className="flex-1 text-center text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                      {miniFloors.length === 0
                         ? "0 andares"
-                        : `${floorIndex + 1} de ${floors.length}`}
+                        : `${currentMiniIndex + 1} de ${miniFloors.length}`}
                     </span>
 
                     <button
                       type="button"
                       onClick={goToNextFloor}
                       disabled={!hasNextFloor}
-                      className="flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Próximo andar"
+                      className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Próximo
+                      <ChevronRight size={18} />
                     </button>
                   </div>
 
                   <div className="space-y-2">
                     {paginatedMiniFloors.map((floor) => {
-                      const isActive = currentFloor?.level === floor.level;
+                      const isActive =
+                        currentFloor?.level === floor.level &&
+                        currentFloor?.tower === floor.tower;
 
                       return (
                         <button
                           key={`${floor.tower}-${floor.level}`}
                           type="button"
                           onClick={() => {
-                            setSelectedFloor(floor.level);
+                            setSelectedFloor({ level: floor.level, tower: floor.tower });
                             setViewMode("single");
                           }}
                           className={`w-full rounded-2xl px-3 py-2 text-left transition ${
@@ -329,6 +396,7 @@ export default function MapaPredio() {
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <span className="truncate text-xs font-semibold text-slate-700">
                               {formatFloorLabel(floor.level)}
+                              {selectedTower === "Todas" ? ` • ${getShortTowerName(floor.tower)}` : ""}
                             </span>
                             <span className="shrink-0 text-[11px] text-slate-500">
                               {floor.apartments.length} aptos
@@ -369,17 +437,6 @@ export default function MapaPredio() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900">Legenda</h3>
-              <div className="mt-3 space-y-2">
-                {STATUS_OPTIONS.map((status) => (
-                  <div key={status} className="flex items-center gap-2">
-                    <span className={`h-3 w-3 rounded-full ${getStatusColor(status)}`} />
-                    <span className="text-xs text-slate-600">{status}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
           </aside>
 
           <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
@@ -472,7 +529,11 @@ export default function MapaPredio() {
         </div>
       </div>
 
-      <MoradorModal apartment={selectedApt} onClose={() => setSelectedApt(null)} />
+      <MoradorModal
+        apartment={selectedApt}
+        onClose={() => setSelectedApt(null)}
+        onAssign={handleAssign}
+      />
     </AppLayout>
   );
 }

@@ -1,10 +1,15 @@
+import { getSupabaseAdmin } from "../../../lib/supabase";
+
 export type ResidentStatus = "Proprietário" | "Inquilino" | "Vago" | "Visitante";
 
 export type Resident = {
+  id?: string;
   name: string;
   email: string;
   phone: string;
   status: ResidentStatus;
+  carPlate?: string;
+  petsCount?: number;
 };
 
 export type Apartment = {
@@ -20,13 +25,248 @@ export type Floor = {
   apartments: Apartment[];
 };
 
+type ProfileRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  car_plate?: string | null;
+  pets_count?: number | null;
+  resident_type?: "PROPRIETARIO" | "INQUILINO" | "VISITANTE" | null;
+  status?: "ATIVO" | "INATIVO" | null;
+};
+
+type CondoApartmentRow = {
+  id: string;
+  tower: string;
+  level: number;
+  number: string;
+  resident_id: string | null;
+  resident?: ProfileRow | null;
+};
+
+const MOCK_ASSIGNMENTS_KEY = "predio:assignments";
+const USERS_CACHE_KEY = "dashboard:users-cache";
+
+type CachedUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  car_plate?: string | null;
+  pets_count?: number | null;
+  role?: string | null;
+  resident_type?: "PROPRIETARIO" | "INQUILINO" | "VISITANTE" | null;
+  status?: "ATIVO" | "INATIVO" | null;
+};
+
+type MockAssignment = {
+  userId: string | null;
+  resident: Resident | null;
+};
+
+function mapResidentStatus(residentType?: string | null, status?: string | null): ResidentStatus {
+  if (status === "INATIVO" || residentType === "VISITANTE") return "Visitante";
+  if (residentType === "INQUILINO") return "Inquilino";
+  return "Proprietário";
+}
+
+function profileToResident(profile: ProfileRow): Resident {
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    phone: profile.phone ?? "",
+    status: mapResidentStatus(profile.resident_type, profile.status),
+    carPlate: profile.car_plate ?? "",
+    petsCount: profile.pets_count ?? 0,
+  };
+}
+
+function sortFloors(floors: Floor[]) {
+  return floors.sort((a, b) => {
+    if (a.tower === b.tower) return b.level - a.level;
+    return a.tower.localeCompare(b.tower);
+  });
+}
+
+function readUsersCache(): CachedUser[] {
+  const raw = localStorage.getItem(USERS_CACHE_KEY);
+  if (!raw) return [];
+
+  try {
+    return JSON.parse(raw) as CachedUser[];
+  } catch {
+    return [];
+  }
+}
+
+function getMockAssignments(): Record<string, MockAssignment> {
+  const raw = localStorage.getItem(MOCK_ASSIGNMENTS_KEY);
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw) as Record<string, MockAssignment>;
+  } catch {
+    return {};
+  }
+}
+
+function setMockAssignments(next: Record<string, MockAssignment>) {
+  localStorage.setItem(MOCK_ASSIGNMENTS_KEY, JSON.stringify(next));
+}
+
+async function listProfileRows(): Promise<ProfileRow[]> {
+  const admin = getSupabaseAdmin();
+
+  const extended = await admin
+    .from("profiles")
+    .select("id, name, email, phone, car_plate, pets_count, resident_type, status")
+    .order("name");
+
+  if (!extended.error) {
+    return (extended.data ?? []) as ProfileRow[];
+  }
+
+  const fallback = await admin
+    .from("profiles")
+    .select("id, name, email")
+    .order("name");
+
+  if (fallback.error) {
+    return readUsersCache() as ProfileRow[];
+  }
+
+  return (fallback.data ?? []) as ProfileRow[];
+}
+
+async function fetchBuildingFromSupabase(): Promise<Floor[]> {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("condo_apartments")
+    .select("id, tower, level, number, resident_id, resident:profiles!condo_apartments_resident_id_fkey(id, name, email, phone, car_plate, pets_count, resident_type, status)")
+    .order("tower")
+    .order("level", { ascending: false })
+    .order("number");
+
+  if (error) throw error;
+
+  const floorsMap = new Map<string, Floor>();
+
+  for (const row of (data ?? []) as CondoApartmentRow[]) {
+    const key = `${row.tower}::${row.level}`;
+    if (!floorsMap.has(key)) {
+      floorsMap.set(key, { tower: row.tower, level: row.level, apartments: [] });
+    }
+
+    floorsMap.get(key)?.apartments.push({
+      id: row.id,
+      number: row.number,
+      floor: row.level,
+      resident: row.resident ? profileToResident(row.resident) : null,
+    });
+  }
+
+  return sortFloors(Array.from(floorsMap.values()));
+}
+
+async function applyMockAssignments(floors: Floor[]): Promise<Floor[]> {
+  const assignments = getMockAssignments();
+  if (Object.keys(assignments).length === 0) return floors;
+
+  const profiles = await listProfileRows();
+  const byId = new Map(profiles.map((profile) => [profile.id, profileToResident(profile)]));
+
+  return floors.map((floor) => ({
+    ...floor,
+    apartments: floor.apartments.map((apartment) => {
+      const assignment = assignments[apartment.id];
+      if (assignment === undefined) return apartment;
+
+      return {
+        ...apartment,
+        resident: assignment.userId
+          ? (byId.get(assignment.userId) ?? assignment.resident ?? apartment.resident)
+          : null,
+      };
+    }),
+  }));
+}
+
+export async function fetchBuilding(): Promise<Floor[]> {
+  try {
+    return await fetchBuildingFromSupabase();
+  } catch {
+    return applyMockAssignments(getMockBuilding());
+  }
+}
+
+export async function fetchUsers(): Promise<{ id: string; name: string; email: string; role: string }[]> {
+  try {
+    const admin = getSupabaseAdmin();
+    const extended = await admin
+      .from("profiles")
+      .select("id, name, email, role")
+      .order("name");
+
+    if (extended.error) throw extended.error;
+    return ((extended.data ?? []) as Array<{ id: string; name: string; email: string; role?: string | null }>).map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role ?? "MORADOR",
+    }));
+  } catch {
+    return readUsersCache().map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role ?? "MORADOR",
+    }));
+  }
+}
+
+export async function assignApartment(
+  apartmentId: string,
+  userId: string | null,
+): Promise<void> {
+  const cachedUsers = readUsersCache();
+  const cachedUser = userId ? cachedUsers.find((user) => user.id === userId) : null;
+  const residentSnapshot = cachedUser
+    ? {
+        id: cachedUser.id,
+        name: cachedUser.name,
+        email: cachedUser.email,
+        phone: cachedUser.phone ?? "",
+        status: mapResidentStatus(cachedUser.resident_type, cachedUser.status),
+        carPlate: cachedUser.car_plate ?? "",
+        petsCount: cachedUser.pets_count ?? 0,
+      }
+    : null;
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin
+      .from("condo_apartments")
+      .update({ resident_id: userId } as never)
+      .eq("id", apartmentId);
+
+    if (error) throw error;
+  } catch {
+    const assignments = getMockAssignments();
+    assignments[apartmentId] = { userId, resident: residentSnapshot };
+    setMockAssignments(assignments);
+  }
+}
+
+
 export function getMockBuilding(): Floor[] {
   const floors: Floor[] = [
     {
       tower: "Torre A",
       level: 7,
       apartments: [
-        { id: "A-701", number: "701", floor: 7, resident: { name: "Fernanda Nascimento", email: "fernanda.nascimento@example.com", phone: "(11) 99999-0051", status: "Proprietário" } },
+        { id: "A-701", number: "701", floor: 7, resident: { name: "Fernanda Nascimento", email: "fernanda.nascimento@example.com", phone: "(11) 99999-0051", status: "Proprietário", carPlate: "ABC-1234", petsCount: 1 } },
         { id: "A-702", number: "702", floor: 7, resident: { name: "Ricardo Lima", email: "ricardo.lima@example.com", phone: "(11) 99999-0052", status: "Inquilino" } },
         { id: "A-703", number: "703", floor: 7, resident: null },
         { id: "A-704", number: "704", floor: 7, resident: { name: "Patrícia Alves", email: "patricia.alves@example.com", phone: "(11) 99999-0054", status: "Visitante" } },
@@ -92,7 +332,6 @@ export function getMockBuilding(): Floor[] {
         { id: "A-104", number: "104", floor: 1, resident: { name: "Renato Alves", email: "renato.alves@example.com", phone: "(11) 99999-0044", status: "Proprietário" } },
       ],
     },
-
     {
       tower: "Torre B",
       level: 7,

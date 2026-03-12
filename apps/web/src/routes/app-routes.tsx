@@ -5,6 +5,8 @@ import ResetPassword from "../pages/reset-password.tsx";
 import ListaOcorrencias from "../pages/ocorrencias/lista-ocorrencias.tsx";
 import ListaAvisos from "../pages/avisos/lista-avisos.tsx";
 import MapaPredio from "../pages/predio/mapa-predio";
+import Agendamentos from "../pages/agendamentos";
+import Perfil from "../pages/perfil";
 import ProtectedRoute from "./protected-route";
 
 export default function AppRoutes() {
@@ -38,6 +40,24 @@ export default function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/agendamentos"
+          element={
+            <ProtectedRoute>
+              <Agendamentos />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/perfil"
+          element={
+            <ProtectedRoute>
+              <Perfil />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/predio"
           element={

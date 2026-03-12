@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, Sun, User, X, Building2 } from "lucide-react";
+import { Bell, CalendarDays, CheckCheck, ClipboardList, Home, LogOut, Menu, Megaphone, Moon, Settings, Sun, User, X, Building2 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
 import {
   AVISO_TIPO_COLORS,
@@ -13,6 +13,7 @@ const navLinks = [
   { label: "Dashboard",   path: "/dashboard",   icon: Home },
   { label: "Avisos",      path: "/avisos",       icon: Megaphone },
   { label: "Ocorrências", path: "/ocorrencias",  icon: ClipboardList },
+  { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
   { label: "Prédio",      path: "/predio",       icon: Building2 },
 ];
 
@@ -127,7 +128,7 @@ export default function AppLayout({ title, children }: { title: string; children
                   <div className="fixed inset-0 z-199" onClick={() => setGearOpen(false)} />
                   <div className="absolute bottom-full right-0 mb-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-200 overflow-hidden py-1">
                     <button
-                      onClick={() => { setGearOpen(false); alert("Em desenvolvimento"); }}
+                      onClick={() => { setGearOpen(false); nav("/perfil"); }}
                       className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100 cursor-pointer border-none bg-transparent text-left transition-colors"
                     >
                       <User size={15} className="text-gray-400" />

@@ -1,4 +1,7 @@
-import { X, Mail, Phone, Home, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X, Mail, Phone, Home, UserRound, Car, Heart } from "lucide-react";
+import { getUser } from "../../auth/services/auth";
+import { fetchUsers } from "../services/predio";
 import type { Apartment } from "../services/predio";
 
 function InfoItem({
@@ -24,13 +27,52 @@ function InfoItem({
 export function MoradorModal({
   apartment,
   onClose,
+  onAssign,
 }: {
   apartment: Apartment | null;
   onClose: () => void;
+  onAssign?: (apartmentId: string, userId: string | null) => Promise<void>;
 }) {
-  if (!apartment) return null;
+  const user = useMemo(() => getUser(), []);
+  const isAdmin = user?.role === "ADMIN";
+  const resident = apartment?.resident ?? null;
+  const apartmentId = apartment?.id ?? null;
 
-  const resident = apartment.resident;
+  const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(resident?.id ?? null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedUserId(resident?.id ?? null);
+  }, [resident]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    setLoadingUsers(true);
+    fetchUsers()
+      .then((data) => setUsers(data))
+      .catch(() => setUsers([]))
+      .finally(() => setLoadingUsers(false));
+  }, [isAdmin]);
+
+  async function handleSave() {
+    if (!onAssign || !apartmentId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onAssign(apartmentId, selectedUserId);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message ?? "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!apartment) return null;
 
   return (
     <div
@@ -60,6 +102,45 @@ export function MoradorModal({
           </button>
         </div>
 
+        {isAdmin && (
+          <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+            <p className="text-sm font-semibold text-indigo-700">Vincular morador ao apartamento</p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <select
+                value={selectedUserId ?? ""}
+                onChange={(e) => setSelectedUserId(e.target.value || null)}
+                disabled={loadingUsers || users.length === 0}
+                className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+              >
+                <option value="">
+                  {loadingUsers ? "Carregando usuarios..." : users.length === 0 ? "Nenhum usuario disponivel" : "Nenhum (desvincular)"}
+                </option>
+                {users.map((u) => (
+                  <option key={u.id} value={String(u.id)}>
+                    {u.name} ({u.email})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || loadingUsers || users.length === 0}
+                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+
+            {!loadingUsers && users.length === 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                Nenhum usuario encontrado para vincular. Crie ou recarregue os usuarios primeiro.
+              </p>
+            )}
+            {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+          </div>
+        )}
+
         {resident ? (
           <div className="space-y-4">
             <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5">
@@ -85,6 +166,20 @@ export function MoradorModal({
                 value={resident.phone}
                 icon={<Phone size={14} />}
               />
+              {resident.carPlate ? (
+                <InfoItem
+                  label="Placa do carro"
+                  value={resident.carPlate}
+                  icon={<Car size={14} />}
+                />
+              ) : null}
+              {typeof resident.petsCount === "number" ? (
+                <InfoItem
+                  label="Número de pets"
+                  value={String(resident.petsCount)}
+                  icon={<Heart size={14} />}
+                />
+              ) : null}
               <InfoItem
                 label="Apartamento"
                 value={apartment.number}
