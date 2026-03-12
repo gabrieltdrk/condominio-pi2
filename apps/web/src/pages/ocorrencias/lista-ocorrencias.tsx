@@ -21,6 +21,7 @@ export default function ListaOcorrencias() {
     loading, error,
     filterStatus, setFilterStatus,
     filterCategoria, setFilterCategoria,
+    onlyMine, setOnlyMine,
     sortKey, sortDir,
     novaOpen, setNovaOpen,
     form, setForm,
@@ -93,16 +94,30 @@ export default function ListaOcorrencias() {
             </button>
           </div>
 
-          {isAdmin && (
-            <select
-              value={filterCategoria}
-              onChange={(e) => setFilterCategoria(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm font-medium outline-none focus:border-indigo-400 cursor-pointer"
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            {isAdmin && (
+              <select
+                value={filterCategoria}
+                onChange={(e) => setFilterCategoria(e.target.value)}
+                className="w-full sm:w-auto px-3 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm font-medium outline-none focus:border-indigo-400 cursor-pointer"
+              >
+                <option value="">Todas as categorias</option>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setOnlyMine((value: boolean) => !value)}
+              className={`w-full sm:w-auto px-3 py-2.5 border rounded-xl text-sm font-semibold transition-colors ${
+                onlyMine
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+              }`}
             >
-              <option value="">Todas as categorias</option>
-              {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
+              {onlyMine ? "Mostrando só as minhas" : "Mostrar só as minhas"}
+            </button>
+          </div>
         </div>
 
         {/* ── Filtros de status ── */}

@@ -32,6 +32,7 @@ export function useOcorrencias() {
   // Filters
   const [filterStatus, setFilterStatus] = useState<OcorrenciaStatus[]>([]);
   const [filterCategoria, setFilterCategoria] = useState("");
+  const [onlyMine, setOnlyMine] = useState(false);
 
   // Sorting
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
@@ -80,6 +81,7 @@ export function useOcorrencias() {
   const filtered = ocorrencias.filter((o) => {
     if (filterStatus.length > 0 && !filterStatus.includes(o.status)) return false;
     if (filterCategoria && o.categoria !== filterCategoria) return false;
+    if (onlyMine && currentUserId && o.created_by !== currentUserId) return false;
     return true;
   });
 
@@ -227,6 +229,7 @@ export function useOcorrencias() {
     ocorrencias, loading, error, currentUserId,
     filterStatus, setFilterStatus,
     filterCategoria, setFilterCategoria,
+    onlyMine, setOnlyMine,
     sortKey, sortDir,
     novaOpen, setNovaOpen,
     form, setForm,
