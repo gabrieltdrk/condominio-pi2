@@ -6,6 +6,8 @@ import ListaOcorrencias from "../pages/ocorrencias/lista-ocorrencias.tsx";
 import ListaAvisos from "../pages/avisos/lista-avisos.tsx";
 import MapaPredio from "../pages/predio/mapa-predio";
 import Agendamentos from "../pages/agendamentos";
+import EnquetesPage from "../pages/enquetes";
+import FinanceiroPage from "../pages/financeiro";
 import MaresiaPage from "../pages/maresia";
 import Perfil from "../pages/perfil";
 import UsuariosPage from "../pages/usuarios";
@@ -35,6 +37,14 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="/enquetes"
+          element={
+            <ProtectedRoute>
+              <EnquetesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/ocorrencias"
           element={
             <ProtectedRoute>
@@ -47,6 +57,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <Agendamentos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/financeiro"
+          element={
+            <ProtectedRoute>
+              <FinanceiroPage />
             </ProtectedRoute>
           }
         />

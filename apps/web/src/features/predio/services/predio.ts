@@ -25,6 +25,18 @@ export type Floor = {
   apartments: Apartment[];
 };
 
+export type CreateBlockInput = {
+  tower: string;
+  floors: number;
+  apartmentsPerFloor: number;
+};
+
+export type CreateApartmentInput = {
+  tower: string;
+  floor: number;
+  number: string;
+};
+
 type ProfileRow = {
   id: string;
   name: string;
@@ -46,6 +58,7 @@ type CondoApartmentRow = {
 };
 
 const MOCK_ASSIGNMENTS_KEY = "predio:assignments";
+const CUSTOM_APARTMENTS_KEY = "predio:custom-apartments";
 const USERS_CACHE_KEY = "dashboard:users-cache";
 
 type CachedUser = {
@@ -63,6 +76,14 @@ type CachedUser = {
 type MockAssignment = {
   userId: string | null;
   resident: Resident | null;
+};
+
+type CustomApartmentRow = {
+  id: string;
+  tower: string;
+  level: number;
+  number: string;
+  resident_id: string | null;
 };
 
 function mapResidentStatus(residentType?: string | null, status?: string | null): ResidentStatus {
@@ -116,6 +137,92 @@ function setMockAssignments(next: Record<string, MockAssignment>) {
   localStorage.setItem(MOCK_ASSIGNMENTS_KEY, JSON.stringify(next));
 }
 
+function normalizeTowerName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^torre\s+/i.test(trimmed) ? trimmed : `Torre ${trimmed}`;
+}
+
+function compareApartmentNumbers(a: string, b: string) {
+  return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
+}
+
+function readCustomApartments(): CustomApartmentRow[] {
+  const raw = localStorage.getItem(CUSTOM_APARTMENTS_KEY);
+  if (!raw) return [];
+
+  try {
+    return JSON.parse(raw) as CustomApartmentRow[];
+  } catch {
+    return [];
+  }
+}
+
+function setCustomApartments(rows: CustomApartmentRow[]) {
+  localStorage.setItem(CUSTOM_APARTMENTS_KEY, JSON.stringify(rows));
+}
+
+function rowsToFloors(rows: Array<CondoApartmentRow | CustomApartmentRow>): Floor[] {
+  const floorsMap = new Map<string, Floor>();
+
+  for (const row of rows) {
+    const key = `${row.tower}::${row.level}`;
+    if (!floorsMap.has(key)) {
+      floorsMap.set(key, { tower: row.tower, level: row.level, apartments: [] });
+    }
+
+    floorsMap.get(key)?.apartments.push({
+      id: row.id,
+      number: row.number,
+      floor: row.level,
+      resident: "resident" in row && row.resident ? profileToResident(row.resident) : null,
+    });
+  }
+
+  const floors = Array.from(floorsMap.values()).map((floor) => ({
+    ...floor,
+    apartments: [...floor.apartments].sort((a, b) => compareApartmentNumbers(a.number, b.number)),
+  }));
+
+  return sortFloors(floors);
+}
+
+function mergeFloors(base: Floor[], extra: Floor[]): Floor[] {
+  const merged = new Map<string, Floor>();
+
+  for (const floor of [...base, ...extra]) {
+    const key = `${floor.tower}::${floor.level}`;
+    const current = merged.get(key);
+
+    if (!current) {
+      merged.set(key, { ...floor, apartments: [...floor.apartments] });
+      continue;
+    }
+
+    const apartmentMap = new Map(
+      current.apartments.map((apartment) => [`${apartment.floor}::${apartment.number}`, apartment]),
+    );
+
+    for (const apartment of floor.apartments) {
+      apartmentMap.set(`${apartment.floor}::${apartment.number}`, apartment);
+    }
+
+    current.apartments = Array.from(apartmentMap.values()).sort((a, b) => compareApartmentNumbers(a.number, b.number));
+  }
+
+  return sortFloors(Array.from(merged.values()));
+}
+
+async function mergeWithCustomApartments(floors: Floor[]): Promise<Floor[]> {
+  const custom = readCustomApartments();
+  if (custom.length === 0) return floors;
+  return mergeFloors(floors, rowsToFloors(custom));
+}
+
+function createLocalApartmentId(tower: string, level: number, number: string) {
+  return `local-${tower.toLowerCase().replace(/\s+/g, "-")}-${level}-${number.toLowerCase()}`;
+}
+
 async function listProfileRows(): Promise<ProfileRow[]> {
   const admin = getSupabaseAdmin();
 
@@ -151,23 +258,7 @@ async function fetchBuildingFromSupabase(): Promise<Floor[]> {
 
   if (error) throw error;
 
-  const floorsMap = new Map<string, Floor>();
-
-  for (const row of (data ?? []) as CondoApartmentRow[]) {
-    const key = `${row.tower}::${row.level}`;
-    if (!floorsMap.has(key)) {
-      floorsMap.set(key, { tower: row.tower, level: row.level, apartments: [] });
-    }
-
-    floorsMap.get(key)?.apartments.push({
-      id: row.id,
-      number: row.number,
-      floor: row.level,
-      resident: row.resident ? profileToResident(row.resident) : null,
-    });
-  }
-
-  return sortFloors(Array.from(floorsMap.values()));
+  return rowsToFloors((data ?? []) as CondoApartmentRow[]);
 }
 
 async function applyMockAssignments(floors: Floor[]): Promise<Floor[]> {
@@ -195,9 +286,12 @@ async function applyMockAssignments(floors: Floor[]): Promise<Floor[]> {
 
 export async function fetchBuilding(): Promise<Floor[]> {
   try {
-    return await fetchBuildingFromSupabase();
+    const supabaseFloors = await fetchBuildingFromSupabase();
+    const merged = await mergeWithCustomApartments(supabaseFloors);
+    return applyMockAssignments(merged);
   } catch {
-    return applyMockAssignments(getMockBuilding());
+    const merged = await mergeWithCustomApartments(getMockBuilding());
+    return applyMockAssignments(merged);
   }
 }
 
@@ -256,6 +350,105 @@ export async function assignApartment(
     const assignments = getMockAssignments();
     assignments[apartmentId] = { userId, resident: residentSnapshot };
     setMockAssignments(assignments);
+  }
+}
+
+function buildBlockApartments({ tower, floors, apartmentsPerFloor }: CreateBlockInput): CustomApartmentRow[] {
+  const normalizedTower = normalizeTowerName(tower);
+  const rows: CustomApartmentRow[] = [];
+
+  for (let floor = floors; floor >= 1; floor -= 1) {
+    for (let apartmentIndex = 1; apartmentIndex <= apartmentsPerFloor; apartmentIndex += 1) {
+      const number = `${floor}${String(apartmentIndex).padStart(2, "0")}`;
+      rows.push({
+        id: createLocalApartmentId(normalizedTower, floor, number),
+        tower: normalizedTower,
+        level: floor,
+        number,
+        resident_id: null,
+      });
+    }
+  }
+
+  return rows;
+}
+
+async function ensureNoDuplicateApartment(tower: string, floor: number, number: string) {
+  const building = await fetchBuilding();
+  const exists = building.some(
+    (item) =>
+      item.tower.toLowerCase() === tower.toLowerCase() &&
+      item.level === floor &&
+      item.apartments.some((apartment) => apartment.number.toLowerCase() === number.toLowerCase()),
+  );
+
+  if (exists) {
+    throw new Error("Já existe um apartamento com esse número nesse bloco/andar.");
+  }
+}
+
+export async function createBlock(input: CreateBlockInput): Promise<void> {
+  const tower = normalizeTowerName(input.tower);
+  const floors = Math.max(1, Math.floor(input.floors));
+  const apartmentsPerFloor = Math.max(1, Math.floor(input.apartmentsPerFloor));
+
+  if (!tower) throw new Error("Informe o nome do bloco.");
+  if (floors < 1) throw new Error("Informe ao menos um andar.");
+  if (apartmentsPerFloor < 1) throw new Error("Informe ao menos um apartamento por andar.");
+
+  const building = await fetchBuilding();
+  const existingTower = building.some((floor) => floor.tower.toLowerCase() === tower.toLowerCase());
+  if (existingTower) {
+    throw new Error("Esse bloco já existe.");
+  }
+
+  const rows = buildBlockApartments({ tower, floors, apartmentsPerFloor });
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin.from("condo_apartments").insert(
+      rows.map((row) => ({
+        tower: row.tower,
+        level: row.level,
+        number: row.number,
+        resident_id: null,
+      })) as never,
+    );
+
+    if (error) throw error;
+  } catch {
+    const current = readCustomApartments();
+    setCustomApartments([...current, ...rows]);
+  }
+}
+
+export async function createApartment(input: CreateApartmentInput): Promise<void> {
+  const tower = normalizeTowerName(input.tower);
+  const floor = Math.max(1, Math.floor(input.floor));
+  const number = input.number.trim();
+
+  if (!tower) throw new Error("Informe o bloco.");
+  if (!number) throw new Error("Informe o número do apartamento.");
+
+  await ensureNoDuplicateApartment(tower, floor, number);
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin
+      .from("condo_apartments")
+      .insert([{ tower, level: floor, number, resident_id: null }] as never);
+
+    if (error) throw error;
+  } catch {
+    const current = readCustomApartments();
+    current.push({
+      id: createLocalApartmentId(tower, floor, number),
+      tower,
+      level: floor,
+      number,
+      resident_id: null,
+    });
+    setCustomApartments(current);
   }
 }
 

@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusSquare } from "lucide-react";
 import AppLayout from "../../features/layout/components/app-layout";
+import { getUser } from "../../features/auth/services/auth";
+import { ApartmentCard } from "../../features/predio/components/apartment-card";
+import { MoradorModal } from "../../features/predio/components/morador-modal";
 import {
   assignApartment,
+  createApartment,
+  createBlock,
   fetchBuilding,
   getMockBuilding,
   type Apartment,
+  type CreateApartmentInput,
+  type CreateBlockInput,
   type Floor,
   type ResidentStatus,
 } from "../../features/predio/services/predio";
-import { ApartmentCard } from "../../features/predio/components/apartment-card";
-import { MoradorModal } from "../../features/predio/components/morador-modal";
 
-const STATUS_OPTIONS: ResidentStatus[] = [
-  "Proprietário",
-  "Inquilino",
-  "Visitante",
-  "Vago",
-];
-
+const STATUS_OPTIONS: ResidentStatus[] = ["Proprietário", "Inquilino", "Visitante", "Vago"];
 const FLOORS_PER_PAGE = 5;
+const adminInputClass =
+  "h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100";
 
 type ViewMode = "single" | "all";
 
@@ -46,6 +47,9 @@ function getStatusColor(status: ResidentStatus) {
 }
 
 export default function MapaPredio() {
+  const user = useMemo(() => getUser(), []);
+  const isAdmin = user?.role === "ADMIN";
+
   const [building, setBuilding] = useState<Floor[]>(() => getMockBuilding());
   const [selectedApt, setSelectedApt] = useState<Apartment | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<{ level: number; tower: string } | null>(null);
@@ -54,6 +58,19 @@ export default function MapaPredio() {
   const [statusFilter, setStatusFilter] = useState<ResidentStatus | "Todos">("Todos");
   const [viewMode, setViewMode] = useState<ViewMode>("single");
   const [miniPage, setMiniPage] = useState(0);
+  const [blockForm, setBlockForm] = useState<CreateBlockInput>({
+    tower: "",
+    floors: 8,
+    apartmentsPerFloor: 4,
+  });
+  const [apartmentForm, setApartmentForm] = useState<CreateApartmentInput>({
+    tower: "Torre A",
+    floor: 1,
+    number: "",
+  });
+  const [savingStructure, setSavingStructure] = useState(false);
+  const [structureError, setStructureError] = useState("");
+  const [structureSuccess, setStructureSuccess] = useState("");
 
   const loadBuilding = async () => {
     const data = await fetchBuilding();
@@ -80,6 +97,16 @@ export default function MapaPredio() {
     return ["Todas", ...uniqueTowers];
   }, [building]);
 
+  useEffect(() => {
+    const availableTowers = towers.filter((tower) => tower !== "Todas");
+    if (availableTowers.length === 0) return;
+
+    setApartmentForm((current) => {
+      if (current.tower && availableTowers.includes(current.tower)) return current;
+      return { ...current, tower: selectedTower !== "Todas" ? selectedTower : availableTowers[0] };
+    });
+  }, [selectedTower, towers]);
+
   const buildingByTower = useMemo(() => {
     if (selectedTower === "Todas") return building;
     return building.filter((floor) => floor.tower === selectedTower);
@@ -91,8 +118,6 @@ export default function MapaPredio() {
       return b.level - a.level;
     });
   }, [buildingByTower]);
-
-  const miniFloors = useMemo(() => floors, [floors]);
 
   useEffect(() => {
     setMiniPage(0);
@@ -159,7 +184,6 @@ export default function MapaPredio() {
           const residentStatus = apt.resident?.status ?? "Vago";
           const residentName = apt.resident?.name ?? "";
           const residentEmail = apt.resident?.email ?? "";
-
           const matchesStatus = statusFilter === "Todos" ? true : residentStatus === statusFilter;
 
           const term = search.trim().toLowerCase();
@@ -203,9 +227,184 @@ export default function MapaPredio() {
     setMiniPage(Math.floor(newIndex / FLOORS_PER_PAGE));
   }
 
+  async function handleCreateBlock(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingStructure(true);
+    setStructureError("");
+    setStructureSuccess("");
+
+    try {
+      await createBlock(blockForm);
+      await loadBuilding();
+      setBlockForm({ tower: "", floors: 8, apartmentsPerFloor: 4 });
+      setStructureSuccess("Bloco cadastrado com sucesso.");
+    } catch (error) {
+      setStructureError(error instanceof Error ? error.message : "Erro ao cadastrar bloco.");
+    } finally {
+      setSavingStructure(false);
+    }
+  }
+
+  async function handleCreateApartment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingStructure(true);
+    setStructureError("");
+    setStructureSuccess("");
+
+    try {
+      await createApartment(apartmentForm);
+      await loadBuilding();
+      setSelectedTower(apartmentForm.tower);
+      setApartmentForm((current) => ({ ...current, number: "" }));
+      setStructureSuccess("Apartamento cadastrado com sucesso.");
+    } catch (error) {
+      setStructureError(error instanceof Error ? error.message : "Erro ao cadastrar apartamento.");
+    } finally {
+      setSavingStructure(false);
+    }
+  }
+
   return (
     <AppLayout title="Mapa do Prédio">
       <div className="space-y-5">
+        {isAdmin && (
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-md">
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
+                  <PlusSquare size={13} />
+                  Estrutura do condomínio
+                </div>
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">Cadastrar novos blocos e apartamentos</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Adicione novas torres com geração automática de unidades ou crie apartamentos avulsos em blocos já existentes.
+                </p>
+              </div>
+
+              <div className="grid w-full gap-4 xl:max-w-4xl xl:grid-cols-2">
+                <form onSubmit={handleCreateBlock} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Novo bloco</h3>
+                  <p className="mt-1 text-xs text-slate-500">Cria a torre e monta os apartamentos de todos os andares.</p>
+
+                  <div className="mt-4 grid gap-3">
+                    <label className="grid gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome do bloco</span>
+                      <input
+                        value={blockForm.tower}
+                        onChange={(event) => setBlockForm((current) => ({ ...current, tower: event.target.value }))}
+                        placeholder="Ex.: Torre C"
+                        className={adminInputClass}
+                      />
+                    </label>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Quantidade de andares</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={blockForm.floors}
+                          onChange={(event) => setBlockForm((current) => ({ ...current, floors: Number(event.target.value) }))}
+                          className={adminInputClass}
+                        />
+                      </label>
+
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Aptos por andar</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={blockForm.apartmentsPerFloor}
+                          onChange={(event) =>
+                            setBlockForm((current) => ({ ...current, apartmentsPerFloor: Number(event.target.value) }))
+                          }
+                          className={adminInputClass}
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={savingStructure}
+                      className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingStructure ? "Salvando..." : "Cadastrar bloco"}
+                    </button>
+                  </div>
+                </form>
+
+                <form onSubmit={handleCreateApartment} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Novo apartamento</h3>
+                  <p className="mt-1 text-xs text-slate-500">Inclui uma unidade nova em um bloco já cadastrado.</p>
+
+                  <div className="mt-4 grid gap-3">
+                    <label className="grid gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Bloco</span>
+                      <select
+                        value={apartmentForm.tower}
+                        onChange={(event) => setApartmentForm((current) => ({ ...current, tower: event.target.value }))}
+                        className={adminInputClass}
+                      >
+                        {towers.filter((tower) => tower !== "Todas").map((tower) => (
+                          <option key={tower} value={tower}>
+                            {tower}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Andar</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={apartmentForm.floor}
+                          onChange={(event) => setApartmentForm((current) => ({ ...current, floor: Number(event.target.value) }))}
+                          className={adminInputClass}
+                        />
+                      </label>
+
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Número do apartamento</span>
+                        <input
+                          value={apartmentForm.number}
+                          onChange={(event) => setApartmentForm((current) => ({ ...current, number: event.target.value }))}
+                          placeholder="Ex.: 305"
+                          className={adminInputClass}
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={savingStructure || towers.length <= 1}
+                      className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingStructure ? "Salvando..." : "Cadastrar apartamento"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {(structureError || structureSuccess) && (
+              <div className="mt-4 space-y-2">
+                {structureError ? (
+                  <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                    {structureError}
+                  </p>
+                ) : null}
+                {structureSuccess ? (
+                  <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                    {structureSuccess}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-md">
@@ -222,8 +421,8 @@ export default function MapaPredio() {
                 </label>
                 <select
                   value={selectedTower}
-                  onChange={(e) => setSelectedTower(e.target.value)}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  onChange={(event) => setSelectedTower(event.target.value)}
+                  className={adminInputClass}
                 >
                   {towers.map((tower) => (
                     <option key={tower} value={tower}>
@@ -240,9 +439,9 @@ export default function MapaPredio() {
                 <input
                   type="text"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Ex: 302 ou Maria"
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Ex.: 302 ou Maria"
+                  className={adminInputClass}
                 />
               </div>
 
@@ -252,8 +451,8 @@ export default function MapaPredio() {
                 </label>
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as ResidentStatus | "Todos")}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  onChange={(event) => setStatusFilter(event.target.value as ResidentStatus | "Todos")}
+                  className={adminInputClass}
                 >
                   <option value="Todos">Todos</option>
                   {STATUS_OPTIONS.map((status) => (
@@ -270,8 +469,8 @@ export default function MapaPredio() {
                 </label>
                 <select
                   value={viewMode}
-                  onChange={(e) => setViewMode(e.target.value as ViewMode)}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  onChange={(event) => setViewMode(event.target.value as ViewMode)}
+                  className={adminInputClass}
                 >
                   <option value="single">Andar selecionado</option>
                   <option value="all">Prédio completo</option>
@@ -327,9 +526,7 @@ export default function MapaPredio() {
             <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-slate-900">Mini prédio</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Navegue em blocos de 5 andares.
-                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Navegue em blocos de 5 andares.</p>
               </div>
 
               <div className="overflow-hidden rounded-[24px] bg-slate-100 p-3">
@@ -344,13 +541,13 @@ export default function MapaPredio() {
                       onClick={goToPrevFloor}
                       disabled={!hasPrevFloor}
                       aria-label="Andar anterior"
-                      className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronLeft size={18} />
                     </button>
 
-                    <span className="flex-1 text-center text-[11px] font-semibold text-slate-500 whitespace-nowrap">
-                      {miniFloors.length === 0 ? "0 andares" : `${currentMiniIndex + 1} de ${miniFloors.length}`}
+                    <span className="flex-1 whitespace-nowrap text-center text-[11px] font-semibold text-slate-500">
+                      {floors.length === 0 ? "0 andares" : `${currentMiniIndex + 1} de ${floors.length}`}
                     </span>
 
                     <button
@@ -358,7 +555,7 @@ export default function MapaPredio() {
                       onClick={goToNextFloor}
                       disabled={!hasNextFloor}
                       aria-label="Próximo andar"
-                      className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronRight size={18} />
                     </button>
@@ -377,9 +574,7 @@ export default function MapaPredio() {
                             setViewMode("single");
                           }}
                           className={`w-full rounded-2xl px-3 py-2 text-left transition ${
-                            isActive
-                              ? "bg-indigo-50 ring-1 ring-indigo-200"
-                              : "bg-white ring-1 ring-slate-200 hover:bg-slate-50"
+                            isActive ? "bg-indigo-50 ring-1 ring-indigo-200" : "bg-white ring-1 ring-slate-200 hover:bg-slate-50"
                           }`}
                         >
                           <div className="mb-2 flex items-center justify-between gap-2">
@@ -387,20 +582,13 @@ export default function MapaPredio() {
                               {formatFloorLabel(floor.level)}
                               {selectedTower === "Todas" ? ` • ${getShortTowerName(floor.tower)}` : ""}
                             </span>
-                            <span className="shrink-0 text-[11px] text-slate-500">
-                              {floor.apartments.length} aptos
-                            </span>
+                            <span className="shrink-0 text-[11px] text-slate-500">{floor.apartments.length} aptos</span>
                           </div>
 
                           <div className="grid grid-cols-4 gap-1.5">
                             {floor.apartments.map((apt) => {
                               const status = apt.resident?.status ?? "Vago";
-                              return (
-                                <span
-                                  key={apt.id}
-                                  className={`h-3.5 rounded-full ${getStatusColor(status)}`}
-                                />
-                              );
+                              return <span key={apt.id} className={`h-3.5 rounded-full ${getStatusColor(status)}`} />;
                             })}
                           </div>
                         </button>
@@ -465,18 +653,13 @@ export default function MapaPredio() {
             <div className="mt-5 space-y-5">
               {filteredFloors.length > 0 ? (
                 filteredFloors.map((floor) => (
-                  <div
-                    key={`${floor.tower}-${floor.level}`}
-                    className="min-w-0 overflow-hidden rounded-[28px] bg-slate-100 p-3 md:p-4"
-                  >
+                  <div key={`${floor.tower}-${floor.level}`} className="min-w-0 overflow-hidden rounded-[28px] bg-slate-100 p-3 md:p-4">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-800">
                           {formatFloorLabel(floor.level)} • {floor.tower}
                         </p>
-                        <p className="text-xs text-slate-500">
-                          {floor.apartments.length} apartamentos neste andar
-                        </p>
+                        <p className="text-xs text-slate-500">{floor.apartments.length} apartamentos neste andar</p>
                       </div>
                     </div>
 
@@ -505,9 +688,7 @@ export default function MapaPredio() {
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
                   <p className="text-sm font-semibold text-slate-700">Nenhum apartamento encontrado</p>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Tente ajustar a busca, o filtro de status ou a torre.
-                  </p>
+                  <p className="mt-2 text-xs text-slate-500">Tente ajustar a busca, o filtro de status ou a torre.</p>
                 </div>
               )}
             </div>
@@ -515,11 +696,7 @@ export default function MapaPredio() {
         </div>
       </div>
 
-      <MoradorModal
-        apartment={selectedApt}
-        onClose={() => setSelectedApt(null)}
-        onAssign={handleAssign}
-      />
+      <MoradorModal apartment={selectedApt} onClose={() => setSelectedApt(null)} onAssign={handleAssign} />
     </AppLayout>
   );
 }
