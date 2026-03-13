@@ -8,6 +8,7 @@ import MapaPredio from "../pages/predio/mapa-predio";
 import Agendamentos from "../pages/agendamentos";
 import EnquetesPage from "../pages/enquetes";
 import FinanceiroPage from "../pages/financeiro";
+import GaragemPage from "../pages/garagem";
 import MaresiaPage from "../pages/maresia";
 import Perfil from "../pages/perfil";
 import UsuariosPage from "../pages/usuarios";
@@ -63,8 +64,16 @@ export default function AppRoutes() {
         <Route
           path="/financeiro"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute adminOnly>
               <FinanceiroPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/garagem"
+          element={
+            <ProtectedRoute>
+              <GaragemPage />
             </ProtectedRoute>
           }
         />
@@ -81,7 +90,7 @@ export default function AppRoutes() {
         <Route
           path="/predio"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute adminOnly>
               <MapaPredio />
             </ProtectedRoute>
           }
@@ -89,7 +98,7 @@ export default function AppRoutes() {
         <Route
           path="/usuarios"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute adminOnly>
               <UsuariosPage />
             </ProtectedRoute>
           }

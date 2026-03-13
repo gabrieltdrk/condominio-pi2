@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Building2,
   CalendarDays,
   CheckCheck,
+  ChevronDown,
+  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   CircleDollarSign,
@@ -33,13 +35,16 @@ const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
-  { label: "Ocorrências", path: "/ocorrencias", icon: ClipboardList },
+  { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
+  { label: "Garagem", path: "/garagem", icon: Building2 },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
-  { label: "Prédio", path: "/predio", icon: Building2 },
-  { label: "Usuários", path: "/usuarios", icon: Users },
+  { label: "Predio", path: "/predio", icon: Building2 },
+  { label: "Usuarios", path: "/usuarios", icon: Users },
   { label: "Maresia", path: "/maresia", icon: Waves },
 ];
+
+const adminPaths = new Set(["/financeiro", "/predio", "/usuarios"]);
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -62,6 +67,7 @@ export default function AppLayout({ title, children }: { title: string; children
   const user = getUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsedState);
+  const [adminSectionOpen, setAdminSectionOpen] = useState(true);
   const { notifs, bellOpen, setBellOpen, bellPos, bellRef, unread, openBell, handleMarcarLida, handleMarcarTodas } = useNotifications();
   const { dark, toggleDark } = useDarkMode();
   const [gearOpen, setGearOpen] = useState(false);
@@ -85,37 +91,26 @@ export default function AppLayout({ title, children }: { title: string; children
         .toUpperCase()
     : "U";
 
+  const mainLinks = navLinks.filter((link) => !adminPaths.has(link.path));
+  const adminLinks = user?.role === "ADMIN" ? navLinks.filter((link) => adminPaths.has(link.path)) : [];
+
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
     const collapsed = mobile ? false : sidebarCollapsed;
 
     return (
       <>
-        <div className={`flex h-16 items-center border-b border-gray-100 dark:border-gray-800 shrink-0 ${collapsed ? "justify-center px-2" : "gap-2 px-4"}`}>
+        <div className={`flex h-16 items-center border-b border-gray-100 shrink-0 ${collapsed ? "justify-center px-2" : "gap-2 px-4"}`}>
           <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl shrink-0">
             <img src="/Logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
 
           {!collapsed && (
-            <span className="flex-1 text-sm font-bold leading-none text-gray-900 dark:text-gray-100">
+            <span className="flex-1 text-sm font-bold leading-none text-gray-900">
               OmniLar
             </span>
           )}
 
           <div className={`flex items-center ${collapsed ? "flex-col gap-1" : "gap-1"}`}>
-            <button
-              ref={bellRef}
-              onClick={openBell}
-              className="relative rounded-lg bg-transparent p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              title="Notificações"
-            >
-              <Bell size={17} />
-              {unread > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              )}
-            </button>
-
             {!mobile && (
               <button
                 onClick={() => setSidebarCollapsed((value) => !value)}
@@ -139,38 +134,51 @@ export default function AppLayout({ title, children }: { title: string; children
         </div>
 
         <nav className={`flex flex-1 flex-col overflow-y-auto p-3 ${collapsed ? "gap-2" : "gap-0.5"}`}>
-          {navLinks.map(({ label, path, icon: Icon }) => {
-            const active = location.pathname === path;
-            return (
-              <button
-                key={path}
-                onClick={() => {
-                  nav(path);
-                  setSidebarOpen(false);
-                }}
-                title={collapsed ? label : undefined}
-                className={`w-full rounded-xl border-none text-sm font-medium transition-colors ${
-                  collapsed
-                    ? `flex h-11 items-center justify-center px-0 ${
-                        active
-                          ? "bg-indigo-50 text-indigo-700"
-                          : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      }`
-                    : `flex items-center gap-3 px-3 py-2.5 text-left ${
-                        active
-                          ? "bg-indigo-50 text-indigo-700"
-                          : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      }`
-                }`}
-              >
-                <Icon size={17} className={active ? "text-indigo-600" : "text-gray-400"} />
-                {!collapsed && label}
-              </button>
-            );
-          })}
+          {[{ title: undefined, links: mainLinks }, { title: "Adminstrativo", links: adminLinks }].map((group) =>
+            group.links.length > 0 ? (
+              <div key={group.title ?? "principal"} className={collapsed ? "space-y-2" : "space-y-1"}>
+                {!collapsed && group.title && (
+                  <button
+                    type="button"
+                    onClick={() => setAdminSectionOpen((value) => !value)}
+                    className="flex w-full items-center justify-between rounded-xl bg-transparent px-3 pb-1 pt-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-gray-600"
+                  >
+                    <span>{group.title}</span>
+                    {adminSectionOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
+                )}
+
+                {(group.title && !adminSectionOpen ? [] : group.links).map(({ label, path, icon: Icon }) => {
+                  const active = location.pathname === path;
+                  return (
+                    <button
+                      key={path}
+                      onClick={() => {
+                        nav(path);
+                        setSidebarOpen(false);
+                      }}
+                      title={collapsed ? label : undefined}
+                      className={`w-full rounded-xl border-none text-sm font-medium transition-colors ${
+                        collapsed
+                          ? `flex h-11 items-center justify-center px-0 ${
+                              active ? "bg-indigo-50 text-indigo-700" : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                            }`
+                          : `flex items-center gap-3 px-3 py-2.5 text-left ${
+                              active ? "bg-indigo-50 text-indigo-700" : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                            }`
+                      }`}
+                    >
+                      <Icon size={17} className={active ? "text-indigo-600" : "text-gray-400"} />
+                      {!collapsed && label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null,
+          )}
         </nav>
 
-        <div className="shrink-0 border-t border-gray-100 p-3 dark:border-gray-800">
+        <div className="shrink-0 border-t border-gray-100 p-3">
           <div className={`flex px-2 py-2 ${collapsed ? "flex-col items-center gap-2" : "items-center gap-2.5"}`}>
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 shrink-0">
               <span className="text-xs font-bold text-indigo-700">{initials}</span>
@@ -179,7 +187,7 @@ export default function AppLayout({ title, children }: { title: string; children
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold leading-tight text-gray-900">
-                  {user?.name ?? "Usuário"}
+                  {user?.name ?? "Usuario"}
                 </p>
                 <p className="mt-0.5 text-[11px] leading-tight text-gray-400">
                   {user?.role === "ADMIN" ? "Administrador" : "Morador"}
@@ -190,7 +198,7 @@ export default function AppLayout({ title, children }: { title: string; children
             <div className="relative shrink-0">
               <button
                 onClick={() => setGearOpen((value) => !value)}
-                title="Configurações"
+                title="Configuracoes"
                 className="rounded-lg bg-transparent p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
               >
                 <Settings size={16} />
@@ -239,9 +247,9 @@ export default function AppLayout({ title, children }: { title: string; children
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       <aside
-        className={`hidden shrink-0 border-r border-gray-200 bg-white transition-[width] duration-300 dark:border-gray-800 dark:bg-gray-900 md:flex md:flex-col ${
+        className={`hidden shrink-0 border-r border-gray-200 bg-white transition-[width] duration-300 md:flex md:flex-col ${
           sidebarCollapsed ? "w-20" : "w-60"
         }`}
       >
@@ -253,7 +261,7 @@ export default function AppLayout({ title, children }: { title: string; children
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 dark:border-gray-800 dark:bg-gray-900 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 md:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -269,7 +277,7 @@ export default function AppLayout({ title, children }: { title: string; children
           >
             <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2.5">
               <Bell size={13} className="shrink-0 text-gray-500" />
-              <span className="flex-1 text-sm font-semibold text-gray-900">Notificações</span>
+              <span className="flex-1 text-sm font-semibold text-gray-900">Notificacoes</span>
               {unread > 0 && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
                   {unread}
@@ -345,7 +353,7 @@ export default function AppLayout({ title, children }: { title: string; children
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 shrink-0 dark:border-gray-800 dark:bg-gray-900 md:px-6">
+        <header className="flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 shrink-0 md:px-6">
           <button
             onClick={() => setSidebarOpen(true)}
             className="rounded-lg bg-transparent p-2 text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
@@ -354,10 +362,24 @@ export default function AppLayout({ title, children }: { title: string; children
             <Menu size={20} />
           </button>
 
-          <h1 className="m-0 truncate text-base font-semibold text-gray-800">{title}</h1>
+          <h1 className="m-0 flex-1 truncate text-base font-semibold text-gray-800">{title}</h1>
+
+          <button
+            ref={bellRef}
+            onClick={openBell}
+            className="relative rounded-lg bg-transparent p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            title="Notificacoes"
+          >
+            <Bell size={18} />
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 dark:bg-gray-950 md:px-6 xl:px-8">
+        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6 xl:px-8">
           {children}
         </main>
       </div>
