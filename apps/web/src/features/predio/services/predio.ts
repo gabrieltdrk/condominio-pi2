@@ -37,6 +37,14 @@ export type CreateApartmentInput = {
   number: string;
 };
 
+export type BuildingApartmentOption = {
+  id: string;
+  tower: string;
+  level: number;
+  number: string;
+  residentId: string | null;
+};
+
 type ProfileRow = {
   id: string;
   name: string;
@@ -235,9 +243,27 @@ async function listProfileRows(): Promise<ProfileRow[]> {
     return (extended.data ?? []) as ProfileRow[];
   }
 
+  const fallbackWithoutPhone = await admin
+    .from("profiles")
+    .select("id, name, email, car_plate, pets_count, resident_type, status")
+    .order("name");
+
+  if (!fallbackWithoutPhone.error) {
+    return (fallbackWithoutPhone.data ?? []) as ProfileRow[];
+  }
+
+  const fallbackWithoutPhoneAndCarPlate = await admin
+    .from("profiles")
+    .select("id, name, email, pets_count, resident_type, status")
+    .order("name");
+
+  if (!fallbackWithoutPhoneAndCarPlate.error) {
+    return (fallbackWithoutPhoneAndCarPlate.data ?? []) as ProfileRow[];
+  }
+
   const fallback = await admin
     .from("profiles")
-    .select("id, name, email")
+    .select("id, name, email, resident_type, status")
     .order("name");
 
   if (fallback.error) {
@@ -249,16 +275,49 @@ async function listProfileRows(): Promise<ProfileRow[]> {
 
 async function fetchBuildingFromSupabase(): Promise<Floor[]> {
   const admin = getSupabaseAdmin();
-  const { data, error } = await admin
+  const extended = await admin
     .from("condo_apartments")
     .select("id, tower, level, number, resident_id, resident:profiles!condo_apartments_resident_id_fkey(id, name, email, phone, car_plate, pets_count, resident_type, status)")
     .order("tower")
     .order("level", { ascending: false })
     .order("number");
 
-  if (error) throw error;
+  if (!extended.error) {
+    return rowsToFloors((extended.data ?? []) as CondoApartmentRow[]);
+  }
 
-  return rowsToFloors((data ?? []) as CondoApartmentRow[]);
+  const fallback = await admin
+    .from("condo_apartments")
+    .select("id, tower, level, number, resident_id, resident:profiles!condo_apartments_resident_id_fkey(id, name, email, car_plate, pets_count, resident_type, status)")
+    .order("tower")
+    .order("level", { ascending: false })
+    .order("number");
+
+  if (!fallback.error) {
+    return rowsToFloors((fallback.data ?? []) as CondoApartmentRow[]);
+  }
+
+  const fallbackWithoutCarPlate = await admin
+    .from("condo_apartments")
+    .select("id, tower, level, number, resident_id, resident:profiles!condo_apartments_resident_id_fkey(id, name, email, pets_count, resident_type, status)")
+    .order("tower")
+    .order("level", { ascending: false })
+    .order("number");
+
+  if (!fallbackWithoutCarPlate.error) {
+    return rowsToFloors((fallbackWithoutCarPlate.data ?? []) as CondoApartmentRow[]);
+  }
+
+  const basic = await admin
+    .from("condo_apartments")
+    .select("id, tower, level, number, resident_id, resident:profiles!condo_apartments_resident_id_fkey(id, name, email)")
+    .order("tower")
+    .order("level", { ascending: false })
+    .order("number");
+
+  if (basic.error) throw basic.error;
+
+  return rowsToFloors((basic.data ?? []) as CondoApartmentRow[]);
 }
 
 async function applyMockAssignments(floors: Floor[]): Promise<Floor[]> {
@@ -320,10 +379,102 @@ export async function fetchUsers(): Promise<{ id: string; name: string; email: s
   }
 }
 
+export async function listBuildingApartmentOptions(): Promise<BuildingApartmentOption[]> {
+  const floors = await fetchBuilding();
+
+  return floors
+    .flatMap((floor) =>
+      floor.apartments.map((apartment) => ({
+        id: apartment.id,
+        tower: floor.tower,
+        level: floor.level,
+        number: apartment.number,
+        residentId: apartment.resident?.id ?? null,
+      })),
+    )
+    .sort((a, b) => {
+      if (a.tower !== b.tower) return a.tower.localeCompare(b.tower);
+      if (a.level !== b.level) return a.level - b.level;
+      return compareApartmentNumbers(a.number, b.number);
+    });
+}
+
+export async function syncApartmentAssignmentForUser(userId: string, apartmentId: string | null): Promise<void> {
+  const assignments = getMockAssignments();
+
+  for (const [key, assignment] of Object.entries(assignments)) {
+    if (assignment.userId === userId || key === apartmentId) {
+      delete assignments[key];
+    }
+  }
+
+  setMockAssignments(assignments);
+
+  try {
+    const admin = getSupabaseAdmin();
+
+    const clearCurrent = await admin
+      .from("condo_apartments")
+      .update({ resident_id: null } as never)
+      .eq("resident_id", userId);
+
+    if (clearCurrent.error) throw clearCurrent.error;
+
+    if (!apartmentId) return;
+
+    const target = await admin
+      .from("condo_apartments")
+      .select("id, resident_id")
+      .eq("id", apartmentId)
+      .single();
+
+    const targetRow = target.data as { id: string; resident_id: string | null } | null;
+    if (target.error || !targetRow) throw new Error("Apartamento selecionado nao foi encontrado.");
+
+    if (targetRow.resident_id && targetRow.resident_id !== userId) {
+      throw new Error("Este apartamento ja esta vinculado a outro usuario.");
+    }
+
+    const assign = await admin
+      .from("condo_apartments")
+      .update({ resident_id: userId } as never)
+      .eq("id", apartmentId);
+
+    if (assign.error) throw assign.error;
+  } catch {
+    if (!apartmentId) return;
+
+    const cachedUsers = readUsersCache();
+    const cachedUser = cachedUsers.find((user) => user.id === userId);
+    assignments[apartmentId] = {
+      userId,
+      resident: cachedUser
+        ? {
+            id: cachedUser.id,
+            name: cachedUser.name,
+            email: cachedUser.email,
+            phone: cachedUser.phone ?? "",
+            status: mapResidentStatus(cachedUser.resident_type, cachedUser.status),
+            carPlate: cachedUser.car_plate ?? "",
+            petsCount: cachedUser.pets_count ?? 0,
+          }
+        : null,
+    };
+    setMockAssignments(assignments);
+  }
+}
+
 export async function assignApartment(
   apartmentId: string,
   userId: string | null,
 ): Promise<void> {
+  if (!apartmentId) return;
+
+  if (userId) {
+    await syncApartmentAssignmentForUser(userId, apartmentId);
+    return;
+  }
+
   const cachedUsers = readUsersCache();
   const cachedUser = userId ? cachedUsers.find((user) => user.id === userId) : null;
   const residentSnapshot = cachedUser
@@ -340,6 +491,13 @@ export async function assignApartment(
 
   try {
     const admin = getSupabaseAdmin();
+    const clearTarget = await admin
+      .from("condo_apartments")
+      .update({ resident_id: null } as never)
+      .eq("id", apartmentId);
+
+    if (clearTarget.error) throw clearTarget.error;
+
     const { error } = await admin
       .from("condo_apartments")
       .update({ resident_id: userId } as never)
@@ -348,7 +506,11 @@ export async function assignApartment(
     if (error) throw error;
   } catch {
     const assignments = getMockAssignments();
-    assignments[apartmentId] = { userId, resident: residentSnapshot };
+    if (userId) {
+      assignments[apartmentId] = { userId, resident: residentSnapshot };
+    } else {
+      delete assignments[apartmentId];
+    }
     setMockAssignments(assignments);
   }
 }

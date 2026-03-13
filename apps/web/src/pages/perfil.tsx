@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser, updateUser } from "../features/auth/services/auth";
+import { formatPhone, isPhoneValid, PHONE_INPUT_TITLE, PHONE_PATTERN } from "../features/dashboard/utils/user-form";
 
 export default function Perfil() {
   const nav = useNavigate();
@@ -13,6 +14,7 @@ export default function Perfil() {
   const [carPlate, setCarPlate] = useState(user?.carPlate ?? "");
   const [petsCount, setPetsCount] = useState(user?.petsCount?.toString() ?? "");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!user) {
@@ -21,10 +23,17 @@ export default function Perfil() {
   }, [nav, user]);
 
   function handleSubmit() {
+    const normalizedPhone = formatPhone(phone);
+    if (normalizedPhone && !isPhoneValid(normalizedPhone)) {
+      setError("Informe um telefone valido no formato (11) 99999-9999.");
+      return;
+    }
+
+    setError("");
     updateUser({
       name: name.trim(),
       email: email.trim(),
-      phone: phone.trim(),
+      phone: normalizedPhone,
       carPlate: carPlate.trim(),
       petsCount: petsCount.trim() ? Number(petsCount) : undefined,
     });
@@ -70,8 +79,12 @@ export default function Perfil() {
               <span className="text-xs font-semibold text-slate-600">Telefone</span>
               <input
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
                 placeholder="(11) 99999-0000"
+                pattern={PHONE_PATTERN}
+                title={PHONE_INPUT_TITLE}
+                inputMode="tel"
+                maxLength={15}
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
               />
             </label>
@@ -101,6 +114,7 @@ export default function Perfil() {
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               {saved && <span className="text-sm font-medium text-emerald-700">Dados atualizados com sucesso!</span>}
+              {error && <span className="text-sm font-medium text-rose-600">{error}</span>}
             </div>
             <div className="flex gap-2">
               <button

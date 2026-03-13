@@ -588,7 +588,30 @@ export default function MapaPredio() {
                           <div className="grid grid-cols-4 gap-1.5">
                             {floor.apartments.map((apt) => {
                               const status = apt.resident?.status ?? "Vago";
-                              return <span key={apt.id} className={`h-3.5 rounded-full ${getStatusColor(status)}`} />;
+
+                              return (
+                                <span
+                                  key={apt.id}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedFloor({ level: floor.level, tower: floor.tower });
+                                    setSelectedApt(apt);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key !== "Enter" && event.key !== " ") return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setSelectedFloor({ level: floor.level, tower: floor.tower });
+                                    setSelectedApt(apt);
+                                  }}
+                                  title={`Apto ${apt.number}`}
+                                  className={`flex h-7 cursor-pointer items-center justify-center rounded-full text-[10px] font-semibold text-white transition hover:scale-[1.03] ${getStatusColor(status)}`}
+                                >
+                                  {apt.number}
+                                </span>
+                              );
                             })}
                           </div>
                         </button>

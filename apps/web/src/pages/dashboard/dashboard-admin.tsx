@@ -31,6 +31,7 @@ const EMPTY_FORM: CreateUserPayload = {
   role: "MORADOR",
   residentType: "PROPRIETARIO",
   status: "ATIVO",
+  apartmentId: null,
 };
 
 const RESIDENT_TYPE_LABEL: Record<CreateUserPayload["residentType"], string> = {
@@ -125,6 +126,7 @@ export default function DashboardAdmin() {
       role: user.role,
       residentType: user.resident_type,
       status: user.status,
+      apartmentId: user.apartment_id,
     });
     setFormError("");
     setModalOpen(true);
@@ -146,6 +148,7 @@ export default function DashboardAdmin() {
           role: form.role,
           residentType: form.residentType,
           status: form.status,
+          apartmentId: form.apartmentId,
         } satisfies UpdateUserPayload);
       } else {
         await createUser(form);
