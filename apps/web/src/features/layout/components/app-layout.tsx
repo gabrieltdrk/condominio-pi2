@@ -354,14 +354,6 @@ export default function AppLayout({ title, children }: { title: string; children
             <Menu size={20} />
           </button>
 
-          <button
-            onClick={() => setSidebarCollapsed((value) => !value)}
-            className="hidden rounded-lg bg-transparent p-2 text-gray-500 transition-colors hover:bg-gray-100 md:inline-flex"
-            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-          >
-            {sidebarCollapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
-          </button>
-
           <h1 className="m-0 truncate text-base font-semibold text-gray-800">{title}</h1>
         </header>
 

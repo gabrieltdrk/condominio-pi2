@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle, CloudSun, Droplets, Wind } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import AppLayout from "../../features/layout/components/app-layout";
 import { createUser, listUsers, updateUserRecord, type CreateUserPayload, type UpdateUserPayload, type UserRecord } from "../../features/dashboard/services/users";
+import { fetchSantosWeather, type WeatherSnapshot } from "../../features/dashboard/services/weather";
 import { listOcorrencias, type Ocorrencia } from "../../features/ocorrencias/services/ocorrencias";
 
 type Pending = { title: string; subtitle: string; tag: string; tagColor: string };
@@ -87,6 +88,8 @@ export default function DashboardAdmin() {
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [ocorrenciasLoading, setOcorrenciasLoading] = useState(true);
   const [ocorrenciasError, setOcorrenciasError] = useState("");
+  const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
@@ -109,6 +112,10 @@ export default function DashboardAdmin() {
       .then(setOcorrencias)
       .catch((e: Error) => setOcorrenciasError(e.message))
       .finally(() => setOcorrenciasLoading(false));
+    fetchSantosWeather()
+      .then(setWeather)
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
   }, []);
 
   function openCreateModal() { setEditingUser(null); setForm(EMPTY_FORM); setFormError(""); setModalOpen(true); }
@@ -238,6 +245,48 @@ export default function DashboardAdmin() {
         <section className="grid grid-cols-12 gap-4">
 
           {/* Resumo Financeiro — line chart */}
+          <div className="col-span-12 overflow-hidden rounded-[28px] border border-sky-100 bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.35),_transparent_28%),linear-gradient(135deg,_#f0f9ff_0%,_#ffffff_45%,_#ecfeff_100%)] p-5 shadow-sm">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                  <CloudSun size={13} />
+                  Tempo em Santos
+                </div>
+                <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Clima atual para acompanhar operacao e rotina do condominio</h3>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Visao rapida com temperatura, sensacao termica e condicoes do dia em Santos, SP.</p>
+              </div>
+
+              {weather ? (
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Agora</p>
+                    <p className="mt-1 break-words text-[clamp(1.5rem,2vw,2.2rem)] font-black leading-tight tracking-[-0.04em] text-slate-950">{Math.round(weather.temperature)}°C</p>
+                    <p className="mt-1 text-xs text-slate-500">{weather.condition}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sensacao</p>
+                    <p className="mt-1 text-lg font-bold text-slate-950">{Math.round(weather.apparentTemperature)}°C</p>
+                    <p className="mt-1 text-xs text-slate-500">Max {Math.round(weather.high)}°C - Min {Math.round(weather.low)}°C</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-slate-500"><Droplets size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Umidade</span></div>
+                    <p className="mt-2 text-lg font-bold text-slate-950">{weather.humidity}%</p>
+                    <p className="mt-1 text-xs text-slate-500">{weather.city}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-slate-500"><Wind size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Vento</span></div>
+                    <p className="mt-2 text-lg font-bold text-slate-950">{Math.round(weather.windSpeed)} km/h</p>
+                    <p className="mt-1 text-xs text-slate-500">Atualizado {new Date(`${weather.fetchedAt}:00`).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-4 text-sm text-slate-500 shadow-sm">
+                  {weatherLoading ? "Carregando clima de Santos..." : "Nao foi possivel carregar o clima agora."}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="col-span-12 lg:col-span-8 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
