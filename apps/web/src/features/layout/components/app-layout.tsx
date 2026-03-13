@@ -4,6 +4,7 @@ import {
   Bell,
   Building2,
   CalendarDays,
+  CarFront,
   CheckCheck,
   ChevronDown,
   ChevronRight,
@@ -30,6 +31,7 @@ import { useDarkMode } from "../hooks/use-dark-mode";
 import { useNotifications } from "../hooks/use-notifications";
 
 const SIDEBAR_STORAGE_KEY = "omni:sidebar-collapsed";
+const ADMIN_SECTION_STORAGE_KEY = "omni:admin-section-open";
 
 const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
@@ -37,7 +39,7 @@ const navLinks = [
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
   { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
-  { label: "Garagem", path: "/garagem", icon: Building2 },
+  { label: "Garagem", path: "/garagem", icon: CarFront },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
   { label: "Predio", path: "/predio", icon: Building2 },
   { label: "Usuarios", path: "/usuarios", icon: Users },
@@ -61,13 +63,19 @@ function getInitialCollapsedState() {
   return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
 }
 
+function getInitialAdminSectionState() {
+  if (typeof window === "undefined") return true;
+  const stored = window.localStorage.getItem(ADMIN_SECTION_STORAGE_KEY);
+  return stored === null ? true : stored === "true";
+}
+
 export default function AppLayout({ title, children }: { title: string; children: ReactNode }) {
   const nav = useNavigate();
   const location = useLocation();
   const user = getUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsedState);
-  const [adminSectionOpen, setAdminSectionOpen] = useState(true);
+  const [adminSectionOpen, setAdminSectionOpen] = useState(getInitialAdminSectionState);
   const { notifs, bellOpen, setBellOpen, bellPos, bellRef, unread, openBell, handleMarcarLida, handleMarcarTodas } = useNotifications();
   const { dark, toggleDark } = useDarkMode();
   const [gearOpen, setGearOpen] = useState(false);
@@ -76,6 +84,11 @@ export default function AppLayout({ title, children }: { title: string; children
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ADMIN_SECTION_STORAGE_KEY, String(adminSectionOpen));
+  }, [adminSectionOpen]);
 
   function sair() {
     logout();
