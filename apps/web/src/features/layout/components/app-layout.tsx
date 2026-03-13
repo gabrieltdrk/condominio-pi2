@@ -112,8 +112,8 @@ export default function AppLayout({ title, children }: { title: string; children
 
     return (
       <>
-        <div className={`flex h-16 items-center border-b border-gray-100 shrink-0 ${collapsed ? "justify-center px-2" : "gap-2 px-4"}`}>
-          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl shrink-0">
+        <div className={`border-b border-gray-100 shrink-0 ${collapsed ? "flex flex-col items-center gap-2 px-2 py-3" : "flex h-16 items-center gap-2 px-4"}`}>
+          <div className={`flex items-center justify-center overflow-hidden shrink-0 ${collapsed ? "h-11 w-11 rounded-2xl" : "h-8 w-8 rounded-xl"}`}>
             <img src="/Logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
 
@@ -123,7 +123,7 @@ export default function AppLayout({ title, children }: { title: string; children
             </span>
           )}
 
-          <div className={`flex items-center ${collapsed ? "flex-col gap-1" : "gap-1"}`}>
+          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-1"}`}>
             {!mobile && (
               <button
                 onClick={() => setSidebarCollapsed((value) => !value)}
@@ -146,7 +146,7 @@ export default function AppLayout({ title, children }: { title: string; children
           </div>
         </div>
 
-        <nav className={`flex flex-1 flex-col overflow-y-auto p-3 ${collapsed ? "gap-2" : "gap-0.5"}`}>
+        <nav className={`min-h-0 flex flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? "gap-2 p-2" : "gap-0.5 p-3"}`}>
           {[{ title: undefined, links: mainLinks }, { title: "Adminstrativo", links: adminLinks }].map((group) =>
             group.links.length > 0 ? (
               <div key={group.title ?? "principal"} className={collapsed ? "space-y-2" : "space-y-1"}>
@@ -220,7 +220,7 @@ export default function AppLayout({ title, children }: { title: string; children
               {gearOpen && (
                 <>
                   <div className="fixed inset-0 z-199" onClick={() => setGearOpen(false)} />
-                  <div className={`absolute bottom-full mb-2 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl z-200 ${collapsed ? "left-1/2 w-52 -translate-x-1/2" : "right-0 w-52"}`}>
+                  <div className={`absolute overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl z-200 ${collapsed ? "left-full bottom-0 ml-2 w-52" : "right-0 bottom-full mb-2 w-52"}`}>
                     <button
                       onClick={() => {
                         setGearOpen(false);
@@ -262,7 +262,7 @@ export default function AppLayout({ title, children }: { title: string; children
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <aside
-        className={`hidden shrink-0 border-r border-gray-200 bg-white transition-[width] duration-300 md:flex md:flex-col ${
+        className={`hidden shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-[width] duration-300 md:flex md:flex-col ${
           sidebarCollapsed ? "w-20" : "w-60"
         }`}
       >
@@ -274,7 +274,7 @@ export default function AppLayout({ title, children }: { title: string; children
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 md:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
