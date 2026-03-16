@@ -56,6 +56,7 @@ export default function MapaPredio() {
   const [selectedApt, setSelectedApt] = useState<Apartment | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<{ level: number; tower: string } | null>(null);
   const [selectedTower, setSelectedTower] = useState<string>("Todas");
+  const [towerToDelete, setTowerToDelete] = useState<string>("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ResidentStatus | "Todos">("Todos");
   const [viewMode, setViewMode] = useState<ViewMode>("single");
@@ -99,6 +100,8 @@ export default function MapaPredio() {
     return ["Todas", ...uniqueTowers];
   }, [building]);
 
+  const towerOptions = useMemo(() => towers.filter((tower) => tower !== "Todas"), [towers]);
+
   useEffect(() => {
     const availableTowers = towers.filter((tower) => tower !== "Todas");
     if (availableTowers.length === 0) return;
@@ -108,6 +111,19 @@ export default function MapaPredio() {
       return { ...current, tower: selectedTower !== "Todas" ? selectedTower : availableTowers[0] };
     });
   }, [selectedTower, towers]);
+
+  useEffect(() => {
+    if (towerOptions.length === 0) {
+      setTowerToDelete("");
+      return;
+    }
+
+    setTowerToDelete((current) => {
+      if (current && towerOptions.includes(current)) return current;
+      if (selectedTower !== "Todas" && towerOptions.includes(selectedTower)) return selectedTower;
+      return towerOptions[0];
+    });
+  }, [selectedTower, towerOptions]);
 
   const buildingByTower = useMemo(() => {
     if (selectedTower === "Todas") return building;
@@ -277,12 +293,12 @@ export default function MapaPredio() {
   }
 
   async function handleDeleteSelectedTower() {
-    if (selectedTower === "Todas") {
-      setStructureError("Selecione uma torre especifica para excluir.");
+    if (!towerToDelete) {
+      setStructureError("Selecione a torre que deseja excluir.");
       return;
     }
 
-    if (!window.confirm(`Excluir a ${selectedTower}? Todos os apartamentos vazios dessa torre serao removidos.`)) {
+    if (!window.confirm(`Excluir a ${towerToDelete}? Todos os apartamentos vazios dessa torre serao removidos.`)) {
       return;
     }
 
@@ -291,9 +307,11 @@ export default function MapaPredio() {
     setStructureSuccess("");
 
     try {
-      await deleteTower(selectedTower);
+      await deleteTower(towerToDelete);
       await loadBuilding();
-      setSelectedTower("Todas");
+      if (selectedTower === towerToDelete) {
+        setSelectedTower("Todas");
+      }
       setSelectedApt(null);
       setStructureSuccess("Bloco excluido com sucesso.");
     } catch (error) {
@@ -398,7 +416,7 @@ export default function MapaPredio() {
                 <form onSubmit={handleCreateApartment} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                   <h3 className="text-sm font-semibold text-slate-900">Novo apartamento</h3>
                   <p className="mt-1 text-xs text-slate-500">
-                    Inclui uma unidade nova em um bloco já cadastrado, respeitando o limite de andares da torre.
+                    Inclui uma unidade nova em um bloco já cadastrado, respeitando o limite de andares e a capacidade de cada andar.
                   </p>
 
                   <div className="mt-4 grid gap-3">
@@ -453,17 +471,46 @@ export default function MapaPredio() {
                     >
                       {savingStructure ? "Salvando..." : "Cadastrar apartamento"}
                     </button>
+                  </div>
+                </form>
+
+                <div className="rounded-3xl border border-rose-100 bg-rose-50/70 p-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Excluir torre</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Essa ação não depende do filtro da visualização. Escolha a torre aqui e confirme a exclusão.
+                  </p>
+
+                  <div className="mt-4 grid gap-3">
+                    <label className="grid gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Torre para excluir</span>
+                      <select
+                        value={towerToDelete}
+                        onChange={(event) => setTowerToDelete(event.target.value)}
+                        className={adminInputClass}
+                      >
+                        {towerOptions.length === 0 ? <option value="">Nenhuma torre disponivel</option> : null}
+                        {towerOptions.map((tower) => (
+                          <option key={tower} value={tower}>
+                            {tower}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <p className="text-xs text-slate-500">
+                      Se houver moradores vinculados, o sistema vai bloquear a exclusão e avisar o motivo.
+                    </p>
 
                     <button
                       type="button"
                       onClick={handleDeleteSelectedTower}
-                      disabled={savingStructure || selectedTower === "Todas"}
-                      className="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={savingStructure || !towerToDelete}
+                      className="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Excluir torre selecionada
+                      Excluir torre
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
             </div>
 

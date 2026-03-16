@@ -576,6 +576,23 @@ async function ensureFloorWithinTowerLimit(tower: string, floor: number) {
   }
 }
 
+async function ensureFloorApartmentCapacity(tower: string, floor: number) {
+  const building = await fetchBuilding();
+  const towerFloors = building.filter((item) => item.tower.toLowerCase() === tower.toLowerCase());
+
+  if (towerFloors.length === 0) {
+    throw new Error("Bloco nao encontrado.");
+  }
+
+  const maxApartmentsPerFloor = Math.max(...towerFloors.map((item) => item.apartments.length));
+  const targetFloor = towerFloors.find((item) => item.level === floor);
+  const currentApartments = targetFloor?.apartments.length ?? 0;
+
+  if (currentApartments >= maxApartmentsPerFloor) {
+    throw new Error(`Esse andar ja atingiu o limite de ${maxApartmentsPerFloor} apartamento(s).`);
+  }
+}
+
 export async function createBlock(input: CreateBlockInput): Promise<void> {
   const tower = normalizeTowerName(input.tower);
   const floors = Math.max(1, Math.floor(input.floors));
@@ -620,6 +637,7 @@ export async function createApartment(input: CreateApartmentInput): Promise<void
   if (!number) throw new Error("Informe o número do apartamento.");
 
   await ensureFloorWithinTowerLimit(tower, floor);
+  await ensureFloorApartmentCapacity(tower, floor);
   await ensureNoDuplicateApartment(tower, floor, number);
 
   try {
