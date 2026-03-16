@@ -38,7 +38,6 @@ const ADMIN_SECTION_STORAGE_KEY = "omni:admin-section-open";
 const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
-  { label: "Chat", path: "/chat", icon: MessageCircleMore },
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
   { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
@@ -418,6 +417,36 @@ export default function AppLayout({ title, children }: { title: string; children
           {children}
         </main>
       </div>
+
+      <div className="pointer-events-none fixed inset-y-0 right-0 z-30 hidden items-center pr-4 lg:flex">
+        <div className="pointer-events-auto flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white/95 p-3 shadow-[0_20px_45px_-25px_rgba(15,23,42,0.45)] backdrop-blur">
+          <button
+            type="button"
+            onClick={() => nav("/chat")}
+            title="Abrir chat"
+            className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition ${
+              location.pathname === "/chat"
+                ? "border-sky-200 bg-sky-50 text-sky-700"
+                : "border-slate-200 bg-white text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+            }`}
+          >
+            <MessageCircleMore size={20} />
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => nav("/chat")}
+        title="Abrir chat"
+        className={`fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-[22px] border shadow-lg transition lg:hidden ${
+          location.pathname === "/chat"
+            ? "border-sky-200 bg-sky-50 text-sky-700"
+            : "border-slate-200 bg-white text-slate-600"
+        }`}
+      >
+        <MessageCircleMore size={22} />
+      </button>
     </div>
   );
 }
