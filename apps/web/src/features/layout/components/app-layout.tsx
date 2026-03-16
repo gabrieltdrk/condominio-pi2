@@ -283,7 +283,7 @@ export default function AppLayout({ title, children }: { title: string; children
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <aside
-        className={`hidden shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-[width] duration-300 md:flex md:flex-col ${
+        className={`hidden shrink-0 overflow-visible border-r border-gray-200 bg-white transition-[width] duration-300 md:flex md:flex-col ${
           sidebarCollapsed ? "w-20" : "w-60"
         }`}
       >
@@ -295,7 +295,7 @@ export default function AppLayout({ title, children }: { title: string; children
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-visible border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 md:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -418,31 +418,14 @@ export default function AppLayout({ title, children }: { title: string; children
         </main>
       </div>
 
-      <div className="pointer-events-none fixed inset-y-0 right-0 z-30 hidden items-center pr-4 lg:flex">
-        <div className="pointer-events-auto flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white/95 p-3 shadow-[0_20px_45px_-25px_rgba(15,23,42,0.45)] backdrop-blur">
-          <button
-            type="button"
-            onClick={() => nav("/chat")}
-            title="Abrir chat"
-            className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition ${
-              location.pathname === "/chat"
-                ? "border-sky-200 bg-sky-50 text-sky-700"
-                : "border-slate-200 bg-white text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-            }`}
-          >
-            <MessageCircleMore size={20} />
-          </button>
-        </div>
-      </div>
-
       <button
         type="button"
         onClick={() => nav("/chat")}
         title="Abrir chat"
-        className={`fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-[22px] border shadow-lg transition lg:hidden ${
+        className={`fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-[22px] border shadow-lg transition ${
           location.pathname === "/chat"
             ? "border-sky-200 bg-sky-50 text-sky-700"
-            : "border-slate-200 bg-white text-slate-600"
+            : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
         }`}
       >
         <MessageCircleMore size={22} />

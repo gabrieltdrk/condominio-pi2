@@ -90,11 +90,8 @@ export default function Perfil() {
                 <UserRound size={13} />
                 Area pessoal
               </div>
-              <h2 className="mt-4 text-[clamp(1.8rem,4vw,3rem)] font-black leading-none tracking-[-0.05em] text-slate-950">
-                Atualize seus dados com rapidez e sem confusao.
-              </h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
-                Centralizei suas informacoes mais importantes para deixar o cadastro mais claro e facilitar qualquer contato do condominio com voce.
+                Revise suas informacoes pessoais e mantenha seu cadastro sempre atualizado para facilitar o contato com o condominio.
               </p>
             </div>
 

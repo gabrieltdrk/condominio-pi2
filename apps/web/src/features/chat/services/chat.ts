@@ -5,48 +5,31 @@ export type ChatMessage = {
   id: string;
   content: string;
   created_at: string;
-  user_id: string;
+  updated_at: string;
+  sender_id: string | null;
   author_name: string;
   author_role: string;
 };
 
 type ChatRow = {
-  id: string;
+  id: number;
   content: string;
   created_at: string;
-  user_id: string;
+  updated_at: string;
+  sender_id: string | null;
   profiles?: {
     name?: string | null;
     role?: string | null;
   } | null;
 };
 
-const STORAGE_KEY = "chat:messages:fallback";
-
-function readFallbackMessages(): ChatMessage[] {
-  if (typeof window === "undefined") return [];
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-
-  try {
-    return JSON.parse(raw) as ChatMessage[];
-  } catch {
-    return [];
-  }
-}
-
-function writeFallbackMessages(messages: ChatMessage[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-}
-
 function mapRow(row: ChatRow): ChatMessage {
   return {
-    id: row.id,
+    id: String(row.id),
     content: row.content,
     created_at: row.created_at,
-    user_id: row.user_id,
+    updated_at: row.updated_at,
+    sender_id: row.sender_id,
     author_name: row.profiles?.name?.trim() || "Morador",
     author_role: row.profiles?.role ?? "MORADOR",
   };
@@ -54,13 +37,13 @@ function mapRow(row: ChatRow): ChatMessage {
 
 export async function listChatMessages(): Promise<ChatMessage[]> {
   const { data, error } = await supabase
-    .from("chat_messages")
-    .select("id, content, created_at, user_id, profiles!chat_messages_user_id_fkey(name, role)")
+    .from("messages")
+    .select("id, content, created_at, updated_at, sender_id, profiles!messages_sender_id_fkey(name, role)")
     .order("created_at", { ascending: true })
-    .limit(200);
+    .limit(300);
 
   if (error) {
-    return readFallbackMessages();
+    throw new Error(error.message);
   }
 
   return ((data ?? []) as ChatRow[]).map(mapRow);
@@ -75,40 +58,35 @@ export async function sendChatMessage(content: string): Promise<void> {
     throw new Error("Sessao invalida. Faca login novamente.");
   }
 
-  const { error } = await supabase.from("chat_messages").insert({
+  const { error } = await supabase.from("messages").insert({
+    sender_id: user.id,
     content: trimmed,
-    user_id: user.id,
   });
 
-  if (!error) return;
-
-  const currentUser = getUser();
-  const fallback = readFallbackMessages();
-  fallback.push({
-    id: `local-${Date.now()}`,
-    content: trimmed,
-    created_at: new Date().toISOString(),
-    user_id: user.id,
-    author_name: currentUser?.name ?? "Morador",
-    author_role: currentUser?.role ?? "MORADOR",
-  });
-  writeFallbackMessages(fallback);
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function deleteChatMessage(messageId: string): Promise<void> {
-  const { error } = await supabase.from("chat_messages").delete().eq("id", messageId);
+  const { error } = await supabase.from("messages").delete().eq("id", Number(messageId));
 
-  if (!error) return;
+  if (error) {
+    throw new Error(error.message);
+  }
+}
 
-  writeFallbackMessages(readFallbackMessages().filter((message) => message.id !== messageId));
+export function canDeleteMessage(message: ChatMessage) {
+  const user = getUser();
+  return !!user && user.email && message.sender_id !== null;
 }
 
 export function subscribeToChatMessages(onChange: () => void) {
   const channel = supabase
-    .channel("chat-messages-feed")
+    .channel("messages-feed")
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "chat_messages" },
+      { event: "*", schema: "public", table: "messages" },
       () => onChange(),
     )
     .subscribe();

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircleMore, SendHorizonal, Shield, Trash2, Users } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
+import { supabase } from "../lib/supabase";
 import {
   deleteChatMessage,
   listChatMessages,
@@ -21,8 +22,7 @@ function formatTime(iso: string) {
 
 export default function ChatPage() {
   const user = useMemo(() => getUser(), []);
-  const isAdmin = user?.role === "ADMIN";
-
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,12 +51,21 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
+    async function loadSessionUser() {
+      const { data } = await supabase.auth.getUser();
+      setSessionUserId(data.user?.id ?? null);
+    }
+
+    void loadSessionUser();
+  }, []);
+
+  useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
 
   const stats = useMemo(() => {
-    const uniqueAuthors = new Set(messages.map((message) => message.user_id)).size;
+    const uniqueAuthors = new Set(messages.map((message) => message.sender_id ?? message.author_name)).size;
     return {
       total: messages.length,
       authors: uniqueAuthors,
@@ -80,7 +89,7 @@ export default function ChatPage() {
   }
 
   async function handleDelete(message: ChatMessage) {
-    if (!isAdmin) {
+    if (message.sender_id !== sessionUserId) {
       return;
     }
 
@@ -106,11 +115,11 @@ export default function ChatPage() {
                 <MessageCircleMore size={13} />
                 Conversa do condominio
               </div>
-              <h2 className="mt-4 text-[clamp(1.9rem,4vw,3.1rem)] font-black leading-none tracking-[-0.05em] text-slate-950">
-                Um chat geral simples para recados e conversa rapida.
+              <h2 className="mt-4 text-[clamp(1.7rem,3.8vw,2.9rem)] font-black leading-none tracking-[-0.05em] text-slate-950">
+                Um chat simples para todo mundo falar no mesmo lugar.
               </h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
-                Todo mundo fala no mesmo lugar. Ideal para mensagens curtas, avisos rapidos e alinhamentos do dia a dia.
+                Ideal para recados, alinhamentos rapidos e conversas do dia a dia entre moradores e administracao.
               </p>
             </div>
 
@@ -137,7 +146,7 @@ export default function ChatPage() {
           <div className="flex min-h-[620px] flex-col overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-5 py-4">
               <h3 className="m-0 text-base font-semibold text-slate-900">Sala geral</h3>
-              <p className="mt-1 text-sm text-slate-500">Mensagens em ordem cronologica para todo o condominio.</p>
+              <p className="mt-1 text-sm text-slate-500">Mensagens em tempo real para todo o condominio.</p>
             </div>
 
             <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_18%)] px-4 py-4">
@@ -149,44 +158,37 @@ export default function ChatPage() {
                 </div>
               ) : null}
 
-              {messages.map((message) => {
-                const ownMessage = message.user_id === user?.email;
-                const tone = ownMessage
-                  ? "ml-auto border-sky-200 bg-sky-50"
-                  : "mr-auto border-slate-200 bg-white";
-
-                return (
-                  <article key={message.id} className={`max-w-[92%] rounded-[24px] border px-4 py-3 shadow-sm ${tone}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="m-0 text-sm font-semibold text-slate-900">{message.author_name}</p>
-                          {message.author_role === "ADMIN" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                              <Shield size={11} />
-                              Admin
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-400">{formatTime(message.created_at)}</p>
+              {messages.map((message) => (
+                <article key={message.id} className="mr-auto max-w-[92%] rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="m-0 text-sm font-semibold text-slate-900">{message.author_name}</p>
+                        {message.author_role === "ADMIN" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                            <Shield size={11} />
+                            Admin
+                          </span>
+                        ) : null}
                       </div>
-
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(message)}
-                          className="rounded-lg border border-slate-200 bg-white p-2 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                          title="Excluir mensagem"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      ) : null}
+                      <p className="mt-1 text-[11px] text-slate-400">{formatTime(message.created_at)}</p>
                     </div>
 
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.content}</p>
-                  </article>
-                );
-              })}
+                    {message.sender_id === sessionUserId ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(message)}
+                        className="rounded-lg border border-slate-200 bg-white p-2 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                        title="Excluir mensagem"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.content}</p>
+                </article>
+              ))}
             </div>
 
             <div className="border-t border-slate-100 bg-white px-4 py-4">
@@ -220,7 +222,7 @@ export default function ChatPage() {
                 {[
                   "Use para recados curtos, duvidas rapidas e comunicacao geral.",
                   "Evite dados sensiveis ou assuntos que precisam de atendimento privado.",
-                  "Se necessario, o admin pode remover mensagens inadequadas.",
+                  "Cada usuario pode excluir as proprias mensagens.",
                 ].map((item) => (
                   <div key={item} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
                     {item}
