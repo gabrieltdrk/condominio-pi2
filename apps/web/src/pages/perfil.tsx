@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../features/layout/components/app-layout";
-import { getUser, updateUser } from "../features/auth/services/auth";
-import { formatPhone, isPhoneValid, PHONE_INPUT_TITLE, PHONE_PATTERN } from "../features/dashboard/utils/user-form";
+import { getUser } from "../features/auth/services/auth";
+import { saveOwnProfile } from "../features/auth/services/profile";
+import {
+  CAR_PLATE_INPUT_TITLE,
+  CAR_PLATE_PATTERN,
+  PHONE_INPUT_TITLE,
+  PHONE_PATTERN,
+  formatCarPlate,
+  formatPhone,
+  isCarPlateValid,
+  isPhoneValid,
+  normalizeCarPlate,
+} from "../features/dashboard/utils/user-form";
 
 export default function Perfil() {
   const nav = useNavigate();
@@ -15,6 +26,7 @@ export default function Perfil() {
   const [petsCount, setPetsCount] = useState(user?.petsCount?.toString() ?? "");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -22,23 +34,37 @@ export default function Perfil() {
     }
   }, [nav, user]);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const normalizedPhone = formatPhone(phone);
     if (normalizedPhone && !isPhoneValid(normalizedPhone)) {
       setError("Informe um telefone valido no formato (11) 99999-9999.");
       return;
     }
 
+    const normalizedCarPlate = normalizeCarPlate(carPlate);
+    if (!isCarPlateValid(normalizedCarPlate)) {
+      setError("Informe uma placa valida no formato ABC-1234 ou ABC1D23.");
+      return;
+    }
+
     setError("");
-    updateUser({
-      name: name.trim(),
-      email: email.trim(),
-      phone: normalizedPhone,
-      carPlate: carPlate.trim(),
-      petsCount: petsCount.trim() ? Number(petsCount) : undefined,
-    });
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2000);
+    setSaving(true);
+    try {
+      await saveOwnProfile({
+        name: name.trim(),
+        email: email.trim(),
+        phone: normalizedPhone,
+        carPlate: normalizedCarPlate,
+        petsCount: petsCount.trim() ? Number(petsCount) : 0,
+      });
+      setCarPlate(formatCarPlate(normalizedCarPlate));
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nao foi possivel salvar seus dados.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!user) return null;
@@ -93,8 +119,11 @@ export default function Perfil() {
               <span className="text-xs font-semibold text-slate-600">Placa do carro</span>
               <input
                 value={carPlate}
-                onChange={(e) => setCarPlate(e.target.value)}
+                onChange={(e) => setCarPlate(formatCarPlate(e.target.value))}
                 placeholder="ABC-1234"
+                pattern={CAR_PLATE_PATTERN}
+                title={CAR_PLATE_INPUT_TITLE}
+                maxLength={8}
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
               />
             </label>
@@ -127,9 +156,10 @@ export default function Perfil() {
               <button
                 type="button"
                 onClick={handleSubmit}
+                disabled={saving}
                 className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
               >
-                Salvar alterações
+                {saving ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
           </div>

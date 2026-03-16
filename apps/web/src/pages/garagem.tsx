@@ -78,11 +78,36 @@ function saveLocalSpots(spots: GarageSpot[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(spots));
 }
 
-const statusTone: Record<SpotStatus, string> = {
-  LIVRE: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  OCUPADA: "border-indigo-100 bg-indigo-50 text-indigo-700",
-  RESERVADA: "border-amber-100 bg-amber-50 text-amber-700",
-  MANUTENCAO: "border-rose-100 bg-rose-50 text-rose-700",
+const mapSpotTone: Record<SpotStatus, { shell: string; badge: string; car: string; line: string }> = {
+  LIVRE: {
+    shell: "border-emerald-200 bg-emerald-50/90 text-emerald-900",
+    badge: "bg-emerald-600 text-white",
+    car: "bg-emerald-200 text-emerald-700",
+    line: "border-emerald-300",
+  },
+  OCUPADA: {
+    shell: "border-sky-200 bg-sky-50/90 text-sky-950",
+    badge: "bg-sky-700 text-white",
+    car: "bg-sky-200 text-sky-700",
+    line: "border-sky-300",
+  },
+  RESERVADA: {
+    shell: "border-amber-200 bg-amber-50/90 text-amber-950",
+    badge: "bg-amber-500 text-white",
+    car: "bg-amber-200 text-amber-700",
+    line: "border-amber-300",
+  },
+  MANUTENCAO: {
+    shell: "border-rose-200 bg-rose-50/90 text-rose-950",
+    badge: "bg-rose-600 text-white",
+    car: "bg-rose-200 text-rose-700",
+    line: "border-rose-300",
+  },
+};
+
+const zoneAccent: Record<string, string> = {
+  "Subsolo A": "from-sky-100 via-white to-cyan-50",
+  "Subsolo B": "from-emerald-100 via-white to-lime-50",
 };
 
 export default function GaragemPage() {
@@ -124,6 +149,20 @@ export default function GaragemPage() {
       return acc;
     }, {});
   }, [spots]);
+
+  const garageZones = useMemo(() => {
+    return Object.entries(groupedSpots).map(([zone, zoneSpots]) => {
+      const ordered = [...zoneSpots].sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true }));
+      const half = Math.ceil(ordered.length / 2);
+
+      return {
+        zone,
+        leftLane: ordered.slice(0, half),
+        rightLane: ordered.slice(half),
+        occupied: ordered.filter((spot) => spot.status === "OCUPADA").length,
+      };
+    });
+  }, [groupedSpots]);
 
   function resetToNewSpot() {
     const nextId = `garage-${Date.now()}`;
@@ -210,55 +249,117 @@ export default function GaragemPage() {
           <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="m-0 text-base font-semibold text-slate-900">Mapa rapido da garagem</h3>
-                <p className="mt-1 text-sm text-slate-500">Clique em uma vaga para editar vinculo, placa e status.</p>
+                <h3 className="m-0 text-base font-semibold text-slate-900">Mapa da garagem</h3>
+                <p className="mt-1 text-sm text-slate-500">Visualizacao por setor, corredor central e vagas dos dois lados.</p>
               </div>
               <button type="button" onClick={resetToNewSpot} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                 Nova vaga
               </button>
             </div>
 
-            <div className="mt-5 space-y-4">
-              {Object.entries(groupedSpots).map(([zone, zoneSpots]) => (
-                <div key={zone} className="rounded-[26px] border border-slate-100 bg-slate-50 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="m-0 text-sm font-semibold text-slate-900">{zone}</p>
-                      <p className="mt-1 text-xs text-slate-500">{zoneSpots.length} vagas nessa area</p>
+            <div className="mt-5 space-y-5">
+              <div className="rounded-[26px] border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {(["LIVRE", "OCUPADA", "RESERVADA", "MANUTENCAO"] as SpotStatus[]).map((status) => (
+                    <div key={status} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600">
+                      <span className={`h-2.5 w-2.5 rounded-full ${mapSpotTone[status].badge.split(" ")[0]}`} />
+                      {status}
                     </div>
-                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                      {zoneSpots.filter((spot) => spot.status === "OCUPADA").length} ocupadas
-                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {garageZones.map((zone) => (
+                <div
+                  key={zone.zone}
+                  className={`overflow-hidden rounded-[28px] border border-slate-200 bg-gradient-to-br ${zoneAccent[zone.zone] ?? "from-slate-100 via-white to-slate-50"} p-4 shadow-sm`}
+                >
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="m-0 text-base font-semibold text-slate-950">{zone.zone}</p>
+                      <p className="mt-1 text-xs text-slate-500">{zone.leftLane.length + zone.rightLane.length} vagas distribuidas em duas fileiras</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full border border-white/70 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                        {zone.occupied} ocupadas
+                      </span>
+                      <span className="rounded-full border border-white/70 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                        Corredor central
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {zoneSpots.map((spot) => (
-                      <button
-                        key={spot.id}
-                        type="button"
-                        onClick={() => setSelectedSpotId(spot.id)}
-                        className={`rounded-[24px] border p-4 text-left transition ${selectedSpotId === spot.id ? "border-slate-900 bg-white shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="m-0 text-sm font-semibold text-slate-900">{spot.code}</p>
-                            <p className="mt-1 text-xs text-slate-500">{spot.apartmentLabel || "Sem unidade vinculada"}</p>
-                          </div>
-                          <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${statusTone[spot.status]}`}>
-                            {spot.status}
-                          </span>
-                        </div>
-                        <div className="mt-4 flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                            <CarFront size={18} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-800">{spot.vehicleModel || "Sem veiculo"}</p>
-                            <p className="truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa nao cadastrada"}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]">
+                    <div className="grid gap-3">
+                      {zone.leftLane.map((spot) => {
+                        const tone = mapSpotTone[spot.status];
+                        return (
+                          <button
+                            key={spot.id}
+                            type="button"
+                            onClick={() => setSelectedSpotId(spot.id)}
+                            className={`rounded-[24px] border-2 p-4 text-left transition ${tone.shell} ${selectedSpotId === spot.id ? "ring-4 ring-slate-900/10 shadow-md" : "hover:-translate-y-0.5 hover:shadow-sm"}`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="m-0 text-sm font-black tracking-[-0.03em]">{spot.code}</p>
+                                <p className="mt-1 text-[11px] text-slate-600">{spot.type}</p>
+                              </div>
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${tone.badge}`}>{spot.status}</span>
+                            </div>
+
+                            <div className={`mt-4 rounded-[20px] border-2 border-dashed ${tone.line} bg-white/70 p-3`}>
+                              <div className={`flex h-11 w-16 items-center justify-center rounded-2xl ${tone.car}`}>
+                                <CarFront size={20} />
+                              </div>
+                              <p className="mt-3 truncate text-sm font-semibold text-slate-800">{spot.vehicleModel || "Sem veiculo"}</p>
+                              <p className="mt-1 truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa nao cadastrada"}</p>
+                              <p className="mt-2 truncate text-[11px] text-slate-500">{spot.apartmentLabel || "Sem unidade vinculada"}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex min-h-full flex-col items-center justify-center rounded-[26px] border border-slate-300/70 bg-[repeating-linear-gradient(180deg,#cbd5e1_0_18px,transparent_18px_42px)] px-3 py-6 text-center">
+                      <div className="rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Via
+                      </div>
+                      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 [writing-mode:vertical-rl] rotate-180">
+                        Fluxo de veiculos
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {zone.rightLane.map((spot) => {
+                        const tone = mapSpotTone[spot.status];
+                        return (
+                          <button
+                            key={spot.id}
+                            type="button"
+                            onClick={() => setSelectedSpotId(spot.id)}
+                            className={`rounded-[24px] border-2 p-4 text-left transition ${tone.shell} ${selectedSpotId === spot.id ? "ring-4 ring-slate-900/10 shadow-md" : "hover:-translate-y-0.5 hover:shadow-sm"}`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="m-0 text-sm font-black tracking-[-0.03em]">{spot.code}</p>
+                                <p className="mt-1 text-[11px] text-slate-600">{spot.type}</p>
+                              </div>
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${tone.badge}`}>{spot.status}</span>
+                            </div>
+
+                            <div className={`mt-4 rounded-[20px] border-2 border-dashed ${tone.line} bg-white/70 p-3`}>
+                              <div className={`ml-auto flex h-11 w-16 items-center justify-center rounded-2xl ${tone.car}`}>
+                                <CarFront size={20} />
+                              </div>
+                              <p className="mt-3 truncate text-sm font-semibold text-slate-800">{spot.vehicleModel || "Sem veiculo"}</p>
+                              <p className="mt-1 truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa nao cadastrada"}</p>
+                              <p className="mt-2 truncate text-[11px] text-slate-500">{spot.apartmentLabel || "Sem unidade vinculada"}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ))}

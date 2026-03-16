@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Search, X } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
+import { getUser } from "../features/auth/services/auth";
 import {
   createUser,
+  deleteUserRecord,
   listUsers,
   updateUserRecord,
   type CreateUserPayload,
@@ -11,8 +13,13 @@ import {
 } from "../features/dashboard/services/users";
 import { listBuildingApartmentOptions, type BuildingApartmentOption } from "../features/predio/services/predio";
 import {
+  CAR_PLATE_INPUT_TITLE,
+  CAR_PLATE_PATTERN,
   formatPhone,
+  formatCarPlate,
+  isCarPlateValid,
   isPhoneValid,
+  normalizeCarPlate,
   PHONE_INPUT_TITLE,
   PHONE_PATTERN,
   RESIDENT_TYPE_LABEL,
@@ -42,6 +49,7 @@ function apartmentLabel(apartment: BuildingApartmentOption) {
 }
 
 export default function UsuariosPage() {
+  const currentUser = useMemo(() => getUser(), []);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [apartmentOptions, setApartmentOptions] = useState<BuildingApartmentOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +128,13 @@ export default function UsuariosPage() {
       return;
     }
 
+    const normalizedCarPlate = normalizeCarPlate(form.carPlate);
+    if (!isCarPlateValid(normalizedCarPlate)) {
+      setFormError("Informe uma placa valida no formato ABC-1234 ou ABC1D23.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       if (editingUser) {
         await updateUserRecord({
@@ -127,7 +142,7 @@ export default function UsuariosPage() {
           name: form.name,
           email: form.email,
           phone,
-          carPlate: form.carPlate,
+          carPlate: normalizedCarPlate,
           petsCount: form.petsCount,
           role: form.role,
           residentType: form.residentType,
@@ -135,7 +150,7 @@ export default function UsuariosPage() {
           apartmentId: form.apartmentId,
         } satisfies UpdateUserPayload);
       } else {
-        await createUser({ ...form, phone });
+        await createUser({ ...form, phone, carPlate: normalizedCarPlate });
       }
 
       closeModal();
@@ -162,10 +177,28 @@ export default function UsuariosPage() {
     () =>
       apartmentOptions.filter((apartment) => {
         if (!selectedTower || apartment.tower !== selectedTower) return false;
-        return apartment.residentId === null || apartment.residentId === editingUser?.id;
+        return apartment.residentId === null || editingUser?.apartment_ids.includes(apartment.id);
       }),
     [apartmentOptions, selectedTower, editingUser]
   );
+
+  async function handleDeleteUser(user: UserRecord) {
+    if (currentUser?.email === user.email) {
+      setError("Nao e permitido excluir o usuario que esta logado.");
+      return;
+    }
+
+    if (!window.confirm(`Excluir o usuario ${user.name}? Essa acao remove o acesso ao sistema.`)) {
+      return;
+    }
+
+    try {
+      await deleteUserRecord(user.id);
+      loadPageData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao excluir usuario.");
+    }
+  }
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -177,8 +210,10 @@ export default function UsuariosPage() {
         user.email.toLowerCase().includes(term) ||
         (user.phone ?? "").toLowerCase().includes(term) ||
         (user.car_plate ?? "").toLowerCase().includes(term) ||
-        (user.apartment_tower ?? "").toLowerCase().includes(term) ||
-        (user.apartment_number ?? "").toLowerCase().includes(term);
+        user.apartments.some(
+          (apartment) =>
+            apartment.tower.toLowerCase().includes(term) || apartment.number.toLowerCase().includes(term),
+        );
 
       const matchesRole = roleFilter === "TODOS" || user.role === roleFilter;
       const matchesType = typeFilter === "TODOS" || user.resident_type === typeFilter;
@@ -297,7 +332,9 @@ export default function UsuariosPage() {
                         </span>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-3 text-slate-500">
-                        {user.apartment_tower && user.apartment_number ? `${user.apartment_tower} · Apto ${user.apartment_number}` : "-"}
+                        {user.apartments.length > 0
+                          ? user.apartments.map((apartment) => `${apartment.tower} · Apto ${apartment.number}`).join(", ")
+                          : "-"}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-3 text-slate-500">
                         {[
@@ -308,7 +345,7 @@ export default function UsuariosPage() {
                           .join(" · ") || "-"}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-3">
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => openEditModal(user)}
@@ -316,6 +353,14 @@ export default function UsuariosPage() {
                           >
                             <Pencil size={14} />
                             Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50"
+                          >
+                            <Trash2 size={14} />
+                            Excluir
                           </button>
                         </div>
                       </td>
@@ -401,8 +446,11 @@ export default function UsuariosPage() {
                       <input
                         id="u-car-plate"
                         value={form.carPlate}
-                        onChange={(e) => setForm({ ...form, carPlate: e.target.value.toUpperCase() })}
+                        onChange={(e) => setForm({ ...form, carPlate: formatCarPlate(e.target.value) })}
                         placeholder="ABC-1234"
+                        pattern={CAR_PLATE_PATTERN}
+                        title={CAR_PLATE_INPUT_TITLE}
+                        maxLength={8}
                         className={inputCls}
                       />
                     </div>

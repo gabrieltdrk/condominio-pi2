@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
+import { refreshStoredUser } from "../../auth/services/profile";
 import { AVISO_TIPO_COLORS, type AvisoTipo } from "../../avisos/services/avisos";
 import { useDarkMode } from "../hooks/use-dark-mode";
 import { useNotifications } from "../hooks/use-notifications";
@@ -72,7 +73,7 @@ function getInitialAdminSectionState() {
 export default function AppLayout({ title, children }: { title: string; children: ReactNode }) {
   const nav = useNavigate();
   const location = useLocation();
-  const user = getUser();
+  const [user, setUser] = useState(getUser());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsedState);
   const [adminSectionOpen, setAdminSectionOpen] = useState(getInitialAdminSectionState);
@@ -89,6 +90,25 @@ export default function AppLayout({ title, children }: { title: string; children
     if (typeof window === "undefined") return;
     window.localStorage.setItem(ADMIN_SECTION_STORAGE_KEY, String(adminSectionOpen));
   }, [adminSectionOpen]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function syncUser() {
+      const refreshed = await refreshStoredUser();
+      if (!active || !refreshed) return;
+      setUser(refreshed);
+    }
+
+    syncUser();
+    const handleFocus = () => void syncUser();
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   function sair() {
     logout();

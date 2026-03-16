@@ -8,6 +8,8 @@ import {
   assignApartment,
   createApartment,
   createBlock,
+  deleteApartment,
+  deleteTower,
   fetchBuilding,
   getMockBuilding,
   type Apartment,
@@ -148,6 +150,18 @@ export default function MapaPredio() {
   }, [floors, selectedFloor]);
 
   const currentFloor = floors[currentMiniIndex] ?? floors[0];
+  const hasPrevPage = miniPage > 0;
+  const hasNextPage = miniPage < totalMiniPages - 1;
+  const selectedTowerSummary = useMemo(() => {
+    if (apartmentForm.tower === "Todas") return null;
+    const towerFloors = building.filter((floor) => floor.tower === apartmentForm.tower);
+    if (towerFloors.length === 0) return null;
+
+    return {
+      floors: Math.max(...towerFloors.map((floor) => floor.level)),
+      apartmentsPerFloor: Math.max(...towerFloors.map((floor) => floor.apartments.length)),
+    };
+  }, [apartmentForm.tower, building]);
 
   const buildingStats = useMemo(() => {
     const allApartments = floors.flatMap((floor) => floor.apartments);
@@ -171,9 +185,6 @@ export default function MapaPredio() {
       vagos: apartments.filter((apt) => !apt.resident || apt.resident.status === "Vago").length,
     };
   }, [currentFloor]);
-
-  const hasPrevFloor = currentMiniIndex > 0;
-  const hasNextFloor = currentMiniIndex >= 0 && currentMiniIndex < floors.length - 1;
 
   const filteredFloors = useMemo(() => {
     const baseFloors = viewMode === "all" ? floors : currentFloor ? [currentFloor] : [];
@@ -202,29 +213,30 @@ export default function MapaPredio() {
   }, [floors, currentFloor, search, statusFilter, viewMode]);
 
   useEffect(() => {
-    if (currentMiniIndex >= 0) {
-      setMiniPage(Math.floor(currentMiniIndex / FLOORS_PER_PAGE));
-    }
-  }, [currentMiniIndex]);
+    const pageFloors = paginatedMiniFloors;
+    if (pageFloors.length === 0) return;
 
-  function goToPrevFloor() {
-    if (!hasPrevFloor) return;
-    const newIndex = Math.max(0, currentMiniIndex - 1);
-    const nextFloor = floors[newIndex];
-    setSelectedFloor({ level: nextFloor.level, tower: nextFloor.tower });
+    const selectedIsOnPage = pageFloors.some(
+      (floor) => floor.level === selectedFloor?.level && floor.tower === selectedFloor?.tower,
+    );
+
+    if (!selectedIsOnPage) {
+      setSelectedFloor({ level: pageFloors[0].level, tower: pageFloors[0].tower });
+    }
+  }, [miniPage, paginatedMiniFloors, selectedFloor]);
+
+  function goToPrevPage() {
+    if (!hasPrevPage) return;
+    setMiniPage((current) => current - 1);
     setSelectedApt(null);
     setViewMode("single");
-    setMiniPage(Math.floor(newIndex / FLOORS_PER_PAGE));
   }
 
-  function goToNextFloor() {
-    if (!hasNextFloor) return;
-    const newIndex = Math.min(floors.length - 1, currentMiniIndex + 1);
-    const nextFloor = floors[newIndex];
-    setSelectedFloor({ level: nextFloor.level, tower: nextFloor.tower });
+  function goToNextPage() {
+    if (!hasNextPage) return;
+    setMiniPage((current) => current + 1);
     setSelectedApt(null);
     setViewMode("single");
-    setMiniPage(Math.floor(newIndex / FLOORS_PER_PAGE));
   }
 
   async function handleCreateBlock(event: React.FormEvent<HTMLFormElement>) {
@@ -259,6 +271,56 @@ export default function MapaPredio() {
       setStructureSuccess("Apartamento cadastrado com sucesso.");
     } catch (error) {
       setStructureError(error instanceof Error ? error.message : "Erro ao cadastrar apartamento.");
+    } finally {
+      setSavingStructure(false);
+    }
+  }
+
+  async function handleDeleteSelectedTower() {
+    if (selectedTower === "Todas") {
+      setStructureError("Selecione uma torre especifica para excluir.");
+      return;
+    }
+
+    if (!window.confirm(`Excluir a ${selectedTower}? Todos os apartamentos vazios dessa torre serao removidos.`)) {
+      return;
+    }
+
+    setSavingStructure(true);
+    setStructureError("");
+    setStructureSuccess("");
+
+    try {
+      await deleteTower(selectedTower);
+      await loadBuilding();
+      setSelectedTower("Todas");
+      setSelectedApt(null);
+      setStructureSuccess("Bloco excluido com sucesso.");
+    } catch (error) {
+      setStructureError(error instanceof Error ? error.message : "Erro ao excluir bloco.");
+    } finally {
+      setSavingStructure(false);
+    }
+  }
+
+  async function handleDeleteApartmentFromModal(apartment: Apartment) {
+    if (!window.confirm(`Excluir o apartamento ${apartment.number}?`)) {
+      return;
+    }
+
+    setSavingStructure(true);
+    setStructureError("");
+    setStructureSuccess("");
+
+    try {
+      await deleteApartment(apartment.id);
+      await loadBuilding();
+      setSelectedApt(null);
+      setStructureSuccess("Apartamento excluido com sucesso.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao excluir apartamento.";
+      setStructureError(message);
+      throw error;
     } finally {
       setSavingStructure(false);
     }
@@ -335,7 +397,9 @@ export default function MapaPredio() {
 
                 <form onSubmit={handleCreateApartment} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                   <h3 className="text-sm font-semibold text-slate-900">Novo apartamento</h3>
-                  <p className="mt-1 text-xs text-slate-500">Inclui uma unidade nova em um bloco já cadastrado.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Inclui uma unidade nova em um bloco já cadastrado, respeitando o limite de andares da torre.
+                  </p>
 
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1.5">
@@ -376,12 +440,27 @@ export default function MapaPredio() {
                       </label>
                     </div>
 
+                    {selectedTowerSummary ? (
+                      <p className="text-xs text-slate-500">
+                        {apartmentForm.tower} tem {selectedTowerSummary.floors} andares e ate {selectedTowerSummary.apartmentsPerFloor} aptos por andar.
+                      </p>
+                    ) : null}
+
                     <button
                       type="submit"
                       disabled={savingStructure || towers.length <= 1}
                       className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {savingStructure ? "Salvando..." : "Cadastrar apartamento"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelectedTower}
+                      disabled={savingStructure || selectedTower === "Todas"}
+                      className="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Excluir torre selecionada
                     </button>
                   </div>
                 </form>
@@ -526,7 +605,7 @@ export default function MapaPredio() {
             <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-slate-900">Mini prédio</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Navegue em blocos de 5 andares.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Use as setas para trocar a pagina do minimapa.</p>
               </div>
 
               <div className="overflow-hidden rounded-[24px] bg-slate-100 p-3">
@@ -538,23 +617,23 @@ export default function MapaPredio() {
                   <div className="mb-3 flex flex-nowrap items-center justify-between gap-2">
                     <button
                       type="button"
-                      onClick={goToPrevFloor}
-                      disabled={!hasPrevFloor}
-                      aria-label="Andar anterior"
+                      onClick={goToPrevPage}
+                      disabled={!hasPrevPage}
+                      aria-label="Pagina anterior"
                       className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronLeft size={18} />
                     </button>
 
                     <span className="flex-1 whitespace-nowrap text-center text-[11px] font-semibold text-slate-500">
-                      {floors.length === 0 ? "0 andares" : `${currentMiniIndex + 1} de ${floors.length}`}
+                      {totalMiniPages === 0 ? "0 paginas" : `Pagina ${miniPage + 1} de ${totalMiniPages}`}
                     </span>
 
                     <button
                       type="button"
-                      onClick={goToNextFloor}
-                      disabled={!hasNextFloor}
-                      aria-label="Próximo andar"
+                      onClick={goToNextPage}
+                      disabled={!hasNextPage}
+                      aria-label="Proxima pagina"
                       className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronRight size={18} />
@@ -719,7 +798,12 @@ export default function MapaPredio() {
         </div>
       </div>
 
-      <MoradorModal apartment={selectedApt} onClose={() => setSelectedApt(null)} onAssign={handleAssign} />
+      <MoradorModal
+        apartment={selectedApt}
+        onClose={() => setSelectedApt(null)}
+        onAssign={handleAssign}
+        onDeleteApartment={handleDeleteApartmentFromModal}
+      />
     </AppLayout>
   );
 }

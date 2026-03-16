@@ -15,6 +15,13 @@ export type UserRecord = {
   role: "ADMIN" | "MORADOR";
   resident_type: ResidentType;
   status: UserStatus;
+  apartment_ids: string[];
+  apartments: Array<{
+    id: string;
+    tower: string;
+    level: number;
+    number: string;
+  }>;
   apartment_id: string | null;
   apartment_number: string | null;
   apartment_tower: string | null;
@@ -80,6 +87,7 @@ type ApartmentAssignmentRow = {
 const USERS_CACHE_KEY = "dashboard:users-cache";
 
 function normalizeProfile(row: ProfileRow, assignment?: ApartmentAssignmentRow): UserRecord {
+  const apartments = assignment ? [assignment] : [];
   return {
     id: row.id,
     name: row.name,
@@ -90,10 +98,17 @@ function normalizeProfile(row: ProfileRow, assignment?: ApartmentAssignmentRow):
     role: (row.role ?? "MORADOR") as "ADMIN" | "MORADOR",
     resident_type: (row.resident_type ?? "PROPRIETARIO") as ResidentType,
     status: (row.status ?? "ATIVO") as UserStatus,
-    apartment_id: assignment?.id ?? null,
-    apartment_number: assignment?.number ?? null,
-    apartment_tower: assignment?.tower ?? null,
-    apartment_level: assignment?.level ?? null,
+    apartment_ids: apartments.map((item) => item.id),
+    apartments: apartments.map((item) => ({
+      id: item.id,
+      tower: item.tower,
+      level: item.level,
+      number: item.number,
+    })),
+    apartment_id: apartments[0]?.id ?? null,
+    apartment_number: apartments[0]?.number ?? null,
+    apartment_tower: apartments[0]?.tower ?? null,
+    apartment_level: apartments[0]?.level ?? null,
     created_at: row.created_at ?? new Date().toISOString(),
   };
 }
@@ -119,13 +134,22 @@ async function listApartmentAssignments(client: SupabaseClient) {
     .select("id, tower, level, number, resident_id")
     .not("resident_id", "is", null);
 
-  if (error) return new Map<string, ApartmentAssignmentRow>();
+  if (error) return new Map<string, ApartmentAssignmentRow[]>();
 
-  return new Map(
-    ((data ?? []) as ApartmentAssignmentRow[])
-      .filter((row) => row.resident_id)
-      .map((row) => [row.resident_id as string, row])
-  );
+  const map = new Map<string, ApartmentAssignmentRow[]>();
+  for (const row of (data ?? []) as ApartmentAssignmentRow[]) {
+    if (!row.resident_id) continue;
+    const current = map.get(row.resident_id) ?? [];
+    current.push(row);
+    current.sort((a, b) => {
+      if (a.tower !== b.tower) return a.tower.localeCompare(b.tower);
+      if (a.level !== b.level) return a.level - b.level;
+      return a.number.localeCompare(b.number, "pt-BR", { numeric: true, sensitivity: "base" });
+    });
+    map.set(row.resident_id, current);
+  }
+
+  return map;
 }
 
 async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
@@ -136,7 +160,19 @@ async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
     .order("created_at", { ascending: false });
 
   if (!extended.error) {
-    const users = (extended.data as ProfileRow[]).map((row) => normalizeProfile(row, assignments.get(row.id)));
+    const users = (extended.data as ProfileRow[]).map((row) => {
+      const normalized = normalizeProfile(row);
+      const apartments = assignments.get(row.id) ?? [];
+      return {
+        ...normalized,
+        apartment_ids: apartments.map((item) => item.id),
+        apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+        apartment_id: apartments[0]?.id ?? null,
+        apartment_number: apartments[0]?.number ?? null,
+        apartment_tower: apartments[0]?.tower ?? null,
+        apartment_level: apartments[0]?.level ?? null,
+      };
+    });
     writeUsersCache(users);
     return users;
   }
@@ -147,7 +183,19 @@ async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
     .order("created_at", { ascending: false });
 
   if (!fallbackWithoutPhone.error) {
-    const users = (fallbackWithoutPhone.data as ProfileRow[]).map((row) => normalizeProfile(row, assignments.get(row.id)));
+    const users = (fallbackWithoutPhone.data as ProfileRow[]).map((row) => {
+      const normalized = normalizeProfile(row);
+      const apartments = assignments.get(row.id) ?? [];
+      return {
+        ...normalized,
+        apartment_ids: apartments.map((item) => item.id),
+        apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+        apartment_id: apartments[0]?.id ?? null,
+        apartment_number: apartments[0]?.number ?? null,
+        apartment_tower: apartments[0]?.tower ?? null,
+        apartment_level: apartments[0]?.level ?? null,
+      };
+    });
     writeUsersCache(users);
     return users;
   }
@@ -158,9 +206,19 @@ async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
     .order("created_at", { ascending: false });
 
   if (!fallbackWithoutPhoneAndCarPlate.error) {
-    const users = (fallbackWithoutPhoneAndCarPlate.data as ProfileRow[]).map((row) =>
-      normalizeProfile(row, assignments.get(row.id)),
-    );
+    const users = (fallbackWithoutPhoneAndCarPlate.data as ProfileRow[]).map((row) => {
+      const normalized = normalizeProfile(row);
+      const apartments = assignments.get(row.id) ?? [];
+      return {
+        ...normalized,
+        apartment_ids: apartments.map((item) => item.id),
+        apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+        apartment_id: apartments[0]?.id ?? null,
+        apartment_number: apartments[0]?.number ?? null,
+        apartment_tower: apartments[0]?.tower ?? null,
+        apartment_level: apartments[0]?.level ?? null,
+      };
+    });
     writeUsersCache(users);
     return users;
   }
@@ -171,7 +229,19 @@ async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
     .order("created_at", { ascending: false });
 
   if (!fallback.error) {
-    const users = (fallback.data as ProfileRow[]).map((row) => normalizeProfile(row, assignments.get(row.id)));
+    const users = (fallback.data as ProfileRow[]).map((row) => {
+      const normalized = normalizeProfile(row);
+      const apartments = assignments.get(row.id) ?? [];
+      return {
+        ...normalized,
+        apartment_ids: apartments.map((item) => item.id),
+        apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+        apartment_id: apartments[0]?.id ?? null,
+        apartment_number: apartments[0]?.number ?? null,
+        apartment_tower: apartments[0]?.tower ?? null,
+        apartment_level: apartments[0]?.level ?? null,
+      };
+    });
     writeUsersCache(users);
     return users;
   }
@@ -187,7 +257,19 @@ async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
     throw new Error("Erro ao carregar usuarios.");
   }
 
-  const users = (basic.data as ProfileRow[]).map((row) => normalizeProfile(row, assignments.get(row.id)));
+  const users = (basic.data as ProfileRow[]).map((row) => {
+    const normalized = normalizeProfile(row);
+    const apartments = assignments.get(row.id) ?? [];
+    return {
+      ...normalized,
+      apartment_ids: apartments.map((item) => item.id),
+      apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+      apartment_id: apartments[0]?.id ?? null,
+      apartment_number: apartments[0]?.number ?? null,
+      apartment_tower: apartments[0]?.tower ?? null,
+      apartment_level: apartments[0]?.level ?? null,
+    };
+  });
   writeUsersCache(users);
   return users;
 }
@@ -201,7 +283,16 @@ async function getProfileById(client: SupabaseClient, id: string): Promise<UserR
     .single();
 
   if (!extended.error) {
-    const user = normalizeProfile(extended.data as ProfileRow, assignments.get(id));
+    const apartments = assignments.get(id) ?? [];
+    const user = {
+      ...normalizeProfile(extended.data as ProfileRow),
+      apartment_ids: apartments.map((item) => item.id),
+      apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+      apartment_id: apartments[0]?.id ?? null,
+      apartment_number: apartments[0]?.number ?? null,
+      apartment_tower: apartments[0]?.tower ?? null,
+      apartment_level: apartments[0]?.level ?? null,
+    };
     const cachedUsers = readUsersCache().filter((item) => item.id !== user.id);
     writeUsersCache([user, ...cachedUsers]);
     return user;
@@ -214,7 +305,16 @@ async function getProfileById(client: SupabaseClient, id: string): Promise<UserR
     .single();
 
   if (!fallbackWithoutPhone.error) {
-    const user = normalizeProfile(fallbackWithoutPhone.data as ProfileRow, assignments.get(id));
+    const apartments = assignments.get(id) ?? [];
+    const user = {
+      ...normalizeProfile(fallbackWithoutPhone.data as ProfileRow),
+      apartment_ids: apartments.map((item) => item.id),
+      apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+      apartment_id: apartments[0]?.id ?? null,
+      apartment_number: apartments[0]?.number ?? null,
+      apartment_tower: apartments[0]?.tower ?? null,
+      apartment_level: apartments[0]?.level ?? null,
+    };
     const cachedUsers = readUsersCache().filter((item) => item.id !== user.id);
     writeUsersCache([user, ...cachedUsers]);
     return user;
@@ -227,7 +327,16 @@ async function getProfileById(client: SupabaseClient, id: string): Promise<UserR
     .single();
 
   if (!fallbackWithoutPhoneAndCarPlate.error) {
-    const user = normalizeProfile(fallbackWithoutPhoneAndCarPlate.data as ProfileRow, assignments.get(id));
+    const apartments = assignments.get(id) ?? [];
+    const user = {
+      ...normalizeProfile(fallbackWithoutPhoneAndCarPlate.data as ProfileRow),
+      apartment_ids: apartments.map((item) => item.id),
+      apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+      apartment_id: apartments[0]?.id ?? null,
+      apartment_number: apartments[0]?.number ?? null,
+      apartment_tower: apartments[0]?.tower ?? null,
+      apartment_level: apartments[0]?.level ?? null,
+    };
     const cachedUsers = readUsersCache().filter((item) => item.id !== user.id);
     writeUsersCache([user, ...cachedUsers]);
     return user;
@@ -240,7 +349,16 @@ async function getProfileById(client: SupabaseClient, id: string): Promise<UserR
     .single();
 
   if (!fallback.error) {
-    const user = normalizeProfile(fallback.data as ProfileRow, assignments.get(id));
+    const apartments = assignments.get(id) ?? [];
+    const user = {
+      ...normalizeProfile(fallback.data as ProfileRow),
+      apartment_ids: apartments.map((item) => item.id),
+      apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+      apartment_id: apartments[0]?.id ?? null,
+      apartment_number: apartments[0]?.number ?? null,
+      apartment_tower: apartments[0]?.tower ?? null,
+      apartment_level: apartments[0]?.level ?? null,
+    };
     const cachedUsers = readUsersCache().filter((item) => item.id !== user.id);
     writeUsersCache([user, ...cachedUsers]);
     return user;
@@ -254,7 +372,16 @@ async function getProfileById(client: SupabaseClient, id: string): Promise<UserR
 
   if (basic.error) throw new Error("Usuario salvo, mas erro ao carregar perfil.");
 
-  const user = normalizeProfile(basic.data as ProfileRow, assignments.get(id));
+  const apartments = assignments.get(id) ?? [];
+  const user = {
+    ...normalizeProfile(basic.data as ProfileRow),
+    apartment_ids: apartments.map((item) => item.id),
+    apartments: apartments.map((item) => ({ id: item.id, tower: item.tower, level: item.level, number: item.number })),
+    apartment_id: apartments[0]?.id ?? null,
+    apartment_number: apartments[0]?.number ?? null,
+    apartment_tower: apartments[0]?.tower ?? null,
+    apartment_level: apartments[0]?.level ?? null,
+  };
   const cachedUsers = readUsersCache().filter((item) => item.id !== user.id);
   writeUsersCache([user, ...cachedUsers]);
   return user;
@@ -280,6 +407,8 @@ function buildUserRecordFromPayload(id: string, payload: Omit<CreateUserPayload,
     role: payload.role,
     resident_type: payload.residentType,
     status: payload.status,
+    apartment_ids: payload.apartmentId ? [payload.apartmentId] : [],
+    apartments: [],
     apartment_id: payload.apartmentId,
     apartment_number: null,
     apartment_tower: null,
@@ -447,6 +576,27 @@ export async function listApartmentOptions(): Promise<ApartmentOption[]> {
 
   if (error) return [];
   return (data ?? []) as ApartmentOption[];
+}
+
+export async function deleteUserRecord(userId: string): Promise<void> {
+  const admin = getSupabaseAdmin();
+
+  const clearAssignments = await admin
+    .from("condo_apartments")
+    .update({ resident_id: null } as never)
+    .eq("resident_id", userId);
+
+  if (clearAssignments.error) {
+    throw new Error(clearAssignments.error.message);
+  }
+
+  const deleted = await admin.auth.admin.deleteUser(userId);
+  if (deleted.error) {
+    throw new Error(deleted.error.message);
+  }
+
+  const cachedUsers = readUsersCache().filter((user) => user.id !== userId);
+  writeUsersCache(cachedUsers);
 }
 
 export async function createUser(payload: CreateUserPayload): Promise<UserRecord> {

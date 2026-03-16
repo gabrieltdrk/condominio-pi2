@@ -150,10 +150,14 @@ export function getUser(): User | null {
   return user;
 }
 
+export function setStoredUser(user: User) {
+  const next = { ...user, role: resolveUserRole(user.email, user.role) };
+  localStorage.setItem("user", JSON.stringify(next));
+  return next;
+}
+
 export function updateUser(updated: Partial<User>) {
   const current = getUser();
   if (!current) return null;
-  const next = { ...current, ...updated };
-  localStorage.setItem("user", JSON.stringify(next));
-  return next;
+  return setStoredUser({ ...current, ...updated });
 }

@@ -45,6 +45,12 @@ export type BuildingApartmentOption = {
   residentId: string | null;
 };
 
+export type TowerSummary = {
+  tower: string;
+  floors: number;
+  apartmentsPerFloor: number;
+};
+
 type ProfileRow = {
   id: string;
   name: string;
@@ -168,6 +174,21 @@ function readCustomApartments(): CustomApartmentRow[] {
 
 function setCustomApartments(rows: CustomApartmentRow[]) {
   localStorage.setItem(CUSTOM_APARTMENTS_KEY, JSON.stringify(rows));
+}
+
+function summarizeTowerRows(rows: Array<{ tower: string; level: number }>, floorApartmentCounts?: Map<string, number>) {
+  const summaries = new Map<string, TowerSummary>();
+
+  for (const row of rows) {
+    const current = summaries.get(row.tower);
+    summaries.set(row.tower, {
+      tower: row.tower,
+      floors: Math.max(current?.floors ?? 0, row.level),
+      apartmentsPerFloor: Math.max(current?.apartmentsPerFloor ?? 0, floorApartmentCounts?.get(`${row.tower}::${row.level}`) ?? 0),
+    });
+  }
+
+  return Array.from(summaries.values()).sort((a, b) => a.tower.localeCompare(b.tower));
 }
 
 function rowsToFloors(rows: Array<CondoApartmentRow | CustomApartmentRow>): Floor[] {
@@ -403,7 +424,7 @@ export async function syncApartmentAssignmentForUser(userId: string, apartmentId
   const assignments = getMockAssignments();
 
   for (const [key, assignment] of Object.entries(assignments)) {
-    if (assignment.userId === userId || key === apartmentId) {
+    if (key === apartmentId || assignment.userId === userId && apartmentId === null) {
       delete assignments[key];
     }
   }
@@ -412,13 +433,6 @@ export async function syncApartmentAssignmentForUser(userId: string, apartmentId
 
   try {
     const admin = getSupabaseAdmin();
-
-    const clearCurrent = await admin
-      .from("condo_apartments")
-      .update({ resident_id: null } as never)
-      .eq("resident_id", userId);
-
-    if (clearCurrent.error) throw clearCurrent.error;
 
     if (!apartmentId) return;
 
@@ -535,17 +549,30 @@ function buildBlockApartments({ tower, floors, apartmentsPerFloor }: CreateBlock
   return rows;
 }
 
-async function ensureNoDuplicateApartment(tower: string, floor: number, number: string) {
+async function ensureNoDuplicateApartment(tower: string, _floor: number, number: string) {
   const building = await fetchBuilding();
   const exists = building.some(
     (item) =>
       item.tower.toLowerCase() === tower.toLowerCase() &&
-      item.level === floor &&
       item.apartments.some((apartment) => apartment.number.toLowerCase() === number.toLowerCase()),
   );
 
   if (exists) {
-    throw new Error("Já existe um apartamento com esse número nesse bloco/andar.");
+    throw new Error("Ja existe um apartamento com esse numero nesse bloco.");
+  }
+}
+
+async function ensureFloorWithinTowerLimit(tower: string, floor: number) {
+  const building = await fetchBuilding();
+  const towerFloors = building.filter((item) => item.tower.toLowerCase() === tower.toLowerCase());
+
+  if (towerFloors.length === 0) {
+    throw new Error("Bloco nao encontrado.");
+  }
+
+  const maxFloor = Math.max(...towerFloors.map((item) => item.level));
+  if (floor > maxFloor) {
+    throw new Error(`Esse bloco possui apenas ${maxFloor} andar(es).`);
   }
 }
 
@@ -592,6 +619,7 @@ export async function createApartment(input: CreateApartmentInput): Promise<void
   if (!tower) throw new Error("Informe o bloco.");
   if (!number) throw new Error("Informe o número do apartamento.");
 
+  await ensureFloorWithinTowerLimit(tower, floor);
   await ensureNoDuplicateApartment(tower, floor, number);
 
   try {
@@ -612,6 +640,73 @@ export async function createApartment(input: CreateApartmentInput): Promise<void
     });
     setCustomApartments(current);
   }
+}
+
+export async function deleteApartment(apartmentId: string): Promise<void> {
+  const building = await fetchBuilding();
+  const apartment = building.flatMap((floor) => floor.apartments).find((item) => item.id === apartmentId);
+
+  if (!apartment) {
+    throw new Error("Apartamento nao encontrado.");
+  }
+
+  if (apartment.resident?.id) {
+    throw new Error("Desvincule o morador antes de excluir este apartamento.");
+  }
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin.from("condo_apartments").delete().eq("id", apartmentId);
+    if (error) throw error;
+  } catch {
+    setCustomApartments(readCustomApartments().filter((item) => item.id !== apartmentId));
+  }
+}
+
+export async function deleteTower(tower: string): Promise<void> {
+  const building = await fetchBuilding();
+  const apartments = building
+    .filter((floor) => floor.tower.toLowerCase() === tower.toLowerCase())
+    .flatMap((floor) => floor.apartments);
+
+  if (apartments.length === 0) {
+    throw new Error("Bloco nao encontrado.");
+  }
+
+  if (apartments.some((apartment) => apartment.resident?.id)) {
+    throw new Error("Desvincule os moradores antes de excluir o bloco.");
+  }
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin.from("condo_apartments").delete().eq("tower", tower);
+    if (error) throw error;
+  } catch {
+    setCustomApartments(readCustomApartments().filter((item) => item.tower.toLowerCase() !== tower.toLowerCase()));
+  }
+}
+
+export async function listTowerSummaries(): Promise<TowerSummary[]> {
+  const building = await fetchBuilding();
+  const floorApartmentCounts = new Map<string, number>();
+
+  for (const floor of building) {
+    floorApartmentCounts.set(`${floor.tower}::${floor.level}`, floor.apartments.length);
+  }
+
+  const buildingRows = building.map((floor) => ({ tower: floor.tower, level: floor.level }));
+  if (buildingRows.length > 0) {
+    return summarizeTowerRows(buildingRows, floorApartmentCounts);
+  }
+
+  const custom = readCustomApartments();
+  const customCounts = new Map<string, number>();
+  for (const apartment of custom) {
+    const key = `${apartment.tower}::${apartment.level}`;
+    customCounts.set(key, (customCounts.get(key) ?? 0) + 1);
+  }
+
+  return summarizeTowerRows(custom.map((item) => ({ tower: item.tower, level: item.level })), customCounts);
 }
 
 

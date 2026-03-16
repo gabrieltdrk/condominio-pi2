@@ -28,10 +28,12 @@ export function MoradorModal({
   apartment,
   onClose,
   onAssign,
+  onDeleteApartment,
 }: {
   apartment: Apartment | null;
   onClose: () => void;
   onAssign?: (apartmentId: string, userId: string | null) => Promise<void>;
+  onDeleteApartment?: (apartment: Apartment) => Promise<void>;
 }) {
   const user = useMemo(() => getUser(), []);
   const isAdmin = user?.role === "ADMIN";
@@ -80,6 +82,19 @@ export function MoradorModal({
       setSelectedUserId(null);
     } catch (err: any) {
       setError(err?.message ?? "Erro ao remover vínculo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteApartment() {
+    if (!apartment || !onDeleteApartment) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onDeleteApartment(apartment);
+    } catch (err: any) {
+      setError(err?.message ?? "Erro ao excluir apartamento.");
     } finally {
       setSaving(false);
     }
@@ -210,12 +225,24 @@ export function MoradorModal({
         )}
 
         <div className="mt-6 flex justify-end">
-          <button
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-            onClick={onClose}
-          >
-            Fechar
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {isAdmin && onDeleteApartment ? (
+              <button
+                type="button"
+                onClick={handleDeleteApartment}
+                disabled={saving}
+                className="rounded-2xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Excluindo..." : "Excluir apartamento"}
+              </button>
+            ) : null}
+            <button
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              onClick={onClose}
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       </div>
     </div>
