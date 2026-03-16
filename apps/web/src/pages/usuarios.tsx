@@ -224,7 +224,7 @@ export default function UsuariosPage() {
   }, [users, search, roleFilter, typeFilter, statusFilter]);
 
   return (
-    <AppLayout title="Usuarios">
+    <AppLayout title="Usuários">
       <div className="space-y-5">
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -277,7 +277,7 @@ export default function UsuariosPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="m-0 text-sm font-semibold text-slate-900">Usuarios cadastrados</h3>
+              <h3 className="m-0 text-sm font-semibold text-slate-900">Usuários cadastrados</h3>
               <p className="mt-0.5 text-xs text-slate-400">{filteredUsers.length} resultado(s)</p>
             </div>
           </div>

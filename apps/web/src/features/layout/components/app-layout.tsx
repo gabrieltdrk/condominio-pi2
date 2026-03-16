@@ -39,12 +39,12 @@ const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
-  { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
+  { label: "Ocorrências", path: "/ocorrencias", icon: ClipboardList },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
   { label: "Garagem", path: "/garagem", icon: CarFront },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
   { label: "Predio", path: "/predio", icon: Building2 },
-  { label: "Usuarios", path: "/usuarios", icon: Users },
+  { label: "Usuários", path: "/usuarios", icon: Users },
   { label: "Maresia", path: "/maresia", icon: Waves },
 ];
 
