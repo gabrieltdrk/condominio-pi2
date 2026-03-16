@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "../pages/login.tsx";
+import ChatPage from "../pages/chat";
 import Dashboard from "../pages/dashboard.tsx";
 import ResetPassword from "../pages/reset-password.tsx";
 import ListaOcorrencias from "../pages/ocorrencias/lista-ocorrencias.tsx";
@@ -34,6 +35,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <ListaAvisos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
             </ProtectedRoute>
           }
         />

@@ -16,6 +16,7 @@ import {
   LogOut,
   Megaphone,
   Menu,
+  MessageCircleMore,
   MessageSquare,
   Moon,
   Settings,
@@ -37,6 +38,7 @@ const ADMIN_SECTION_STORAGE_KEY = "omni:admin-section-open";
 const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
+  { label: "Chat", path: "/chat", icon: MessageCircleMore },
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
   { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
