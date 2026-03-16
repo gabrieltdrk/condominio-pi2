@@ -38,7 +38,7 @@ export async function fetchSantosWeather() {
       );
 
       if (!response.ok) {
-        throw new Error("Nao foi possivel carregar o clima de Santos.");
+        throw new Error("Não foi possível carregar o clima de Santos.");
       }
 
       const data = await response.json() as {
@@ -92,7 +92,7 @@ export async function fetchSantosWeather() {
     );
 
     if (!response.ok) {
-      throw new Error("Nao foi possivel carregar o clima de Santos.");
+      throw new Error("Não foi possível carregar o clima de Santos.");
     }
 
     const data = await response.json() as {

@@ -80,7 +80,7 @@ export default function ChatPage() {
       setDraft("");
       await loadMessages();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nao foi possivel enviar a mensagem.");
+      setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
     } finally {
       setSending(false);
     }
@@ -99,7 +99,7 @@ export default function ChatPage() {
       await deleteChatMessage(message.id);
       await loadMessages();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nao foi possivel excluir a mensagem.");
+      setError(err instanceof Error ? err.message : "Não foi possível excluir a mensagem.");
     }
   }
 
@@ -114,7 +114,7 @@ export default function ChatPage() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Chat geral</h2>
-                <p className="text-xs text-slate-500">Conversa em tempo real do condominio.</p>
+                <p className="text-xs text-slate-500">Conversa em tempo real do condomínio.</p>
               </div>
             </div>
           </div>
@@ -136,7 +136,7 @@ export default function ChatPage() {
           {loading ? <p className="text-sm text-slate-400">Carregando mensagens...</p> : null}
           {!loading && messages.length === 0 ? (
             <div className="mx-auto mt-10 max-w-md rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-              <p className="text-sm font-semibold text-slate-700">Ainda nao tem mensagem aqui</p>
+              <p className="text-sm font-semibold text-slate-700">Ainda não tem mensagem aqui</p>
               <p className="mt-2 text-xs text-slate-500">Se quiser, pode mandar a primeira.</p>
             </div>
           ) : null}

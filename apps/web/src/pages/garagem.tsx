@@ -59,7 +59,7 @@ function createSeedSpots(apartments: BuildingApartmentOption[]): GarageSpot[] {
       vehicleModel: occupied ? ["Civic", "Compass", "Corolla", "Onix", "T-Cross", "HB20"][index % 6] : "",
       vehicleColor: occupied ? ["Preto", "Branco", "Prata", "Cinza"][index % 4] : "",
       residentName: occupied ? `Morador ${index + 1}` : index === 10 ? "Visitante liberado" : "",
-      notes: index === 9 ? "Vaga isolada para pintura." : index === 10 ? "Reserva valida ate 22h." : "",
+      notes: index === 9 ? "Vaga isolada para pintura." : index === 10 ? "Reserva válida até 22h." : "",
     };
   });
 }
@@ -203,7 +203,7 @@ export default function GaragemPage() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">
                 <ParkingSquare size={13} />
-                Operacao da garagem
+                Operação da garagem
               </div>
               <h2 className="mt-4 max-w-2xl text-[clamp(1.9rem,4vw,3.2rem)] font-black leading-none tracking-[-0.05em] text-slate-950">Controle visual de vagas, veiculos e ocupacao por unidade.</h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">Uma central para saber rapidamente quais vagas estao ocupadas, reservadas, livres ou em manutencao, com vinculo direto a bloco e apartamento.</p>
@@ -313,7 +313,7 @@ export default function GaragemPage() {
                                 <CarFront size={20} />
                               </div>
                               <p className="mt-3 truncate text-sm font-semibold text-slate-800">{spot.vehicleModel || "Sem veiculo"}</p>
-                              <p className="mt-1 truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa nao cadastrada"}</p>
+                              <p className="mt-1 truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa não cadastrada"}</p>
                               <p className="mt-2 truncate text-[11px] text-slate-500">{spot.apartmentLabel || "Sem unidade vinculada"}</p>
                             </div>
                           </button>
@@ -353,7 +353,7 @@ export default function GaragemPage() {
                                 <CarFront size={20} />
                               </div>
                               <p className="mt-3 truncate text-sm font-semibold text-slate-800">{spot.vehicleModel || "Sem veiculo"}</p>
-                              <p className="mt-1 truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa nao cadastrada"}</p>
+                              <p className="mt-1 truncate text-xs text-slate-500">{spot.vehiclePlate || "Placa não cadastrada"}</p>
                               <p className="mt-2 truncate text-[11px] text-slate-500">{spot.apartmentLabel || "Sem unidade vinculada"}</p>
                             </div>
                           </button>

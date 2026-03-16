@@ -75,7 +75,7 @@ export async function refreshStoredUser(): Promise<User | null> {
 export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
-    throw new Error("Sessao invalida. Faca login novamente.");
+    throw new Error("Sessão inválida. Faça login novamente.");
   }
 
   const email = input.email.trim();

@@ -55,7 +55,7 @@ export async function sendChatMessage(content: string): Promise<void> {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    throw new Error("Sessao invalida. Faca login novamente.");
+    throw new Error("Sessão inválida. Faça login novamente.");
   }
 
   const { error } = await supabase.from("messages").insert({

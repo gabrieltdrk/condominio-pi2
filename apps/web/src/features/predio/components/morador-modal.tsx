@@ -144,9 +144,9 @@ export function MoradorModal({
                 >
                   <option value="">
                     {loadingUsers
-                      ? "Carregando usuarios..."
+                      ? "Carregando usuários..."
                       : users.length === 0
-                        ? "Nenhum usuario disponivel"
+                        ? "Nenhum usuário disponível"
                         : "Nenhum (desvincular)"}
                   </option>
                   {users.map((item) => (
@@ -181,7 +181,7 @@ export function MoradorModal({
 
             {!loadingUsers && users.length === 0 && (
               <p className="mt-2 text-sm text-amber-700">
-                Nenhum usuario encontrado para vincular. Crie ou recarregue os usuarios primeiro.
+                Nenhum usuário encontrado para vincular. Crie ou recarregue os usuários primeiro.
               </p>
             )}
             {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}

@@ -254,7 +254,7 @@ async function listProfiles(client: SupabaseClient): Promise<UserRecord[]> {
   if (basic.error) {
     const cachedUsers = readUsersCache();
     if (cachedUsers.length > 0) return cachedUsers;
-    throw new Error("Erro ao carregar usuarios.");
+    throw new Error("Erro ao carregar usuários.");
   }
 
   const users = (basic.data as ProfileRow[]).map((row) => {
@@ -558,7 +558,7 @@ async function updateProfileWithFallbacks(
     lastError = basicFallbackUpdate.error.message;
   }
 
-  throw new Error(lastError ?? "Erro ao atualizar perfil do usuario.");
+  throw new Error(lastError ?? "Erro ao atualizar perfil do usuário.");
 }
 
 export async function listUsers(): Promise<UserRecord[]> {

@@ -252,8 +252,8 @@ export default function DashboardAdmin() {
                   <CloudSun size={13} />
                   Tempo em Santos
                 </div>
-                <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Clima atual para acompanhar operacao e rotina do condominio</h3>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Visao rapida com temperatura, sensacao termica e condicoes do dia em Santos, SP.</p>
+                <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Clima atual para acompanhar operação e rotina do condomínio</h3>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Visão rápida com temperatura, sensação térmica e condições do dia em Santos, SP.</p>
               </div>
 
               {weather ? (
@@ -281,7 +281,7 @@ export default function DashboardAdmin() {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-4 text-sm text-slate-500 shadow-sm">
-                  {weatherLoading ? "Carregando clima de Santos..." : "Nao foi possivel carregar o clima agora."}
+                  {weatherLoading ? "Carregando clima de Santos..." : "Não foi possível carregar o clima agora."}
                 </div>
               )}
             </div>

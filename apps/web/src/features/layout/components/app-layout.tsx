@@ -43,7 +43,7 @@ const navLinks = [
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
   { label: "Garagem", path: "/garagem", icon: CarFront },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
-  { label: "Predio", path: "/predio", icon: Building2 },
+  { label: "Edifício", path: "/predio", icon: Building2 },
   { label: "Usuários", path: "/usuarios", icon: Users },
   { label: "Maresia", path: "/maresia", icon: Waves },
 ];
@@ -168,7 +168,7 @@ export default function AppLayout({ title, children }: { title: string; children
         </div>
 
         <nav className={`min-h-0 flex flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? "gap-2 p-2" : "gap-0.5 p-3"}`}>
-          {[{ title: undefined, links: mainLinks }, { title: "Adminstrativo", links: adminLinks }].map((group) =>
+          {[{ title: undefined, links: mainLinks }, { title: "Administrativo", links: adminLinks }].map((group) =>
             group.links.length > 0 ? (
               <div key={group.title ?? "principal"} className={collapsed ? "space-y-2" : "space-y-1"}>
                 {!collapsed && group.title && (
@@ -221,7 +221,7 @@ export default function AppLayout({ title, children }: { title: string; children
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold leading-tight text-gray-900">
-                  {user?.name ?? "Usuario"}
+                  {user?.name ?? "Usuário"}
                 </p>
                 <p className="mt-0.5 text-[11px] leading-tight text-gray-400">
                   {user?.role === "ADMIN" ? "Administrador" : "Morador"}
@@ -232,7 +232,7 @@ export default function AppLayout({ title, children }: { title: string; children
             <div className="relative shrink-0">
               <button
                 onClick={() => setGearOpen((value) => !value)}
-                title="Configuracoes"
+                title="Configurações"
                 className="rounded-lg bg-transparent p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
               >
                 <Settings size={16} />
@@ -311,7 +311,7 @@ export default function AppLayout({ title, children }: { title: string; children
           >
             <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2.5">
               <Bell size={13} className="shrink-0 text-gray-500" />
-              <span className="flex-1 text-sm font-semibold text-gray-900">Notificacoes</span>
+              <span className="flex-1 text-sm font-semibold text-gray-900">Notificações</span>
               {unread > 0 && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
                   {unread}
@@ -402,7 +402,7 @@ export default function AppLayout({ title, children }: { title: string; children
             ref={bellRef}
             onClick={openBell}
             className="relative rounded-lg bg-transparent p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            title="Notificacoes"
+            title="Notificações"
           >
             <Bell size={18} />
             {unread > 0 && (

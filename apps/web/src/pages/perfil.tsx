@@ -53,13 +53,13 @@ export default function Perfil() {
   async function handleSubmit() {
     const normalizedPhone = formatPhone(phone);
     if (normalizedPhone && !isPhoneValid(normalizedPhone)) {
-      setError("Informe um telefone valido no formato (11) 99999-9999.");
+      setError("Informe um telefone válido no formato (11) 99999-9999.");
       return;
     }
 
     const normalizedCarPlate = normalizeCarPlate(carPlate);
     if (!isCarPlateValid(normalizedCarPlate)) {
-      setError("Informe uma placa valida no formato ABC-1234 ou ABC1D23.");
+      setError("Informe uma placa válida no formato ABC-1234 ou ABC1D23.");
       return;
     }
 
@@ -79,7 +79,7 @@ export default function Perfil() {
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nao foi possivel salvar seus dados.");
+      setError(err instanceof Error ? err.message : "Não foi possível salvar seus dados.");
     } finally {
       setSaving(false);
     }
@@ -99,7 +99,7 @@ export default function Perfil() {
 
               <div className="min-w-0">
                 <p className="truncate text-lg font-semibold">{name || user.name}</p>
-                <p className="mt-1 truncate text-sm text-slate-300">{email || "Email nao informado"}</p>
+                <p className="mt-1 truncate text-sm text-slate-300">{email || "Email não informado"}</p>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-200">
                   <ShieldCheck size={12} />
                   {user.role === "ADMIN" ? "Administrador" : "Morador"}
@@ -113,7 +113,7 @@ export default function Perfil() {
               <Phone size={16} />
               <span className="text-xs font-semibold uppercase tracking-[0.16em]">Telefone</span>
             </div>
-            <p className="mt-4 text-base font-semibold text-slate-900">{phone || "Nao informado"}</p>
+            <p className="mt-4 text-base font-semibold text-slate-900">{phone || "Não informado"}</p>
           </div>
 
           <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -121,7 +121,7 @@ export default function Perfil() {
               <CarFront size={16} />
               <span className="text-xs font-semibold uppercase tracking-[0.16em]">Placa</span>
             </div>
-            <p className="mt-4 text-base font-semibold text-slate-900">{carPlate || "Nao informada"}</p>
+            <p className="mt-4 text-base font-semibold text-slate-900">{carPlate || "Não informada"}</p>
           </div>
         </section>
 
@@ -159,7 +159,7 @@ export default function Perfil() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Contato</p>
-                    <p className="text-xs text-slate-500">Informacoes para avisos e comunicacao.</p>
+                    <p className="text-xs text-slate-500">Informações para avisos e comunicação.</p>
                   </div>
                 </div>
 
@@ -184,7 +184,7 @@ export default function Perfil() {
                       <span className="text-xs font-semibold uppercase tracking-[0.16em]">Canal principal</span>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">
-                      Mantenha telefone e email atualizados para receber avisos e facilitar o contato da administracao.
+                      Mantenha telefone e email atualizados para receber avisos e facilitar o contato da administração.
                     </p>
                   </div>
                 </div>
@@ -196,7 +196,7 @@ export default function Perfil() {
                     <CarFront size={18} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Veiculo e pets</p>
+                    <p className="text-sm font-semibold text-slate-900">Veículo e pets</p>
                     <p className="text-xs text-slate-500">Dados complementares do morador.</p>
                   </div>
                 </div>
@@ -216,7 +216,7 @@ export default function Perfil() {
                   </label>
 
                   <label className="block">
-                    <span className="text-xs font-semibold text-slate-600">Numero de pets</span>
+                    <span className="text-xs font-semibold text-slate-600">Número de pets</span>
                     <input
                       type="number"
                       min={0}
@@ -250,7 +250,7 @@ export default function Perfil() {
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save size={16} />
-                  {saving ? "Salvando..." : "Salvar alteracoes"}
+                  {saving ? "Salvando..." : "Salvar alterações"}
                 </button>
               </div>
             </div>
@@ -258,12 +258,12 @@ export default function Perfil() {
 
           <aside className="space-y-4">
             <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="m-0 text-base font-semibold text-slate-900">Resumo rapido</h3>
+              <h3 className="m-0 text-base font-semibold text-slate-900">Resumo rápido</h3>
               <div className="mt-4 space-y-3">
                 {[
-                  { icon: Mail, label: "Email", value: email || "Nao informado" },
-                  { icon: Phone, label: "Telefone", value: phone || "Nao informado" },
-                  { icon: CarFront, label: "Placa", value: carPlate || "Nao informada" },
+                  { icon: Mail, label: "Email", value: email || "Não informado" },
+                  { icon: Phone, label: "Telefone", value: phone || "Não informado" },
+                  { icon: CarFront, label: "Placa", value: carPlate || "Não informada" },
                   { icon: PawPrint, label: "Pets", value: petsCount || "0" },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -287,7 +287,7 @@ export default function Perfil() {
                 {[
                   "Se trocar de telefone, atualize aqui para manter o contato em dia.",
                   "Use a placa no formato ABC-1234 ou ABC1D23.",
-                  "Esses dados ajudam no acesso, na garagem e na comunicacao da administracao.",
+                  "Esses dados ajudam no acesso, na garagem e na comunicação da administração.",
                 ].map((tip) => (
                   <div key={tip} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
                     {tip}

@@ -298,7 +298,7 @@ export default function MapaPredio() {
       return;
     }
 
-    if (!window.confirm(`Excluir a ${towerToDelete}? Todos os apartamentos vazios dessa torre serao removidos.`)) {
+    if (!window.confirm(`Excluir a ${towerToDelete}? Todos os apartamentos vazios dessa torre serão removidos.`)) {
       return;
     }
 
@@ -334,7 +334,7 @@ export default function MapaPredio() {
       await deleteApartment(apartment.id);
       await loadBuilding();
       setSelectedApt(null);
-      setStructureSuccess("Apartamento excluido com sucesso.");
+      setStructureSuccess("Apartamento excluído com sucesso.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao excluir apartamento.";
       setStructureError(message);
@@ -345,10 +345,228 @@ export default function MapaPredio() {
   }
 
   return (
-    <AppLayout title="Mapa do Prédio">
+    <AppLayout title="Mapa do edifício">
       <div className="space-y-5">
         {isAdmin && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <>
+            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.10),_transparent_28%),linear-gradient(135deg,_#ffffff_0%,_#f8fafc_55%,_#eef2ff_100%)] px-4 py-5 md:px-5">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
+                      <PlusSquare size={13} />
+                      Gestão da estrutura
+                    </div>
+                    <h2 className="mt-3 text-xl font-semibold text-slate-900">CRUD do edifício</h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      Cadastre torres, adicione apartamentos avulsos e remova estruturas em um painel separado do mapa.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Torres</p>
+                      <p className="mt-1 text-xl font-semibold text-slate-900">{towerOptions.length}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Andares</p>
+                      <p className="mt-1 text-xl font-semibold text-slate-900">{building.length}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Apartamentos</p>
+                      <p className="mt-1 text-xl font-semibold text-slate-900">{building.reduce((sum, floor) => sum + floor.apartments.length, 0)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ocupados</p>
+                      <p className="mt-1 text-xl font-semibold text-slate-900">
+                        {building.reduce((sum, floor) => sum + floor.apartments.filter((apt) => apt.resident && apt.resident.status !== "Vago").length, 0)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 md:p-5">
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <form onSubmit={handleCreateBlock} className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Criar torre</h3>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Gera a estrutura completa da torre com todos os andares e apartamentos.</p>
+                      </div>
+                      <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Novo bloco</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome da torre</span>
+                        <input
+                          value={blockForm.tower}
+                          onChange={(event) => setBlockForm((current) => ({ ...current, tower: event.target.value }))}
+                          placeholder="Ex.: Torre C"
+                          className={adminInputClass}
+                        />
+                      </label>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Andares</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={blockForm.floors}
+                            onChange={(event) => setBlockForm((current) => ({ ...current, floors: Number(event.target.value) }))}
+                            className={adminInputClass}
+                          />
+                        </label>
+
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Aptos por andar</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={blockForm.apartmentsPerFloor}
+                            onChange={(event) => setBlockForm((current) => ({ ...current, apartmentsPerFloor: Number(event.target.value) }))}
+                            className={adminInputClass}
+                          />
+                        </label>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={savingStructure}
+                        className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingStructure ? "Salvando..." : "Cadastrar torre"}
+                      </button>
+                    </div>
+                  </form>
+
+                  <form onSubmit={handleCreateApartment} className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Criar apartamento</h3>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Adiciona uma unidade manualmente em uma torre já cadastrada.</p>
+                      </div>
+                      <span className="rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">Unidade avulsa</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Torre</span>
+                        <select
+                          value={apartmentForm.tower}
+                          onChange={(event) => setApartmentForm((current) => ({ ...current, tower: event.target.value }))}
+                          className={adminInputClass}
+                        >
+                          {towerOptions.map((tower) => (
+                            <option key={tower} value={tower}>
+                              {tower}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Andar</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={apartmentForm.floor}
+                            onChange={(event) => setApartmentForm((current) => ({ ...current, floor: Number(event.target.value) }))}
+                            className={adminInputClass}
+                          />
+                        </label>
+
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Número</span>
+                          <input
+                            value={apartmentForm.number}
+                            onChange={(event) => setApartmentForm((current) => ({ ...current, number: event.target.value }))}
+                            placeholder="Ex.: 305"
+                            className={adminInputClass}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500">
+                        {selectedTowerSummary
+                          ? `${apartmentForm.tower} possui ${selectedTowerSummary.floors} andares e até ${selectedTowerSummary.apartmentsPerFloor} apartamentos por andar.`
+                          : "Selecione uma torre válida para visualizar os limites."}
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={savingStructure || towerOptions.length === 0}
+                        className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingStructure ? "Salvando..." : "Cadastrar apartamento"}
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="rounded-[28px] border border-rose-200 bg-[linear-gradient(180deg,_#fff7f7,_#ffffff)] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Excluir torre</h3>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Use esta ação apenas quando a torre já estiver sem moradores vinculados.</p>
+                      </div>
+                      <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-700">Ação crítica</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Torre para excluir</span>
+                        <select
+                          value={towerToDelete}
+                          onChange={(event) => setTowerToDelete(event.target.value)}
+                          className={adminInputClass}
+                        >
+                          {towerOptions.length === 0 ? <option value="">Nenhuma torre disponível</option> : null}
+                          {towerOptions.map((tower) => (
+                            <option key={tower} value={tower}>
+                              {tower}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="rounded-2xl border border-rose-200 bg-white px-3 py-2.5 text-xs text-slate-500">
+                        Essa exclusão é independente do filtro do mapa. Se houver moradores vinculados, o sistema bloqueia automaticamente.
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleDeleteSelectedTower}
+                        disabled={savingStructure || !towerToDelete}
+                        className="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Excluir torre
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {(structureError || structureSuccess) && (
+                <div className="border-t border-slate-100 px-4 py-4 md:px-5">
+                  {structureError ? (
+                    <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                      {structureError}
+                    </p>
+                  ) : null}
+                  {structureSuccess ? (
+                    <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                      {structureSuccess}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </section>
+
+            {false && (
+              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-md">
                 <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
@@ -460,7 +678,7 @@ export default function MapaPredio() {
 
                     {selectedTowerSummary ? (
                       <p className="text-xs text-slate-500">
-                        {apartmentForm.tower} tem {selectedTowerSummary.floors} andares e ate {selectedTowerSummary.apartmentsPerFloor} aptos por andar.
+                        {apartmentForm.tower} tem {selectedTowerSummary?.floors} andares e ate {selectedTowerSummary?.apartmentsPerFloor} aptos por andar.
                       </p>
                     ) : null}
 
@@ -477,7 +695,7 @@ export default function MapaPredio() {
                 <div className="rounded-3xl border border-rose-100 bg-rose-50/70 p-4">
                   <h3 className="text-sm font-semibold text-slate-900">Excluir torre</h3>
                   <p className="mt-1 text-xs text-slate-500">
-                    Essa ação não depende do filtro da visualização. Escolha a torre aqui e confirme a exclusão.
+                  Essa ação não depende do filtro da visualização. Escolha a torre aqui e confirme a exclusão.
                   </p>
 
                   <div className="mt-4 grid gap-3">
@@ -488,7 +706,7 @@ export default function MapaPredio() {
                         onChange={(event) => setTowerToDelete(event.target.value)}
                         className={adminInputClass}
                       >
-                        {towerOptions.length === 0 ? <option value="">Nenhuma torre disponivel</option> : null}
+                        {towerOptions.length === 0 ? <option value="">Nenhuma torre disponível</option> : null}
                         {towerOptions.map((tower) => (
                           <option key={tower} value={tower}>
                             {tower}
@@ -528,13 +746,15 @@ export default function MapaPredio() {
                 ) : null}
               </div>
             )}
-          </section>
+              </section>
+            )}
+          </>
         )}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-md">
-              <h2 className="text-lg font-semibold text-slate-900">Visualização do edifício</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Visualização do edifício</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
                 Encontre apartamentos por torre, andar, status ou nome do morador.
               </p>
@@ -652,7 +872,7 @@ export default function MapaPredio() {
             <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-slate-900">Mini prédio</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Use as setas para trocar a pagina do minimapa.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Use as setas para trocar a página do minimapa.</p>
               </div>
 
               <div className="overflow-hidden rounded-[24px] bg-slate-100 p-3">
@@ -666,21 +886,21 @@ export default function MapaPredio() {
                       type="button"
                       onClick={goToPrevPage}
                       disabled={!hasPrevPage}
-                      aria-label="Pagina anterior"
+                      aria-label="Página anterior"
                       className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronLeft size={18} />
                     </button>
 
                     <span className="flex-1 whitespace-nowrap text-center text-[11px] font-semibold text-slate-500">
-                      {totalMiniPages === 0 ? "0 paginas" : `Pagina ${miniPage + 1} de ${totalMiniPages}`}
+                      {totalMiniPages === 0 ? "0 páginas" : `Página ${miniPage + 1} de ${totalMiniPages}`}
                     </span>
 
                     <button
                       type="button"
                       onClick={goToNextPage}
                       disabled={!hasNextPage}
-                      aria-label="Proxima pagina"
+                      aria-label="Próxima página"
                       className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronRight size={18} />

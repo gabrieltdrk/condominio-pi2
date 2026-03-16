@@ -123,14 +123,14 @@ export default function UsuariosPage() {
     const phone = formatPhone(form.phone);
     const phoneIsRequired = !editingUser;
     if ((phoneIsRequired && !phone) || (phone && !isPhoneValid(phone))) {
-      setFormError("Informe um telefone valido no formato (11) 99999-9999.");
+      setFormError("Informe um telefone válido no formato (11) 99999-9999.");
       setSubmitting(false);
       return;
     }
 
     const normalizedCarPlate = normalizeCarPlate(form.carPlate);
     if (!isCarPlateValid(normalizedCarPlate)) {
-      setFormError("Informe uma placa valida no formato ABC-1234 ou ABC1D23.");
+      setFormError("Informe uma placa válida no formato ABC-1234 ou ABC1D23.");
       setSubmitting(false);
       return;
     }
@@ -160,8 +160,8 @@ export default function UsuariosPage() {
         err instanceof Error
           ? err.message
           : editingUser
-            ? "Erro ao atualizar usuario."
-            : "Erro ao criar usuario."
+            ? "Erro ao atualizar usuário."
+            : "Erro ao criar usuário."
       );
     } finally {
       setSubmitting(false);
@@ -184,11 +184,11 @@ export default function UsuariosPage() {
 
   async function handleDeleteUser(user: UserRecord) {
     if (currentUser?.email === user.email) {
-      setError("Nao e permitido excluir o usuario que esta logado.");
+      setError("Não é permitido excluir o usuário que está logado.");
       return;
     }
 
-    if (!window.confirm(`Excluir o usuario ${user.name}? Essa acao remove o acesso ao sistema.`)) {
+    if (!window.confirm(`Excluir o usuário ${user.name}? Essa ação remove o acesso ao sistema.`)) {
       return;
     }
 
@@ -196,7 +196,7 @@ export default function UsuariosPage() {
       await deleteUserRecord(user.id);
       loadPageData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao excluir usuario.");
+      setError(err instanceof Error ? err.message : "Erro ao excluir usuário.");
     }
   }
 
@@ -229,7 +229,7 @@ export default function UsuariosPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="m-0 text-lg font-semibold text-slate-900">Gestao de usuarios</h2>
+              <h2 className="m-0 text-lg font-semibold text-slate-900">Gestão de usuários</h2>
               <p className="mt-1 text-sm text-slate-500">Visualize, filtre, edite e vincule moradores aos apartamentos.</p>
             </div>
 
@@ -249,7 +249,7 @@ export default function UsuariosPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
               >
                 <Plus size={15} />
-                Novo usuario
+                Novo usuário
               </button>
             </div>
           </div>
@@ -377,7 +377,7 @@ export default function UsuariosPage() {
         <div className="fixed inset-0 z-1000 flex items-center justify-center bg-black/40 p-4">
           <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="m-0 px-6 pt-6 text-base font-semibold text-gray-900">{editingUser ? "Editar usuario" : "Novo usuario"}</h3>
+              <h3 className="m-0 px-6 pt-6 text-base font-semibold text-gray-900">{editingUser ? "Editar usuário" : "Novo usuário"}</h3>
               <button
                 type="button"
                 className="mr-6 mt-6 rounded-lg bg-transparent p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
@@ -456,7 +456,7 @@ export default function UsuariosPage() {
                     </div>
                     <div className="grid gap-1.5">
                       <label htmlFor="u-pets-count" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Numero de pets
+                        Número de pets
                       </label>
                       <input
                         id="u-pets-count"
@@ -489,7 +489,7 @@ export default function UsuariosPage() {
 
                   <div className="grid gap-1.5">
                     <label htmlFor="u-resident-type" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Tipo de usuario
+                      Tipo de usuário
                     </label>
                     <select
                       id="u-resident-type"
@@ -520,7 +520,7 @@ export default function UsuariosPage() {
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm font-semibold text-slate-900">Vinculo com unidade</p>
-                    <p className="mt-1 text-xs text-slate-500">Os blocos e apartamentos abaixo usam a mesma base do mapa do predio.</p>
+                    <p className="mt-1 text-xs text-slate-500">Os blocos e apartamentos abaixo usam a mesma base do mapa do edifício.</p>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                       <div className="grid gap-1.5">
@@ -584,7 +584,7 @@ export default function UsuariosPage() {
                   disabled={submitting}
                   className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
                 >
-                  {submitting ? "Salvando..." : editingUser ? "Salvar alteracoes" : "Criar usuario"}
+                  {submitting ? "Salvando..." : editingUser ? "Salvar alterações" : "Criar usuário"}
                 </button>
                 </div>
               </div>

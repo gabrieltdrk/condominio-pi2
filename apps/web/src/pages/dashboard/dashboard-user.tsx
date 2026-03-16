@@ -88,7 +88,7 @@ export default function DashboardUser() {
                   Santos agora
                 </div>
                 <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Tempo em Santos para planejar melhor o seu dia</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">Temperatura atual, sensacao termica e condicoes do dia em um resumo rapido.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Temperatura atual, sensação térmica e condições do dia em um resumo rápido.</p>
               </div>
 
               {weather ? (
@@ -111,7 +111,7 @@ export default function DashboardUser() {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-4 text-sm text-slate-500 shadow-sm">
-                  {weatherLoading ? "Carregando clima de Santos..." : "Nao foi possivel carregar o clima agora."}
+                  {weatherLoading ? "Carregando clima de Santos..." : "Não foi possível carregar o clima agora."}
                 </div>
               )}
             </div>

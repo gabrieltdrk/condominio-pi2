@@ -443,10 +443,10 @@ export async function syncApartmentAssignmentForUser(userId: string, apartmentId
       .single();
 
     const targetRow = target.data as { id: string; resident_id: string | null } | null;
-    if (target.error || !targetRow) throw new Error("Apartamento selecionado nao foi encontrado.");
+    if (target.error || !targetRow) throw new Error("Apartamento selecionado não foi encontrado.");
 
     if (targetRow.resident_id && targetRow.resident_id !== userId) {
-      throw new Error("Este apartamento ja esta vinculado a outro usuario.");
+      throw new Error("Este apartamento já está vinculado a outro usuário.");
     }
 
     const assign = await admin
@@ -558,7 +558,7 @@ async function ensureNoDuplicateApartment(tower: string, _floor: number, number:
   );
 
   if (exists) {
-    throw new Error("Ja existe um apartamento com esse numero nesse bloco.");
+    throw new Error("Já existe um apartamento com esse número nesse bloco.");
   }
 }
 
@@ -567,7 +567,7 @@ async function ensureFloorWithinTowerLimit(tower: string, floor: number) {
   const towerFloors = building.filter((item) => item.tower.toLowerCase() === tower.toLowerCase());
 
   if (towerFloors.length === 0) {
-    throw new Error("Bloco nao encontrado.");
+    throw new Error("Bloco não encontrado.");
   }
 
   const maxFloor = Math.max(...towerFloors.map((item) => item.level));
@@ -581,7 +581,7 @@ async function ensureFloorApartmentCapacity(tower: string, floor: number) {
   const towerFloors = building.filter((item) => item.tower.toLowerCase() === tower.toLowerCase());
 
   if (towerFloors.length === 0) {
-    throw new Error("Bloco nao encontrado.");
+    throw new Error("Bloco não encontrado.");
   }
 
   const maxApartmentsPerFloor = Math.max(...towerFloors.map((item) => item.apartments.length));
@@ -589,7 +589,7 @@ async function ensureFloorApartmentCapacity(tower: string, floor: number) {
   const currentApartments = targetFloor?.apartments.length ?? 0;
 
   if (currentApartments >= maxApartmentsPerFloor) {
-    throw new Error(`Esse andar ja atingiu o limite de ${maxApartmentsPerFloor} apartamento(s).`);
+    throw new Error(`Esse andar já atingiu o limite de ${maxApartmentsPerFloor} apartamento(s).`);
   }
 }
 
@@ -665,7 +665,7 @@ export async function deleteApartment(apartmentId: string): Promise<void> {
   const apartment = building.flatMap((floor) => floor.apartments).find((item) => item.id === apartmentId);
 
   if (!apartment) {
-    throw new Error("Apartamento nao encontrado.");
+    throw new Error("Apartamento não encontrado.");
   }
 
   if (apartment.resident?.id) {
@@ -688,7 +688,7 @@ export async function deleteTower(tower: string): Promise<void> {
     .flatMap((floor) => floor.apartments);
 
   if (apartments.length === 0) {
-    throw new Error("Bloco nao encontrado.");
+    throw new Error("Bloco não encontrado.");
   }
 
   if (apartments.some((apartment) => apartment.resident?.id)) {
