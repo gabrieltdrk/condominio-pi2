@@ -3,7 +3,6 @@ import { supabase } from "../../../lib/supabase";
 
 export type ChatMessage = {
   id: string;
-  topic: string;
   content: string;
   created_at: string;
   user_id: string;
@@ -13,7 +12,6 @@ export type ChatMessage = {
 
 type ChatRow = {
   id: string;
-  topic?: string | null;
   content: string;
   created_at: string;
   user_id: string;
@@ -46,7 +44,6 @@ function writeFallbackMessages(messages: ChatMessage[]) {
 function mapRow(row: ChatRow): ChatMessage {
   return {
     id: row.id,
-    topic: row.topic ?? "GERAL",
     content: row.content,
     created_at: row.created_at,
     user_id: row.user_id,
@@ -58,7 +55,7 @@ function mapRow(row: ChatRow): ChatMessage {
 export async function listChatMessages(): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from("chat_messages")
-    .select("id, topic, content, created_at, user_id, profiles!chat_messages_user_id_fkey(name, role)")
+    .select("id, content, created_at, user_id, profiles!chat_messages_user_id_fkey(name, role)")
     .order("created_at", { ascending: true })
     .limit(200);
 
@@ -69,7 +66,7 @@ export async function listChatMessages(): Promise<ChatMessage[]> {
   return ((data ?? []) as ChatRow[]).map(mapRow);
 }
 
-export async function sendChatMessage(content: string, topic: string): Promise<void> {
+export async function sendChatMessage(content: string): Promise<void> {
   const trimmed = content.trim();
   if (!trimmed) return;
 
@@ -79,7 +76,6 @@ export async function sendChatMessage(content: string, topic: string): Promise<v
   }
 
   const { error } = await supabase.from("chat_messages").insert({
-    topic,
     content: trimmed,
     user_id: user.id,
   });
@@ -90,7 +86,6 @@ export async function sendChatMessage(content: string, topic: string): Promise<v
   const fallback = readFallbackMessages();
   fallback.push({
     id: `local-${Date.now()}`,
-    topic,
     content: trimmed,
     created_at: new Date().toISOString(),
     user_id: user.id,
