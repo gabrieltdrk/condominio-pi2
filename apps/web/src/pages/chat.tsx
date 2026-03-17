@@ -191,6 +191,12 @@ export default function ChatPage() {
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey) return;
+                event.preventDefault();
+                if (sending || !draft.trim()) return;
+                void handleSend();
+              }}
               rows={1}
               maxLength={500}
               placeholder="Digite sua mensagem..."
