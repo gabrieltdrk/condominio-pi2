@@ -49,23 +49,49 @@ export async function listChatMessages(): Promise<ChatMessage[]> {
   return ((data ?? []) as ChatRow[]).map(mapRow);
 }
 
-export async function sendChatMessage(content: string): Promise<void> {
+export async function sendChatMessage(content: string): Promise<ChatMessage> {
   const trimmed = content.trim();
-  if (!trimmed) return;
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    throw new Error("Sessão inválida. Faça login novamente.");
+  if (!trimmed) {
+    throw new Error("Digite uma mensagem antes de enviar.");
   }
 
-  const { error } = await supabase.from("messages").insert({
-    sender_id: user.id,
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error("Sessao invalida. Faca login novamente.");
+  }
+
+  const optimisticMessage: ChatMessage = {
+    id: `temp-${Date.now()}`,
     content: trimmed,
-  });
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    sender_id: user.id,
+    author_name:
+      user.user_metadata?.name?.trim() ||
+      user.user_metadata?.full_name?.trim() ||
+      user.email?.split("@")[0] ||
+      "Morador",
+    author_role: typeof user.user_metadata?.role === "string" ? user.user_metadata.role : "MORADOR",
+  };
+
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      sender_id: user.id,
+      content: trimmed,
+    })
+    .select("id, content, created_at, updated_at, sender_id, profiles!messages_sender_id_fkey(name, role)")
+    .single();
 
   if (error) {
     throw new Error(error.message);
   }
+
+  return data ? mapRow(data as ChatRow) : optimisticMessage;
 }
 
 export async function deleteChatMessage(messageId: string): Promise<void> {

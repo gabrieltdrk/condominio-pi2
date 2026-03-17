@@ -19,6 +19,18 @@ function formatTime(iso: string) {
   });
 }
 
+function mergeMessages(nextMessages: ChatMessage[]) {
+  const uniqueMessages = new Map<string, ChatMessage>();
+
+  nextMessages.forEach((message) => {
+    uniqueMessages.set(message.id, message);
+  });
+
+  return Array.from(uniqueMessages.values()).sort(
+    (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
+  );
+}
+
 export default function ChatPage() {
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -76,11 +88,11 @@ export default function ChatPage() {
     setSending(true);
     setError("");
     try {
-      await sendChatMessage(draft);
+      const sentMessage = await sendChatMessage(draft);
+      setMessages((currentMessages) => mergeMessages([...currentMessages, sentMessage]));
       setDraft("");
-      await loadMessages();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
+      setError(err instanceof Error ? err.message : "Nao foi possivel enviar a mensagem.");
     } finally {
       setSending(false);
     }
@@ -99,13 +111,13 @@ export default function ChatPage() {
       await deleteChatMessage(message.id);
       await loadMessages();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível excluir a mensagem.");
+      setError(err instanceof Error ? err.message : "Nao foi possivel excluir a mensagem.");
     }
   }
 
   return (
     <AppLayout title="Chat Geral">
-      <div className="mx-auto flex h-[calc(100vh-9rem)] w-full max-w-5xl min-h-0 flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(15,23,42,0.35)]">
+      <div className="mx-auto flex h-[calc(100vh-9rem)] min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(15,23,42,0.35)]">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -114,7 +126,7 @@ export default function ChatPage() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Chat geral</h2>
-                <p className="text-xs text-slate-500">Conversa em tempo real do condomínio.</p>
+                <p className="text-xs text-slate-500">Conversa em tempo real do condominio.</p>
               </div>
             </div>
           </div>
@@ -136,7 +148,7 @@ export default function ChatPage() {
           {loading ? <p className="text-sm text-slate-400">Carregando mensagens...</p> : null}
           {!loading && messages.length === 0 ? (
             <div className="mx-auto mt-10 max-w-md rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-              <p className="text-sm font-semibold text-slate-700">Ainda não tem mensagem aqui</p>
+              <p className="text-sm font-semibold text-slate-700">Ainda nao tem mensagem aqui</p>
               <p className="mt-2 text-xs text-slate-500">Se quiser, pode mandar a primeira.</p>
             </div>
           ) : null}
@@ -148,9 +160,7 @@ export default function ChatPage() {
               <article
                 key={message.id}
                 className={`max-w-[88%] rounded-[24px] border px-4 py-3 shadow-sm ${
-                  isOwn
-                    ? "ml-auto border-sky-200 bg-sky-50"
-                    : "mr-auto border-slate-200 bg-white"
+                  isOwn ? "ml-auto border-sky-200 bg-sky-50" : "mr-auto border-slate-200 bg-white"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
