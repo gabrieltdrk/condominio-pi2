@@ -535,7 +535,7 @@ function buildBlockApartments({ tower, floors, apartmentsPerFloor }: CreateBlock
 
   for (let floor = floors; floor >= 1; floor -= 1) {
     for (let apartmentIndex = 1; apartmentIndex <= apartmentsPerFloor; apartmentIndex += 1) {
-      const number = `${floor}${String(apartmentIndex).padStart(2, "0")}`;
+      const number = `${floor}${apartmentIndex}`;
       rows.push({
         id: createLocalApartmentId(normalizedTower, floor, number),
         tower: normalizedTower,
@@ -682,9 +682,10 @@ export async function deleteApartment(apartmentId: string): Promise<void> {
 }
 
 export async function deleteTower(tower: string): Promise<void> {
+  const normalizedTower = normalizeTowerName(tower);
   const building = await fetchBuilding();
   const apartments = building
-    .filter((floor) => floor.tower.toLowerCase() === tower.toLowerCase())
+    .filter((floor) => normalizeTowerName(floor.tower).toLowerCase() === normalizedTower.toLowerCase())
     .flatMap((floor) => floor.apartments);
 
   if (apartments.length === 0) {
@@ -697,10 +698,15 @@ export async function deleteTower(tower: string): Promise<void> {
 
   try {
     const admin = getSupabaseAdmin();
-    const { error } = await admin.from("condo_apartments").delete().eq("tower", tower);
+    const apartmentIds = apartments.map((apartment) => apartment.id);
+    const { error } = await admin.from("condo_apartments").delete().in("id", apartmentIds);
     if (error) throw error;
   } catch {
-    setCustomApartments(readCustomApartments().filter((item) => item.tower.toLowerCase() !== tower.toLowerCase()));
+    setCustomApartments(
+      readCustomApartments().filter(
+        (item) => normalizeTowerName(item.tower).toLowerCase() !== normalizedTower.toLowerCase(),
+      ),
+    );
   }
 }
 

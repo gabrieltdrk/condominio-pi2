@@ -422,13 +422,16 @@ export default function AppLayout({ title, children }: { title: string; children
         type="button"
         onClick={() => nav("/chat")}
         title="Abrir chat"
-        className={`fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-[22px] border shadow-lg transition ${
+        className={`fixed bottom-5 right-5 z-30 inline-flex h-14 items-center justify-center gap-2 rounded-full border px-4 shadow-[0_20px_45px_-18px_rgba(14,165,233,0.45)] transition ${
           location.pathname === "/chat"
-            ? "border-sky-200 bg-sky-50 text-sky-700"
-            : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+            ? "border-sky-300 bg-sky-600 text-white"
+            : "border-sky-200 bg-white text-sky-700 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50"
         }`}
       >
-        <MessageCircleMore size={22} />
+        <span className={`flex h-10 w-10 items-center justify-center rounded-full ${location.pathname === "/chat" ? "bg-white/15" : "bg-sky-100"}`}>
+          <MessageCircleMore size={22} />
+        </span>
+        <span className="hidden text-sm font-semibold sm:inline">Chat</span>
       </button>
     </div>
   );

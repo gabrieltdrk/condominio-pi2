@@ -75,22 +75,26 @@ export async function refreshStoredUser(): Promise<User | null> {
 export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
-    throw new Error("Sessão inválida. Faça login novamente.");
+    throw new Error("Sessao invalida. Faca login novamente.");
   }
 
   const email = input.email.trim();
-  const updateAuth = await supabase.auth.updateUser({
-    email,
-    data: {
-      name: input.name.trim(),
-      phone: input.phone || null,
-      car_plate: input.carPlate || null,
-      pets_count: input.petsCount ?? 0,
-    },
-  });
+  const currentEmail = data.user.email?.trim() ?? "";
 
-  if (updateAuth.error) {
-    throw new Error(updateAuth.error.message);
+  if (email && email.toLowerCase() !== currentEmail.toLowerCase()) {
+    const updateAuth = await supabase.auth.updateUser({
+      email,
+      data: {
+        name: input.name.trim(),
+        phone: input.phone || null,
+        car_plate: input.carPlate || null,
+        pets_count: input.petsCount ?? 0,
+      },
+    });
+
+    if (updateAuth.error) {
+      throw new Error(updateAuth.error.message);
+    }
   }
 
   const profileUpdate = await supabase
@@ -102,12 +106,22 @@ export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {
       car_plate: input.carPlate || null,
       pets_count: input.petsCount ?? 0,
     } as never)
-    .eq("id", data.user.id);
+    .eq("id", data.user.id)
+    .select("id")
+    .maybeSingle();
 
   if (profileUpdate.error) {
     throw new Error(profileUpdate.error.message);
   }
 
+  if (!profileUpdate.data) {
+    throw new Error("Perfil nao encontrado para atualizacao. Avise o administrador para vincular seu cadastro.");
+  }
+
   const freshProfile = await fetchProfile(data.user.id);
+  if (!freshProfile) {
+    throw new Error("Os dados foram enviados, mas nao foi possivel confirmar o perfil salvo.");
+  }
+
   return mergeUser(email, freshProfile);
 }
