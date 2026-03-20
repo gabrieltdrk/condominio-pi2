@@ -22,6 +22,7 @@ import {
   Settings,
   Sun,
   User,
+  UserRoundCheck,
   Users,
   Waves,
   X,
@@ -39,16 +40,18 @@ const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
-  { label: "Ocorrências", path: "/ocorrencias", icon: ClipboardList },
+  { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
+  { label: "Visitantes", path: "/visitantes", icon: UserRoundCheck },
   { label: "Garagem", path: "/garagem", icon: CarFront },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
-  { label: "Edifício", path: "/predio", icon: Building2 },
-  { label: "Usuários", path: "/usuarios", icon: Users },
+  { label: "Edificio", path: "/predio", icon: Building2 },
+  { label: "Usuarios", path: "/usuarios", icon: Users },
   { label: "Maresia", path: "/maresia", icon: Waves },
 ];
 
 const adminPaths = new Set(["/financeiro", "/predio", "/usuarios"]);
+const gatekeeperPaths = new Set(["/garagem", "/visitantes"]);
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -101,7 +104,7 @@ export default function AppLayout({ title, children }: { title: string; children
       setUser(refreshed);
     }
 
-    syncUser();
+    void syncUser();
     const handleFocus = () => void syncUser();
     window.addEventListener("focus", handleFocus);
 
@@ -112,7 +115,7 @@ export default function AppLayout({ title, children }: { title: string; children
   }, []);
 
   function sair() {
-    logout();
+    void logout();
     nav("/login");
   }
 
@@ -125,7 +128,10 @@ export default function AppLayout({ title, children }: { title: string; children
         .toUpperCase()
     : "U";
 
-  const mainLinks = navLinks.filter((link) => !adminPaths.has(link.path));
+  const mainLinks =
+    user?.role === "PORTEIRO"
+      ? navLinks.filter((link) => gatekeeperPaths.has(link.path))
+      : navLinks.filter((link) => !adminPaths.has(link.path));
   const adminLinks = user?.role === "ADMIN" ? navLinks.filter((link) => adminPaths.has(link.path)) : [];
 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
@@ -133,16 +139,12 @@ export default function AppLayout({ title, children }: { title: string; children
 
     return (
       <>
-        <div className={`border-b border-gray-100 shrink-0 ${collapsed ? "flex flex-col items-center gap-2 px-2 py-3" : "flex h-16 items-center gap-2 px-4"}`}>
-          <div className={`flex items-center justify-center overflow-hidden shrink-0 ${collapsed ? "h-11 w-11 rounded-2xl" : "h-8 w-8 rounded-xl"}`}>
+        <div className={`shrink-0 border-b border-gray-100 ${collapsed ? "flex flex-col items-center gap-2 px-2 py-3" : "flex h-16 items-center gap-2 px-4"}`}>
+          <div className={`shrink-0 overflow-hidden ${collapsed ? "h-11 w-11 rounded-2xl" : "h-8 w-8 rounded-xl"}`}>
             <img src="/Logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
 
-          {!collapsed && (
-            <span className="flex-1 text-sm font-bold leading-none text-gray-900">
-              OmniLar
-            </span>
-          )}
+          {!collapsed && <span className="flex-1 text-sm font-bold leading-none text-gray-900">OmniLar</span>}
 
           <div className={`flex items-center ${collapsed ? "justify-center" : "gap-1"}`}>
             {!mobile && (
@@ -214,17 +216,15 @@ export default function AppLayout({ title, children }: { title: string; children
 
         <div className="shrink-0 border-t border-gray-100 p-3">
           <div className={`flex px-2 py-2 ${collapsed ? "flex-col items-center gap-2" : "items-center gap-2.5"}`}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 shrink-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100">
               <span className="text-xs font-bold text-indigo-700">{initials}</span>
             </div>
 
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold leading-tight text-gray-900">
-                  {user?.name ?? "Usuário"}
-                </p>
+                <p className="truncate text-xs font-semibold leading-tight text-gray-900">{user?.name ?? "Usuario"}</p>
                 <p className="mt-0.5 text-[11px] leading-tight text-gray-400">
-                  {user?.role === "ADMIN" ? "Administrador" : "Morador"}
+                  {user?.role === "ADMIN" ? "Administrador" : user?.role === "PORTEIRO" ? "Portaria" : "Morador"}
                 </p>
               </div>
             )}
@@ -232,7 +232,7 @@ export default function AppLayout({ title, children }: { title: string; children
             <div className="relative shrink-0">
               <button
                 onClick={() => setGearOpen((value) => !value)}
-                title="Configurações"
+                title="Configuracoes"
                 className="rounded-lg bg-transparent p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
               >
                 <Settings size={16} />
@@ -241,7 +241,7 @@ export default function AppLayout({ title, children }: { title: string; children
               {gearOpen && (
                 <>
                   <div className="fixed inset-0 z-199" onClick={() => setGearOpen(false)} />
-                  <div className={`absolute overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl z-200 ${collapsed ? "left-full bottom-0 ml-2 w-52" : "right-0 bottom-full mb-2 w-52"}`}>
+                  <div className={`absolute z-200 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl ${collapsed ? "bottom-0 left-full ml-2 w-52" : "bottom-full right-0 mb-2 w-52"}`}>
                     <button
                       onClick={() => {
                         setGearOpen(false);
@@ -290,9 +290,7 @@ export default function AppLayout({ title, children }: { title: string; children
         <SidebarContent />
       </aside>
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
+      {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-visible border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 md:hidden ${
@@ -311,7 +309,7 @@ export default function AppLayout({ title, children }: { title: string; children
           >
             <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2.5">
               <Bell size={13} className="shrink-0 text-gray-500" />
-              <span className="flex-1 text-sm font-semibold text-gray-900">Notificações</span>
+              <span className="flex-1 text-sm font-semibold text-gray-900">Notificacoes</span>
               {unread > 0 && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
                   {unread}
@@ -354,7 +352,7 @@ export default function AppLayout({ title, children }: { title: string; children
                       onClick={() => {
                         handleMarcarLida(notification.id);
                         setBellOpen(false);
-                        nav("/avisos");
+                        nav(notification.link ?? "/avisos");
                       }}
                     >
                       {notification.aviso_tipo && (
@@ -362,9 +360,17 @@ export default function AppLayout({ title, children }: { title: string; children
                           {notification.aviso_tipo}
                         </span>
                       )}
+                      {!notification.aviso_tipo && notification.categoria && (
+                        <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                          {notification.categoria}
+                        </span>
+                      )}
                       <p className="mt-0.5 line-clamp-2 text-xs font-semibold leading-tight text-gray-800">
-                        {notification.aviso_titulo ?? "Novo aviso publicado"}
+                        {notification.titulo ?? notification.aviso_titulo ?? "Nova notificacao"}
                       </p>
+                      {notification.mensagem && (
+                        <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{notification.mensagem}</p>
+                      )}
                       <p className="mt-0.5 text-[10px] text-gray-400">{timeAgo(notification.created_at)}</p>
                     </div>
 
@@ -387,7 +393,7 @@ export default function AppLayout({ title, children }: { title: string; children
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 shrink-0 md:px-6">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 md:px-6">
           <button
             onClick={() => setSidebarOpen(true)}
             className="rounded-lg bg-transparent p-2 text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
@@ -402,7 +408,7 @@ export default function AppLayout({ title, children }: { title: string; children
             ref={bellRef}
             onClick={openBell}
             className="relative rounded-lg bg-transparent p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            title="Notificações"
+            title="Notificacoes"
           >
             <Bell size={18} />
             {unread > 0 && (
@@ -413,26 +419,26 @@ export default function AppLayout({ title, children }: { title: string; children
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6 xl:px-8">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6 xl:px-8">{children}</main>
       </div>
 
-      <button
-        type="button"
-        onClick={() => nav("/chat")}
-        title="Abrir chat"
-        className={`fixed bottom-5 right-5 z-30 inline-flex h-14 items-center justify-center gap-2 rounded-full border px-4 shadow-[0_20px_45px_-18px_rgba(14,165,233,0.45)] transition ${
-          location.pathname === "/chat"
-            ? "border-sky-300 bg-sky-600 text-white"
-            : "border-sky-200 bg-white text-sky-700 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50"
-        }`}
-      >
-        <span className={`flex h-10 w-10 items-center justify-center rounded-full ${location.pathname === "/chat" ? "bg-white/15" : "bg-sky-100"}`}>
-          <MessageCircleMore size={22} />
-        </span>
-        <span className="hidden text-sm font-semibold sm:inline">Chat</span>
-      </button>
+      {user?.role !== "PORTEIRO" && (
+        <button
+          type="button"
+          onClick={() => nav("/chat")}
+          title="Abrir chat"
+          className={`fixed bottom-5 right-5 z-30 inline-flex h-14 items-center justify-center gap-2 rounded-full border px-4 shadow-[0_20px_45px_-18px_rgba(14,165,233,0.45)] transition ${
+            location.pathname === "/chat"
+              ? "border-sky-300 bg-sky-600 text-white"
+              : "border-sky-200 bg-white text-sky-700 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50"
+          }`}
+        >
+          <span className={`flex h-10 w-10 items-center justify-center rounded-full ${location.pathname === "/chat" ? "bg-white/15" : "bg-sky-100"}`}>
+            <MessageCircleMore size={22} />
+          </span>
+          <span className="hidden text-sm font-semibold sm:inline">Chat</span>
+        </button>
+      )}
     </div>
   );
 }

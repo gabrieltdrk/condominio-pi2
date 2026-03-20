@@ -12,7 +12,7 @@ export type UserRecord = {
   phone: string | null;
   car_plate: string | null;
   pets_count: number | null;
-  role: "ADMIN" | "MORADOR";
+  role: "ADMIN" | "MORADOR" | "PORTEIRO";
   resident_type: ResidentType;
   status: UserStatus;
   apartment_ids: string[];
@@ -36,7 +36,7 @@ export type CreateUserPayload = {
   password: string;
   carPlate: string;
   petsCount: number | null;
-  role: "ADMIN" | "MORADOR";
+  role: "ADMIN" | "MORADOR" | "PORTEIRO";
   residentType: ResidentType;
   status: UserStatus;
   apartmentId: string | null;
@@ -49,7 +49,7 @@ export type UpdateUserPayload = {
   phone: string;
   carPlate: string;
   petsCount: number | null;
-  role: "ADMIN" | "MORADOR";
+  role: "ADMIN" | "MORADOR" | "PORTEIRO";
   residentType: ResidentType;
   status: UserStatus;
   apartmentId: string | null;
@@ -70,7 +70,7 @@ type ProfileRow = {
   phone?: string | null;
   car_plate?: string | null;
   pets_count?: number | null;
-  role?: "ADMIN" | "MORADOR" | null;
+  role?: "ADMIN" | "MORADOR" | "PORTEIRO" | null;
   resident_type?: ResidentType | null;
   status?: UserStatus | null;
   created_at?: string | null;
@@ -95,7 +95,7 @@ function normalizeProfile(row: ProfileRow, assignment?: ApartmentAssignmentRow):
     phone: row.phone ?? null,
     car_plate: row.car_plate ?? null,
     pets_count: row.pets_count ?? null,
-    role: (row.role ?? "MORADOR") as "ADMIN" | "MORADOR",
+    role: (row.role ?? "MORADOR") as "ADMIN" | "MORADOR" | "PORTEIRO",
     resident_type: (row.resident_type ?? "PROPRIETARIO") as ResidentType,
     status: (row.status ?? "ATIVO") as UserStatus,
     apartment_ids: apartments.map((item) => item.id),
@@ -426,7 +426,7 @@ async function upsertProfileWithFallbacks(
     phone: string;
     carPlate: string;
     petsCount: number | null;
-    role: "ADMIN" | "MORADOR";
+    role: "ADMIN" | "MORADOR" | "PORTEIRO";
     residentType: ResidentType;
     status: UserStatus;
   }

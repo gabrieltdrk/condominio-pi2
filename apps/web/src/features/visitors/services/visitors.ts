@@ -1,0 +1,342 @@
+import { supabase } from "../../../lib/supabase";
+
+export type VisitorRequestStatus =
+  | "PENDENTE_CONFIRMACAO"
+  | "CONFIRMADO"
+  | "VALIDADO_MORADOR"
+  | "CHECKED_IN"
+  | "CHECKED_OUT"
+  | "CANCELADO";
+
+export type VisitorGuestInput = {
+  fullName: string;
+  birthDate: string;
+  cpf: string;
+  email: string;
+  isPrimary?: boolean;
+};
+
+export type VisitorRequestInput = {
+  apartmentId: string | null;
+  adultsCount: number;
+  childrenCount: number;
+  petsCount: number;
+  expectedCheckIn: string;
+  expectedCheckOut: string;
+  requiresPortariaQr: boolean;
+  notes: string;
+  guests: VisitorGuestInput[];
+};
+
+export type VisitorGuest = {
+  id: string;
+  requestId: string;
+  fullName: string;
+  birthDate: string;
+  cpf: string;
+  email: string;
+  isPrimary: boolean;
+};
+
+export type VisitorRequest = {
+  id: string;
+  residentId: string;
+  residentName: string;
+  apartmentId: string | null;
+  apartmentLabel: string;
+  status: VisitorRequestStatus;
+  requiresPortariaQr: boolean;
+  adultsCount: number;
+  childrenCount: number;
+  petsCount: number;
+  expectedCheckIn: string;
+  expectedCheckOut: string;
+  notes: string;
+  confirmationEmailSentAt: string | null;
+  principalConfirmedAt: string | null;
+  residentValidatedAt: string | null;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  createdAt: string;
+  guests: VisitorGuest[];
+  primaryGuest: VisitorGuest | null;
+};
+
+type VisitorRequestRow = {
+  id: string;
+  resident_id: string;
+  apartment_id: string | null;
+  status: VisitorRequestStatus;
+  requires_portaria_qr: boolean;
+  adults_count: number;
+  children_count: number;
+  pets_count: number;
+  expected_check_in: string;
+  expected_check_out: string;
+  notes: string | null;
+  confirmation_email_sent_at: string | null;
+  principal_confirmed_at: string | null;
+  resident_validated_at: string | null;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+  created_at: string;
+};
+
+type VisitorGuestRow = {
+  id: string;
+  request_id: string;
+  full_name: string;
+  birth_date: string;
+  cpf: string;
+  email: string | null;
+  is_primary: boolean;
+};
+
+export type VisitorFlowResult = {
+  requestId: string;
+  emailQueued: boolean;
+};
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function normalizeGuests(guests: VisitorGuestInput[]) {
+  return guests.map((guest, index) => ({
+    full_name: guest.fullName.trim(),
+    birth_date: guest.birthDate,
+    cpf: digitsOnly(guest.cpf),
+    email: guest.email.trim() || null,
+    is_primary: guest.isPrimary ?? index === 0,
+  }));
+}
+
+function mapGuest(row: VisitorGuestRow): VisitorGuest {
+  return {
+    id: row.id,
+    requestId: row.request_id,
+    fullName: row.full_name,
+    birthDate: row.birth_date,
+    cpf: row.cpf,
+    email: row.email ?? "",
+    isPrimary: row.is_primary,
+  };
+}
+
+export async function listVisitorRequests(): Promise<VisitorRequest[]> {
+  const { data, error } = await supabase
+    .from("visitor_requests")
+    .select(
+      "id, resident_id, apartment_id, status, requires_portaria_qr, adults_count, children_count, pets_count, expected_check_in, expected_check_out, notes, confirmation_email_sent_at, principal_confirmed_at, resident_validated_at, checked_in_at, checked_out_at, created_at",
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const requests = (data ?? []) as VisitorRequestRow[];
+  if (requests.length === 0) return [];
+
+  const requestIds = requests.map((request) => request.id);
+  const residentIds = Array.from(new Set(requests.map((request) => request.resident_id)));
+  const apartmentIds = Array.from(new Set(requests.map((request) => request.apartment_id).filter((value): value is string => Boolean(value))));
+
+  const [guestsResult, profilesResult, apartmentsResult] = await Promise.all([
+    supabase
+      .from("visitor_request_guests")
+      .select("id, request_id, full_name, birth_date, cpf, email, is_primary")
+      .in("request_id", requestIds)
+      .order("created_at", { ascending: true }),
+    supabase.from("profiles").select("id, name, email").in("id", residentIds),
+    apartmentIds.length > 0
+      ? supabase.from("condo_apartments").select("id, tower, level, number").in("id", apartmentIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (guestsResult.error) throw new Error(guestsResult.error.message);
+  if (profilesResult.error) throw new Error(profilesResult.error.message);
+  if (apartmentsResult.error) throw new Error(apartmentsResult.error.message);
+
+  const guestsByRequest = new Map<string, VisitorGuest[]>();
+  for (const guest of (guestsResult.data ?? []) as VisitorGuestRow[]) {
+    const current = guestsByRequest.get(guest.request_id) ?? [];
+    current.push(mapGuest(guest));
+    guestsByRequest.set(guest.request_id, current);
+  }
+
+  const residentMap = new Map<string, string>();
+  for (const profile of profilesResult.data ?? []) {
+    residentMap.set(profile.id as string, ((profile.name as string | null) ?? (profile.email as string | null) ?? "Morador").trim());
+  }
+
+  const apartmentMap = new Map<string, string>();
+  for (const apartment of apartmentsResult.data ?? []) {
+    apartmentMap.set(apartment.id as string, `${apartment.tower as string} · Andar ${String(apartment.level)} · Ap ${String(apartment.number)}`);
+  }
+
+  return requests.map((row) => {
+    const guests = guestsByRequest.get(row.id) ?? [];
+    return {
+      id: row.id,
+      residentId: row.resident_id,
+      residentName: residentMap.get(row.resident_id) ?? "Morador",
+      apartmentId: row.apartment_id,
+      apartmentLabel: row.apartment_id ? apartmentMap.get(row.apartment_id) ?? "Unidade vinculada" : "Sem unidade",
+      status: row.status,
+      requiresPortariaQr: row.requires_portaria_qr,
+      adultsCount: row.adults_count,
+      childrenCount: row.children_count,
+      petsCount: row.pets_count,
+      expectedCheckIn: row.expected_check_in,
+      expectedCheckOut: row.expected_check_out,
+      notes: row.notes ?? "",
+      confirmationEmailSentAt: row.confirmation_email_sent_at,
+      principalConfirmedAt: row.principal_confirmed_at,
+      residentValidatedAt: row.resident_validated_at,
+      checkedInAt: row.checked_in_at,
+      checkedOutAt: row.checked_out_at,
+      createdAt: row.created_at,
+      guests,
+      primaryGuest: guests.find((guest) => guest.isPrimary) ?? guests[0] ?? null,
+    };
+  });
+}
+
+export async function createVisitorRequest(input: VisitorRequestInput): Promise<VisitorFlowResult> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) {
+    throw new Error("Sessao invalida. Faca login novamente.");
+  }
+
+  const guests = normalizeGuests(input.guests);
+  if (guests.length === 0) {
+    throw new Error("Adicione ao menos um visitante.");
+  }
+
+  const primaryGuest = guests.find((guest) => guest.is_primary) ?? guests[0];
+  if (!primaryGuest.email) {
+    throw new Error("Informe o e-mail do visitante principal.");
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("visitor_requests")
+    .insert({
+      resident_id: authData.user.id,
+      apartment_id: input.apartmentId,
+      adults_count: input.adultsCount,
+      children_count: input.childrenCount,
+      pets_count: input.petsCount,
+      expected_check_in: input.expectedCheckIn,
+      expected_check_out: input.expectedCheckOut,
+      requires_portaria_qr: input.requiresPortariaQr,
+      notes: input.notes.trim() || null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !inserted) {
+    throw new Error(error?.message ?? "Nao foi possivel criar a visita.");
+  }
+
+  const { error: guestsError } = await supabase.from("visitor_request_guests").insert(
+    guests.map((guest) => ({
+      ...guest,
+      request_id: inserted.id,
+    })),
+  );
+
+  if (guestsError) {
+    throw new Error(guestsError.message);
+  }
+
+  const emailQueued = await sendVisitorInvitation(inserted.id);
+  return {
+    requestId: inserted.id,
+    emailQueued,
+  };
+}
+
+export async function sendVisitorInvitation(requestId: string): Promise<boolean> {
+  const result = await supabase.functions.invoke("visitor-dispatch", {
+    body: { requestId },
+  });
+
+  if (result.error) {
+    return false;
+  }
+
+  return true;
+}
+
+export async function cancelVisitorRequest(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from("visitor_requests")
+    .update({ status: "CANCELADO" })
+    .eq("id", requestId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function completeVisitorCheckOut(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from("visitor_requests")
+    .update({
+      status: "CHECKED_OUT",
+      checked_out_at: new Date().toISOString(),
+    })
+    .eq("id", requestId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function approveVisitorByToken(token: string): Promise<{ status: VisitorRequestStatus; requiresPortariaQr: boolean }> {
+  const result = await supabase.functions.invoke("visitor-approval", {
+    body: { token },
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  return {
+    status: (result.data?.status ?? "CONFIRMADO") as VisitorRequestStatus,
+    requiresPortariaQr: Boolean(result.data?.requiresPortariaQr),
+  };
+}
+
+export async function validateVisitorAccessToken(token: string): Promise<{ status: VisitorRequestStatus; actor: "resident" | "gatekeeper" }> {
+  const result = await supabase.functions.invoke("visitor-checkin", {
+    body: { token },
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  return {
+    status: (result.data?.status ?? "CHECKED_IN") as VisitorRequestStatus,
+    actor: (result.data?.actor ?? "gatekeeper") as "resident" | "gatekeeper",
+  };
+}
+
+export function subscribeToVisitorRequests(onChange: () => void) {
+  const requestsChannel = supabase
+    .channel("visitor-requests-feed")
+    .on("postgres_changes", { event: "*", schema: "public", table: "visitor_requests" }, onChange)
+    .subscribe();
+
+  const guestsChannel = supabase
+    .channel("visitor-guests-feed")
+    .on("postgres_changes", { event: "*", schema: "public", table: "visitor_request_guests" }, onChange)
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(requestsChannel);
+    void supabase.removeChannel(guestsChannel);
+  };
+}

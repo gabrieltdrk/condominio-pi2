@@ -13,6 +13,8 @@ import GaragemPage from "../pages/garagem";
 import MaresiaPage from "../pages/maresia";
 import Perfil from "../pages/perfil";
 import UsuariosPage from "../pages/usuarios";
+import VisitantesPage from "../pages/visitantes";
+import VisitorApprovalPage from "../pages/visitantes-aprovacao";
 import ProtectedRoute from "./protected-route";
 
 export default function AppRoutes() {
@@ -22,6 +24,7 @@ export default function AppRoutes() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/visitantes/aprovacao" element={<VisitorApprovalPage />} />
         <Route
           path="/dashboard"
           element={
@@ -71,6 +74,14 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="/visitantes"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN", "MORADOR", "PORTEIRO"]}>
+              <VisitantesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/financeiro"
           element={
             <ProtectedRoute adminOnly>
@@ -81,7 +92,7 @@ export default function AppRoutes() {
         <Route
           path="/garagem"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["ADMIN", "MORADOR", "PORTEIRO"]}>
               <GaragemPage />
             </ProtectedRoute>
           }

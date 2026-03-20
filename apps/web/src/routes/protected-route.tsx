@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { getToken, getUser } from "../features/auth/services/auth";
+import { getToken, getUser, type UserRole } from "../features/auth/services/auth";
 
 type Props = {
   children: ReactNode;
   adminOnly?: boolean;
+  allowedRoles?: UserRole[];
 };
 
-export default function ProtectedRoute({ children, adminOnly = false }: Props) {
+export default function ProtectedRoute({ children, adminOnly = false, allowedRoles }: Props) {
   const token = getToken();
   const user = getUser();
 
@@ -16,6 +17,10 @@ export default function ProtectedRoute({ children, adminOnly = false }: Props) {
   }
 
   if (adminOnly && user?.role !== "ADMIN") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (allowedRoles && (!user?.role || !allowedRoles.includes(user.role))) {
     return <Navigate to="/dashboard" replace />;
   }
 

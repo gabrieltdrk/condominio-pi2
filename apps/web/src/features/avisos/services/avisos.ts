@@ -28,11 +28,16 @@ export type CreateAvisoPayload = {
 
 export type Notificacao = {
   id: string;
-  aviso_id: string;
+  aviso_id?: string;
   lida: boolean;
   created_at: string;
   aviso_titulo?: string;
   aviso_tipo?: string;
+  titulo?: string;
+  mensagem?: string;
+  categoria?: string;
+  link?: string | null;
+  origem: "avisos" | "system";
 };
 
 export const AVISO_TIPOS: AvisoTipo[] = ["Informativo", "Manutenção", "Assembleia", "Segurança", "Eventos"];
@@ -166,34 +171,80 @@ export async function toggleCurtidaAviso(avisoId: string): Promise<void> {
 // ── Notificações ──────────────────────────────────────────────────────────
 
 export async function listNotificacoes(): Promise<Notificacao[]> {
-  const { data, error } = await supabase
+  const avisosPromise = supabase
     .from("notificacoes")
     .select("*, avisos(titulo, tipo)")
     .eq("lida", false)
-    .order("created_at", { ascending: false })
-    .limit(30);
+    .order("created_at", { ascending: false });
 
-  if (error) return [];
+  const systemPromise = supabase
+    .from("system_notifications")
+    .select("id, title, message, category, link, read, created_at")
+    .eq("read", false)
+    .order("created_at", { ascending: false });
 
-  type Raw = { id: string; aviso_id: string; lida: boolean; created_at: string; avisos: { titulo: string; tipo: string } | null };
-  return (data as unknown as Raw[]).map((n) => ({
-    id: n.id,
-    aviso_id: n.aviso_id,
-    lida: n.lida,
-    created_at: n.created_at,
-    aviso_titulo: n.avisos?.titulo,
-    aviso_tipo: n.avisos?.tipo,
-  }));
+  const [avisosResult, systemResult] = await Promise.all([avisosPromise, systemPromise]);
+
+  type RawAviso = { id: string; aviso_id: string; lida: boolean; created_at: string; avisos: { titulo: string; tipo: string } | null };
+  const avisos = avisosResult.error
+    ? []
+    : (avisosResult.data as unknown as RawAviso[]).map((n) => ({
+        id: n.id,
+        aviso_id: n.aviso_id,
+        lida: n.lida,
+        created_at: n.created_at,
+        aviso_titulo: n.avisos?.titulo,
+        aviso_tipo: n.avisos?.tipo,
+        titulo: n.avisos?.titulo ?? "Novo aviso publicado",
+        mensagem: n.avisos?.tipo ?? "Aviso",
+        categoria: "AVISO",
+        link: "/avisos",
+        origem: "avisos" as const,
+      }));
+
+  type RawSystem = { id: string; title: string; message: string; category: string; link: string | null; read: boolean; created_at: string };
+  const system = systemResult.error
+    ? []
+    : (systemResult.data as RawSystem[]).map((n) => ({
+        id: n.id,
+        lida: n.read,
+        created_at: n.created_at,
+        titulo: n.title,
+        mensagem: n.message,
+        categoria: n.category,
+        link: n.link,
+        origem: "system" as const,
+      }));
+
+  return [...avisos, ...system]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 30);
 }
 
-export async function marcarNotificacaoLida(id: string): Promise<void> {
-  await supabase.from("notificacoes").update({ lida: true }).eq("id", id);
+export async function marcarNotificacaoLida(notification: Pick<Notificacao, "id" | "origem">): Promise<void> {
+  if (notification.origem === "system") {
+    await supabase.from("system_notifications").update({ read: true }).eq("id", notification.id);
+    return;
+  }
+
+  await supabase.from("notificacoes").update({ lida: true }).eq("id", notification.id);
 }
 
-export async function marcarTodasLidas(): Promise<void> {
+export async function marcarTodasLidas(notificacoes: Notificacao[]): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from("notificacoes").update({ lida: true }).eq("user_id", user.id).eq("lida", false);
+
+  const avisoIds = notificacoes.filter((item) => item.origem === "avisos").map((item) => item.id);
+  const systemIds = notificacoes.filter((item) => item.origem === "system").map((item) => item.id);
+
+  await Promise.all([
+    avisoIds.length > 0
+      ? supabase.from("notificacoes").update({ lida: true }).eq("user_id", user.id).in("id", avisoIds)
+      : Promise.resolve(),
+    systemIds.length > 0
+      ? supabase.from("system_notifications").update({ read: true }).eq("user_id", user.id).in("id", systemIds)
+      : Promise.resolve(),
+  ]);
 }
 
 export async function excluirNotificacao(id: string): Promise<void> {

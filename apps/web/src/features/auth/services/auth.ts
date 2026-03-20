@@ -1,6 +1,6 @@
 import { supabase } from "../../../lib/supabase";
 
-export type UserRole = "ADMIN" | "MORADOR";
+export type UserRole = "ADMIN" | "MORADOR" | "PORTEIRO";
 export type ResidentType = "PROPRIETARIO" | "INQUILINO" | "VISITANTE";
 export type UserStatus = "ATIVO" | "INATIVO";
 const DEFAULT_ADMIN_EMAIL = "admin@condominio.com";

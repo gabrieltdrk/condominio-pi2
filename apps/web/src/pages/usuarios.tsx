@@ -55,7 +55,7 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"TODOS" | "ADMIN" | "MORADOR">("TODOS");
+  const [roleFilter, setRoleFilter] = useState<"TODOS" | "ADMIN" | "MORADOR" | "PORTEIRO">("TODOS");
   const [typeFilter, setTypeFilter] = useState<"TODOS" | UserFormState["residentType"]>("TODOS");
   const [statusFilter, setStatusFilter] = useState<"TODOS" | UserFormState["status"]>("TODOS");
   const [modalOpen, setModalOpen] = useState(false);
@@ -259,6 +259,7 @@ export default function UsuariosPage() {
               <option value="TODOS">Todos os perfis</option>
               <option value="ADMIN">Administradores</option>
               <option value="MORADOR">Moradores</option>
+              <option value="PORTEIRO">Porteiros</option>
             </select>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)} className={inputCls}>
               <option value="TODOS">Todos os tipos</option>
@@ -325,10 +326,12 @@ export default function UsuariosPage() {
                           className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                             user.role === "ADMIN"
                               ? "border-indigo-200 bg-indigo-50 text-indigo-600"
+                              : user.role === "PORTEIRO"
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
                               : "border-slate-200 bg-slate-100 text-slate-600"
                           }`}
                         >
-                          {user.role === "ADMIN" ? "Administrador" : "Morador"}
+                          {user.role === "ADMIN" ? "Administrador" : user.role === "PORTEIRO" ? "Porteiro" : "Morador"}
                         </span>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-3 text-slate-500">
@@ -483,6 +486,7 @@ export default function UsuariosPage() {
                       className={inputCls}
                     >
                       <option value="MORADOR">Morador</option>
+                      <option value="PORTEIRO">Porteiro</option>
                       <option value="ADMIN">Administrador</option>
                     </select>
                   </div>
