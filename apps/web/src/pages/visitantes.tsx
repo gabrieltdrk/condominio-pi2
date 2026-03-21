@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MailCheck, Plus, QrCode, ScanLine, ShieldCheck, Users, X } from "lucide-react";
+import jsQR from "jsqr";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
 import { listBuildingApartmentOptions, type BuildingApartmentOption } from "../features/predio/services/predio";
@@ -101,14 +102,8 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
         streamRef.current = stream;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-
-        if (!detectorApi.BarcodeDetector) {
-          setCameraMessage("A camera foi liberada, mas este navegador nao suporta leitura automatica de QR. Use a validacao manual abaixo.");
-          return;
-        }
-
         setCameraMessage("Aponte a camera para o QR code do visitante.");
-        const detector = new detectorApi.BarcodeDetector({ formats: ["qr_code"] });
+        const detector = detectorApi.BarcodeDetector ? new detectorApi.BarcodeDetector({ formats: ["qr_code"] }) : null;
         const scan = async () => {
           if (!active || !videoRef.current || !canvasRef.current) return;
           if (videoRef.current.readyState < 2) {
@@ -121,7 +116,14 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
           const context = canvas.getContext("2d");
           if (!context) return;
           context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const token = parseScannedToken((await detector.detect(canvas))[0]?.rawValue ?? "");
+          const nativeToken = detector ? parseScannedToken((await detector.detect(canvas))[0]?.rawValue ?? "") : "";
+          if (nativeToken) {
+            await onSubmit(nativeToken);
+            return;
+          }
+          const image = context.getImageData(0, 0, canvas.width, canvas.height);
+          const fallbackToken = parseScannedToken(jsQR(image.data, image.width, image.height)?.data ?? "");
+          const token = nativeToken || fallbackToken;
           if (token) {
             await onSubmit(token);
             return;
