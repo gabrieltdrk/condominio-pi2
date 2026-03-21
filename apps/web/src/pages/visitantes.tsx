@@ -200,6 +200,12 @@ export default function VisitantesPage() {
     qrAtGate: requests.filter((request) => request.requiresPortariaQr).length,
   }), [requests]);
 
+  const availableApartments = useMemo(() => {
+    if (user?.role === "ADMIN") return apartments;
+    if (user?.role === "MORADOR") return apartments.filter((option) => option.residentId === user.id);
+    return [];
+  }, [apartments, user]);
+
   function updateGuest(index: number, patch: Partial<VisitorGuestInput>) {
     setForm((current) => ({ ...current, guests: current.guests.map((guest, guestIndex) => guestIndex === index ? { ...guest, ...patch } : guest) }));
   }
@@ -214,7 +220,7 @@ export default function VisitantesPage() {
 
   function resetForm() {
     setForm({
-      apartmentId: apartments[0]?.id ?? null,
+      apartmentId: availableApartments[0]?.id ?? null,
       adultsCount: 1,
       childrenCount: 0,
       petsCount: 0,
@@ -226,6 +232,14 @@ export default function VisitantesPage() {
     });
     setFormError("");
   }
+
+  useEffect(() => {
+    setForm((current) => {
+      if (user?.role !== "MORADOR") return current;
+      if (current.apartmentId && availableApartments.some((option) => option.id === current.apartmentId)) return current;
+      return { ...current, apartmentId: availableApartments[0]?.id ?? null };
+    });
+  }, [availableApartments, user?.role]);
 
   async function handleCreate() {
     const invalidIndex = form.guests.findIndex((guest, index) => !isGuestValid(guest, index === 0));
@@ -287,7 +301,7 @@ export default function VisitantesPage() {
               <h2 className="mt-4 max-w-3xl text-[clamp(1.9rem,4vw,3.2rem)] font-black leading-none tracking-[-0.05em] text-slate-950">Cadastro manual, aprovacao por e-mail e autenticacao por QR code.</h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">O visitante principal recebe o convite por e-mail, confirma a visita e depois apresenta o QR code para validacao na portaria ou pelo morador.</p>
               <div className="mt-5 flex flex-wrap gap-3">
-                {canCreate && <button type="button" onClick={() => { resetForm(); setModalOpen(true); }} className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"><Plus size={16} /> Nova visita</button>}
+                {canCreate && <button type="button" onClick={() => { resetForm(); setModalOpen(true); }} disabled={user?.role === "MORADOR" && availableApartments.length === 0} className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"><Plus size={16} /> Nova visita</button>}
                 <button type="button" onClick={() => setScannerOpen(isGatekeeper ? "gatekeeper" : "resident")} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><ScanLine size={16} /> {isGatekeeper ? "Validar QR na portaria" : "Validar QR"}</button>
               </div>
             </div>
@@ -299,6 +313,7 @@ export default function VisitantesPage() {
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Check-ins</p><p className="mt-2 text-2xl font-black">{metrics.checkedIn}</p></div>
               </div>
               <p className="mt-4 text-sm leading-6 text-slate-300">{isGatekeeper ? "Seu perfil possui acesso restrito a garagem e visitantes." : "Quando o visitante aprova o convite, o morador recebe notificacao no sistema."}</p>
+              {user?.role === "MORADOR" && availableApartments.length === 0 && <p className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">Vincule uma unidade ao morador para liberar o cadastro de visitantes.</p>}
             </div>
           </div>
         </section>
@@ -374,7 +389,7 @@ export default function VisitantesPage() {
                   <button type="button" onClick={addGuest} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"><Plus size={16} /> Adicionar visitante</button>
                 </section>
                 <section className="space-y-5">
-                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><h4 className="text-sm font-semibold text-slate-900">Dados da visita</h4><div className="mt-4 grid gap-3"><select value={form.apartmentId ?? ""} onChange={(event) => setForm((current) => ({ ...current, apartmentId: event.target.value || null }))} className={inputClass}><option value="">Selecionar unidade</option>{apartments.map((option) => <option key={option.id} value={option.id}>{apartmentLabel(option)}</option>)}</select><div className="grid gap-3 sm:grid-cols-3"><input type="number" min={0} value={form.adultsCount} onChange={(event) => setForm((current) => ({ ...current, adultsCount: Number(event.target.value) }))} className={inputClass} placeholder="Adultos" /><input type="number" min={0} value={form.childrenCount} onChange={(event) => setForm((current) => ({ ...current, childrenCount: Number(event.target.value) }))} className={inputClass} placeholder="Criancas" /><input type="number" min={0} value={form.petsCount} onChange={(event) => setForm((current) => ({ ...current, petsCount: Number(event.target.value) }))} className={inputClass} placeholder="Animais" /></div><input type="datetime-local" value={form.expectedCheckIn} onChange={(event) => setForm((current) => ({ ...current, expectedCheckIn: event.target.value }))} className={inputClass} /><input type="datetime-local" value={form.expectedCheckOut} onChange={(event) => setForm((current) => ({ ...current, expectedCheckOut: event.target.value }))} className={inputClass} /><textarea rows={4} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className={areaClass} placeholder="Observacoes para a portaria" /></div></div>
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><h4 className="text-sm font-semibold text-slate-900">Dados da visita</h4><div className="mt-4 grid gap-3"><select value={form.apartmentId ?? ""} onChange={(event) => setForm((current) => ({ ...current, apartmentId: event.target.value || null }))} disabled={user?.role === "MORADOR"} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}><option value="">Selecionar unidade</option>{availableApartments.map((option) => <option key={option.id} value={option.id}>{apartmentLabel(option)}</option>)}</select>{user?.role === "MORADOR" && <p className="text-xs leading-5 text-slate-500">A unidade vinculada ao seu perfil foi selecionada automaticamente para este cadastro.</p>}<div className="grid gap-3 sm:grid-cols-3"><input type="number" min={0} value={form.adultsCount} onChange={(event) => setForm((current) => ({ ...current, adultsCount: Number(event.target.value) }))} className={inputClass} placeholder="Adultos" /><input type="number" min={0} value={form.childrenCount} onChange={(event) => setForm((current) => ({ ...current, childrenCount: Number(event.target.value) }))} className={inputClass} placeholder="Criancas" /><input type="number" min={0} value={form.petsCount} onChange={(event) => setForm((current) => ({ ...current, petsCount: Number(event.target.value) }))} className={inputClass} placeholder="Animais" /></div><input type="datetime-local" value={form.expectedCheckIn} onChange={(event) => setForm((current) => ({ ...current, expectedCheckIn: event.target.value }))} className={inputClass} /><input type="datetime-local" value={form.expectedCheckOut} onChange={(event) => setForm((current) => ({ ...current, expectedCheckOut: event.target.value }))} className={inputClass} /><textarea rows={4} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className={areaClass} placeholder="Observacoes para a portaria" /></div></div>
                   <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-semibold text-slate-900">Validacao do QR</p><div className="mt-4 grid gap-3"><button type="button" onClick={() => setForm((current) => ({ ...current, requiresPortariaQr: true }))} className={`rounded-[24px] border p-4 text-left transition ${form.requiresPortariaQr ? "border-emerald-300 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}><p className="text-sm font-semibold text-slate-900">QR apresentado na portaria</p><p className="mt-1 text-xs text-slate-500">O porteiro valida o check-in lendo o QR code.</p></button><button type="button" onClick={() => setForm((current) => ({ ...current, requiresPortariaQr: false }))} className={`rounded-[24px] border p-4 text-left transition ${!form.requiresPortariaQr ? "border-indigo-300 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}><p className="text-sm font-semibold text-slate-900">QR validado pelo morador</p><p className="mt-1 text-xs text-slate-500">O morador escaneia o QR code para autenticar a visita.</p></button></div></div>
                 </section>
               </div>

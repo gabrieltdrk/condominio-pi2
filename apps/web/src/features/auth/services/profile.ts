@@ -46,9 +46,10 @@ async function fetchProfile(id: string): Promise<ProfileRow | null> {
   return fallback.data as ProfileRow;
 }
 
-function mergeUser(email: string, profile: ProfileRow | null) {
+function mergeUser(id: string, email: string, profile: ProfileRow | null) {
   const current = getUser();
   const next: User = {
+    id,
     name: profile?.name ?? current?.name ?? email,
     email,
     phone: profile?.phone ?? "",
@@ -69,7 +70,7 @@ export async function refreshStoredUser(): Promise<User | null> {
 
   const email = data.session.user.email ?? "";
   const profile = await fetchProfile(data.session.user.id);
-  return mergeUser(email, profile);
+  return mergeUser(data.session.user.id, email, profile);
 }
 
 export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {
@@ -123,5 +124,5 @@ export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {
     throw new Error("Os dados foram enviados, mas nao foi possivel confirmar o perfil salvo.");
   }
 
-  return mergeUser(email, freshProfile);
+  return mergeUser(data.user.id, email, freshProfile);
 }

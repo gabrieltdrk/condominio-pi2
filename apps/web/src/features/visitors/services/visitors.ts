@@ -1,3 +1,4 @@
+import { getUser } from "../../auth/services/auth";
 import { supabase } from "../../../lib/supabase";
 
 export type VisitorRequestStatus =
@@ -124,12 +125,22 @@ function mapGuest(row: VisitorGuestRow): VisitorGuest {
 }
 
 export async function listVisitorRequests(): Promise<VisitorRequest[]> {
-  const { data, error } = await supabase
+  const storedUser = getUser();
+  const authResult = await supabase.auth.getUser();
+  const currentUserId = authResult.data.user?.id ?? null;
+
+  let query = supabase
     .from("visitor_requests")
     .select(
       "id, resident_id, apartment_id, status, requires_portaria_qr, adults_count, children_count, pets_count, expected_check_in, expected_check_out, notes, confirmation_email_sent_at, principal_confirmed_at, resident_validated_at, checked_in_at, checked_out_at, created_at",
     )
     .order("created_at", { ascending: false });
+
+  if (storedUser?.role === "MORADOR" && currentUserId) {
+    query = query.eq("resident_id", currentUserId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -209,6 +220,11 @@ export async function createVisitorRequest(input: VisitorRequestInput): Promise<
     throw new Error("Sessao invalida. Faca login novamente.");
   }
 
+  const storedUser = getUser();
+  if (storedUser?.role === "PORTEIRO") {
+    throw new Error("A portaria nao pode cadastrar visitas.");
+  }
+
   const guests = normalizeGuests(input.guests);
   if (guests.length === 0) {
     throw new Error("Adicione ao menos um visitante.");
@@ -217,6 +233,26 @@ export async function createVisitorRequest(input: VisitorRequestInput): Promise<
   const primaryGuest = guests.find((guest) => guest.is_primary) ?? guests[0];
   if (!primaryGuest.email) {
     throw new Error("Informe o e-mail do visitante principal.");
+  }
+
+  if (!input.apartmentId) {
+    throw new Error("Selecione a unidade da visita.");
+  }
+
+  if (storedUser?.role === "MORADOR") {
+    const { data: apartment, error: apartmentError } = await supabase
+      .from("condo_apartments")
+      .select("id, resident_id")
+      .eq("id", input.apartmentId)
+      .maybeSingle();
+
+    if (apartmentError) {
+      throw new Error(apartmentError.message);
+    }
+
+    if (!apartment || apartment.resident_id !== authData.user.id) {
+      throw new Error("Voce so pode cadastrar visitantes para a sua unidade.");
+    }
   }
 
   const { data: inserted, error } = await supabase

@@ -6,6 +6,7 @@ export type UserStatus = "ATIVO" | "INATIVO";
 const DEFAULT_ADMIN_EMAIL = "admin@condominio.com";
 
 export type User = {
+  id?: string;
   name: string;
   role: UserRole;
   email: string;
@@ -74,6 +75,7 @@ export async function checkOAuthSession(): Promise<User | null> {
   const profile = await getProfile(session.user.id);
 
   const user: User = {
+    id: session.user.id,
     name: profile?.name ?? session.user.email ?? "",
     email: session.user.email ?? "",
     phone: profile?.phone ?? "",
@@ -97,6 +99,7 @@ export async function login(email: string, password: string): Promise<User> {
   const profile = await getProfile(data.user.id);
 
   const user: User = {
+    id: data.user.id,
     name: profile?.name ?? data.user.email ?? "",
     email: data.user.email ?? "",
     phone: profile?.phone ?? "",
