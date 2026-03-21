@@ -75,6 +75,19 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
   useEffect(() => {
     let timer: number | null = null;
     let active = true;
+    function stopCamera() {
+      if (timer) window.clearTimeout(timer);
+      for (const track of streamRef.current?.getTracks() ?? []) track.stop();
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+    }
+
+    if (manualOpen) {
+      setCameraMessage("Cole o token manualmente para validar o acesso.");
+      stopCamera();
+      return () => stopCamera();
+    }
+
     async function start() {
       const detectorApi = window as typeof window & { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: CanvasImageSource) => Promise<Array<{ rawValue?: string }>> } };
       if (!navigator.mediaDevices?.getUserMedia || !videoRef.current || !canvasRef.current) {
@@ -123,26 +136,32 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
     void start();
     return () => {
       active = false;
-      if (timer) window.clearTimeout(timer);
-      for (const track of streamRef.current?.getTracks() ?? []) track.stop();
+      stopCamera();
     };
-  }, [onSubmit]);
+  }, [manualOpen, onSubmit]);
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/60 p-4">
-      <div className="w-full max-w-3xl rounded-[30px] border border-slate-200 bg-white p-5 shadow-2xl">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/70 p-0 sm:p-4">
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-w-3xl sm:rounded-[30px] sm:border sm:border-slate-200">
         <div className="flex items-center justify-between gap-3">
-          <div>
+          <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5">
             <h3 className="m-0 text-base font-semibold text-slate-900">{title}</h3>
-            <p className="mt-1 text-sm text-slate-500">Use a camera para ler o QR code do visitante.</p>
+            <p className="mt-1 text-sm text-slate-500">{manualOpen ? "Cole o token manualmente para validar o acesso." : "Use a camera para ler o QR code do visitante."}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="mr-4 mt-[max(1rem,env(safe-area-inset-top))] rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 sm:mr-5 sm:mt-5"><X size={18} /></button>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-[1fr_0.9fr]">
-          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-950">
-            <video ref={videoRef} className="min-h-72 w-full object-cover" muted playsInline autoPlay />
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pb-5 md:grid-cols-[1fr_0.9fr]">
+          {!manualOpen && (
+            <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-950">
+              <video ref={videoRef} className="h-[42dvh] w-full object-cover sm:min-h-72 sm:h-auto" muted playsInline autoPlay />
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+          )}
+          {manualOpen && (
+            <div className="flex items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-500">
+              A leitura por camera foi ocultada para facilitar a validacao manual no mobile.
+            </div>
+          )}
           <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
             <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">{cameraMessage}</p>
             {!manualOpen && (
@@ -151,22 +170,22 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
                 onClick={() => setManualOpen(true)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
-                Colar codigo manualmente
+                Colar token manualmente
               </button>
             )}
             {manualOpen && (
               <>
-                <textarea rows={6} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={areaClass} placeholder="Cole aqui o token ou a URL do QR code" />
+                <textarea rows={6} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={`${areaClass} min-h-40`} placeholder="Cole aqui o token ou a URL do QR code" />
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <button type="button" onClick={() => void onSubmit(parseScannedToken(manualToken))} disabled={submitting} className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
                     {submitting ? "Validando..." : "Validar codigo"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setManualOpen(false); setManualToken(""); }}
+                    onClick={() => { setManualOpen(false); setManualToken(""); setCameraMessage("Abrindo camera traseira para leitura do QR code."); }}
                     className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
                   >
-                    Ocultar campo
+                    Voltar para camera
                   </button>
                 </div>
               </>
