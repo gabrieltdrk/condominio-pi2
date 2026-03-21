@@ -294,8 +294,16 @@ export async function createVisitorRequest(input: VisitorRequestInput): Promise<
 }
 
 export async function sendVisitorInvitation(requestId: string): Promise<boolean> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
   const result = await supabase.functions.invoke("visitor-dispatch", {
     body: { requestId },
+    headers: accessToken
+      ? {
+          Authorization: `Bearer ${accessToken}`,
+        }
+      : undefined,
   });
 
   if (result.error) {
