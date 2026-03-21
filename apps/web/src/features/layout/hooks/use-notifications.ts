@@ -27,13 +27,16 @@ export function useNotifications() {
   }
 
   function handleMarcarLida(id: string) {
+    const notification = notifs.find((item) => item.id === id);
     setNotifs((prev) => prev.filter((n) => n.id !== id));
-    marcarNotificacaoLida(id).catch(() => {});
+    if (!notification) return;
+    marcarNotificacaoLida({ id: notification.id, origem: notification.origem }).catch(() => {});
   }
 
   function handleMarcarTodas() {
+    const current = [...notifs];
     setNotifs([]);
-    marcarTodasLidas().catch(() => {});
+    marcarTodasLidas(current).catch(() => {});
   }
 
   return { notifs, bellOpen, setBellOpen, bellPos, bellRef, unread, openBell, handleMarcarLida, handleMarcarTodas };

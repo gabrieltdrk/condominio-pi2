@@ -32,6 +32,7 @@ export function useOcorrencias() {
   // Filters
   const [filterStatus, setFilterStatus] = useState<OcorrenciaStatus[]>([]);
   const [filterCategoria, setFilterCategoria] = useState("");
+  const [onlyMine, setOnlyMine] = useState(false);
 
   // Sorting
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
@@ -65,15 +66,18 @@ export function useOcorrencias() {
   const load = useCallback(() => {
     setLoading(true);
     setError("");
-    listOcorrencias()
+    listOcorrencias({ onlyMine })
       .then(setOcorrencias)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+  }, [onlyMine]);
+
+  useEffect(() => {
+    getCurrentUserId().then(setCurrentUserId);
   }, []);
 
   useEffect(() => {
     load();
-    getCurrentUserId().then(setCurrentUserId);
   }, [load]);
 
   // ── Filters + Sort ──────────────────────────────────────────────────────
@@ -227,6 +231,7 @@ export function useOcorrencias() {
     ocorrencias, loading, error, currentUserId,
     filterStatus, setFilterStatus,
     filterCategoria, setFilterCategoria,
+    onlyMine, setOnlyMine,
     sortKey, sortDir,
     novaOpen, setNovaOpen,
     form, setForm,

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle, ArrowRight, Bell, CheckCircle2,
-  ClipboardList, Phone, Plus, Receipt, Wrench,
+  ClipboardList, CloudSun, Droplets, Phone, Plus, Receipt, Wind, Wrench,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../../features/layout/components/app-layout";
 import { getUser } from "../../features/auth/services/auth";
+import { fetchSantosWeather, type WeatherSnapshot } from "../../features/dashboard/services/weather";
 import { listOcorrencias, type Ocorrencia, type OcorrenciaStatus } from "../../features/ocorrencias/services/ocorrencias";
 
 const STATUS_COLORS: Record<OcorrenciaStatus, string> = {
@@ -42,12 +43,18 @@ export default function DashboardUser() {
   const user = getUser();
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   useEffect(() => {
     listOcorrencias()
       .then(setOcorrencias)
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetchSantosWeather()
+      .then(setWeather)
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
   }, []);
 
   const abertas = ocorrencias.filter((o) =>
@@ -73,6 +80,42 @@ export default function DashboardUser() {
 
         {/* ── KPIs ── */}
         <section className="grid grid-cols-12 gap-4">
+          <div className="col-span-12 overflow-hidden rounded-[28px] border border-sky-100 bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.35),_transparent_28%),linear-gradient(135deg,_#f0f9ff_0%,_#ffffff_45%,_#ecfeff_100%)] p-5 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                  <CloudSun size={13} />
+                  Santos agora
+                </div>
+                <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Tempo em Santos para planejar melhor o seu dia</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Temperatura atual, sensação térmica e condições do dia em um resumo rápido.</p>
+              </div>
+
+              {weather ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Agora</p>
+                    <p className="mt-1 break-words text-[clamp(1.4rem,2vw,2rem)] font-black leading-tight tracking-[-0.04em] text-slate-950">{Math.round(weather.temperature)}°C</p>
+                    <p className="mt-1 text-xs text-slate-500">{weather.condition}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-slate-500"><Droplets size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Umidade</span></div>
+                    <p className="mt-2 text-lg font-bold text-slate-950">{weather.humidity}%</p>
+                    <p className="mt-1 text-xs text-slate-500">Sensacao de {Math.round(weather.apparentTemperature)}°C</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-slate-500"><Wind size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Vento</span></div>
+                    <p className="mt-2 text-lg font-bold text-slate-950">{Math.round(weather.windSpeed)} km/h</p>
+                    <p className="mt-1 text-xs text-slate-500">Max {Math.round(weather.high)}°C - Min {Math.round(weather.low)}°C</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-4 text-sm text-slate-500 shadow-sm">
+                  {weatherLoading ? "Carregando clima de Santos..." : "Não foi possível carregar o clima agora."}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Abertas */}
           <div className="col-span-12 sm:col-span-4 bg-linear-to-br from-indigo-50 to-white border border-indigo-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default">

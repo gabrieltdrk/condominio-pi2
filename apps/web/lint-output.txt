@@ -1,0 +1,464 @@
+﻿
+> web@0.0.0 lint
+> eslint .
+
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx
+  148:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:148:22
+  146 |                     <th className="w-1 p-0 border-b border-gray-100" />
+  147 |                     <th className="w-6 px-3 py-3 border-b border-gray-100" />
+> 148 |                     <SortTh col="titulo" label="T├¡tulo" />
+      |                      ^^^^^^ This component is created during render
+  149 |                     <SortTh col="tipo" label="Tipo" />
+  150 |                     <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-left text-gray-500">Publicado por</th>
+  151 |                     <SortTh col="created_at" label="Data" />
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:85:3
+  83 |   }
+  84 |
+> 85 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 86 |     return (
+     | ^^^^^^^^^^^^
+> 87 |       <th
+     | ^^^^^^^^^^^^
+> 88 |         className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
+     | ^^^^^^^^^^^^
+> 89 |         onClick={() => handleSort(col)}
+     | ^^^^^^^^^^^^
+> 90 |       >
+     | ^^^^^^^^^^^^
+> 91 |         <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
+     | ^^^^^^^^^^^^
+> 92 |       </th>
+     | ^^^^^^^^^^^^
+> 93 |     );
+     | ^^^^^^^^^^^^
+> 94 |   }
+     | ^^^^ The component is created during render here
+  95 |
+  96 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  97 |   return (                                                                           react-hooks/static-components
+  149:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:149:22
+  147 |                     <th className="w-6 px-3 py-3 border-b border-gray-100" />
+  148 |                     <SortTh col="titulo" label="T├¡tulo" />
+> 149 |                     <SortTh col="tipo" label="Tipo" />
+      |                      ^^^^^^ This component is created during render
+  150 |                     <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-left text-gray-500">Publicado por</th>
+  151 |                     <SortTh col="created_at" label="Data" />
+  152 |                     <SortTh col="data_expiracao" label="Expira em" />
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:85:3
+  83 |   }
+  84 |
+> 85 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 86 |     return (
+     | ^^^^^^^^^^^^
+> 87 |       <th
+     | ^^^^^^^^^^^^
+> 88 |         className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
+     | ^^^^^^^^^^^^
+> 89 |         onClick={() => handleSort(col)}
+     | ^^^^^^^^^^^^
+> 90 |       >
+     | ^^^^^^^^^^^^
+> 91 |         <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
+     | ^^^^^^^^^^^^
+> 92 |       </th>
+     | ^^^^^^^^^^^^
+> 93 |     );
+     | ^^^^^^^^^^^^
+> 94 |   }
+     | ^^^^ The component is created during render here
+  95 |
+  96 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  97 |   return (                                                                             react-hooks/static-components
+  151:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:151:22
+  149 |                     <SortTh col="tipo" label="Tipo" />
+  150 |                     <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-left text-gray-500">Publicado por</th>
+> 151 |                     <SortTh col="created_at" label="Data" />
+      |                      ^^^^^^ This component is created during render
+  152 |                     <SortTh col="data_expiracao" label="Expira em" />
+  153 |                     <SortTh col="curtidas_count" label="Curtidas" />
+  154 |                     {isAdmin && <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-center text-gray-500">A├º├Áes</th>}
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:85:3
+  83 |   }
+  84 |
+> 85 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 86 |     return (
+     | ^^^^^^^^^^^^
+> 87 |       <th
+     | ^^^^^^^^^^^^
+> 88 |         className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
+     | ^^^^^^^^^^^^
+> 89 |         onClick={() => handleSort(col)}
+     | ^^^^^^^^^^^^
+> 90 |       >
+     | ^^^^^^^^^^^^
+> 91 |         <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
+     | ^^^^^^^^^^^^
+> 92 |       </th>
+     | ^^^^^^^^^^^^
+> 93 |     );
+     | ^^^^^^^^^^^^
+> 94 |   }
+     | ^^^^ The component is created during render here
+  95 |
+  96 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  97 |   return (  react-hooks/static-components
+  152:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:152:22
+  150 |                     <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-left text-gray-500">Publicado por</th>
+  151 |                     <SortTh col="created_at" label="Data" />
+> 152 |                     <SortTh col="data_expiracao" label="Expira em" />
+      |                      ^^^^^^ This component is created during render
+  153 |                     <SortTh col="curtidas_count" label="Curtidas" />
+  154 |                     {isAdmin && <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-center text-gray-500">A├º├Áes</th>}
+  155 |                   </tr>
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:85:3
+  83 |   }
+  84 |
+> 85 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 86 |     return (
+     | ^^^^^^^^^^^^
+> 87 |       <th
+     | ^^^^^^^^^^^^
+> 88 |         className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
+     | ^^^^^^^^^^^^
+> 89 |         onClick={() => handleSort(col)}
+     | ^^^^^^^^^^^^
+> 90 |       >
+     | ^^^^^^^^^^^^
+> 91 |         <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
+     | ^^^^^^^^^^^^
+> 92 |       </th>
+     | ^^^^^^^^^^^^
+> 93 |     );
+     | ^^^^^^^^^^^^
+> 94 |   }
+     | ^^^^ The component is created during render here
+  95 |
+  96 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  97 |   return (                                 react-hooks/static-components
+  153:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:153:22
+  151 |                     <SortTh col="created_at" label="Data" />
+  152 |                     <SortTh col="data_expiracao" label="Expira em" />
+> 153 |                     <SortTh col="curtidas_count" label="Curtidas" />
+      |                      ^^^^^^ This component is created during render
+  154 |                     {isAdmin && <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-center text-gray-500">A├º├Áes</th>}
+  155 |                   </tr>
+  156 |                 </thead>
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\avisos\lista-avisos.tsx:85:3
+  83 |   }
+  84 |
+> 85 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 86 |     return (
+     | ^^^^^^^^^^^^
+> 87 |       <th
+     | ^^^^^^^^^^^^
+> 88 |         className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
+     | ^^^^^^^^^^^^
+> 89 |         onClick={() => handleSort(col)}
+     | ^^^^^^^^^^^^
+> 90 |       >
+     | ^^^^^^^^^^^^
+> 91 |         <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
+     | ^^^^^^^^^^^^
+> 92 |       </th>
+     | ^^^^^^^^^^^^
+> 93 |     );
+     | ^^^^^^^^^^^^
+> 94 |   }
+     | ^^^^ The component is created during render here
+  95 |
+  96 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  97 |   return (                                                                                                                                                react-hooks/static-components
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx
+  167:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:167:22
+  165 |                   <tr className="bg-linear-to-r from-gray-50 to-indigo-50/30">
+  166 |                     <th className="w-1 p-0 border-b border-gray-100" />
+> 167 |                     <SortTh col="protocolo" label="Protocolo" />
+      |                      ^^^^^^ This component is created during render
+  168 |                     {isAdmin && <SortTh col="author_name" label="Morador" />}
+  169 |                     <SortTh col="assunto" label="Assunto" />
+  170 |                     {isAdmin && <SortTh col="categoria" label="Categoria" />}
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (  react-hooks/static-components
+  168:34  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:168:34
+  166 |                     <th className="w-1 p-0 border-b border-gray-100" />
+  167 |                     <SortTh col="protocolo" label="Protocolo" />
+> 168 |                     {isAdmin && <SortTh col="author_name" label="Morador" />}
+      |                                  ^^^^^^ This component is created during render
+  169 |                     <SortTh col="assunto" label="Assunto" />
+  170 |                     {isAdmin && <SortTh col="categoria" label="Categoria" />}
+  171 |                     <SortTh col="urgencia" label="Prioridade" />
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (    react-hooks/static-components
+  169:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:169:22
+  167 |                     <SortTh col="protocolo" label="Protocolo" />
+  168 |                     {isAdmin && <SortTh col="author_name" label="Morador" />}
+> 169 |                     <SortTh col="assunto" label="Assunto" />
+      |                      ^^^^^^ This component is created during render
+  170 |                     {isAdmin && <SortTh col="categoria" label="Categoria" />}
+  171 |                     <SortTh col="urgencia" label="Prioridade" />
+  172 |                     <SortTh col="status" label="Status" />
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (                             react-hooks/static-components
+  170:34  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:170:34
+  168 |                     {isAdmin && <SortTh col="author_name" label="Morador" />}
+  169 |                     <SortTh col="assunto" label="Assunto" />
+> 170 |                     {isAdmin && <SortTh col="categoria" label="Categoria" />}
+      |                                  ^^^^^^ This component is created during render
+  171 |                     <SortTh col="urgencia" label="Prioridade" />
+  172 |                     <SortTh col="status" label="Status" />
+  173 |                     <SortTh col="created_at" label="Data" />
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (                     react-hooks/static-components
+  171:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:171:22
+  169 |                     <SortTh col="assunto" label="Assunto" />
+  170 |                     {isAdmin && <SortTh col="categoria" label="Categoria" />}
+> 171 |                     <SortTh col="urgencia" label="Prioridade" />
+      |                      ^^^^^^ This component is created during render
+  172 |                     <SortTh col="status" label="Status" />
+  173 |                     <SortTh col="created_at" label="Data" />
+  174 |                     <SortTh col="curtidas_count" label="Curtidas" />
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (                                          react-hooks/static-components
+  172:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:172:22
+  170 |                     {isAdmin && <SortTh col="categoria" label="Categoria" />}
+  171 |                     <SortTh col="urgencia" label="Prioridade" />
+> 172 |                     <SortTh col="status" label="Status" />
+      |                      ^^^^^^ This component is created during render
+  173 |                     <SortTh col="created_at" label="Data" />
+  174 |                     <SortTh col="curtidas_count" label="Curtidas" />
+  175 |                   </tr>
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (                                                                               react-hooks/static-components
+  173:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:173:22
+  171 |                     <SortTh col="urgencia" label="Prioridade" />
+  172 |                     <SortTh col="status" label="Status" />
+> 173 |                     <SortTh col="created_at" label="Data" />
+      |                      ^^^^^^ This component is created during render
+  174 |                     <SortTh col="curtidas_count" label="Curtidas" />
+  175 |                   </tr>
+  176 |                 </thead>
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (                                                                                                                                    react-hooks/static-components
+  174:22  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:174:22
+  172 |                     <SortTh col="status" label="Status" />
+  173 |                     <SortTh col="created_at" label="Data" />
+> 174 |                     <SortTh col="curtidas_count" label="Curtidas" />
+      |                      ^^^^^^ This component is created during render
+  175 |                   </tr>
+  176 |                 </thead>
+  177 |                 <tbody>
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\ocorrencias\lista-ocorrencias.tsx:60:3
+  58 |   }
+  59 |
+> 60 |   function SortTh({ col, label }: { col: SortKey; label: string }) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |     return (
+     | ^^^^^^^^^^^^
+> 62 |       <th
+     ÔÇª
+     | ^^^^^^^^^^^^
+> 70 |     );
+     | ^^^^^^^^^^^^
+> 71 |   }
+     | ^^^^ The component is created during render here
+  72 |
+  73 |   // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  74 |   return (                                                                                                                                                                             react-hooks/static-components
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\predio\mapa-predio.tsx
+  66:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vivac\condominio-pi2\apps\web\src\pages\predio\mapa-predio.tsx:66:5
+  64 |
+  65 |   useEffect(() => {
+> 66 |     setMiniPage(0);
+     |     ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  67 |     setSelectedFloor(null);
+  68 |   }, [selectedTower]);
+  69 |  react-hooks/set-state-in-effect
+
+Ô£û 14 problems (14 errors, 0 warnings)
+

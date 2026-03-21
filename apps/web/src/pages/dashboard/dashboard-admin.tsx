@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle, CloudSun, Droplets, Wind } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
@@ -15,12 +15,36 @@ import {
   Cell,
 } from "recharts";
 import AppLayout from "../../features/layout/components/app-layout";
-import { createUser, listUsers, type CreateUserPayload, type UserRecord } from "../../features/dashboard/services/users";
+import { createUser, listUsers, updateUserRecord, type CreateUserPayload, type UpdateUserPayload, type UserRecord } from "../../features/dashboard/services/users";
+import { fetchSantosWeather, type WeatherSnapshot } from "../../features/dashboard/services/weather";
 import { listOcorrencias, type Ocorrencia } from "../../features/ocorrencias/services/ocorrencias";
 
 type Pending = { title: string; subtitle: string; tag: string; tagColor: string };
+type UserFormState = CreateUserPayload;
 
-const EMPTY_FORM: CreateUserPayload = { name: "", email: "", password: "", role: "MORADOR" };
+const EMPTY_FORM: CreateUserPayload = {
+  name: "",
+  email: "",
+  phone: "",
+  password: "",
+  carPlate: "",
+  petsCount: null,
+  role: "MORADOR",
+  residentType: "PROPRIETARIO",
+  status: "ATIVO",
+  apartmentId: null,
+};
+
+const RESIDENT_TYPE_LABEL: Record<CreateUserPayload["residentType"], string> = {
+  PROPRIETARIO: "Proprietário",
+  INQUILINO: "Inquilino",
+  VISITANTE: "Visitante",
+};
+
+const USER_STATUS_LABEL: Record<CreateUserPayload["status"], string> = {
+  ATIVO: "Ativo",
+  INATIVO: "Inativo",
+};
 
 const inputCls = "px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-[13px] outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
 
@@ -64,9 +88,12 @@ export default function DashboardAdmin() {
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [ocorrenciasLoading, setOcorrenciasLoading] = useState(true);
   const [ocorrenciasError, setOcorrenciasError] = useState("");
+  const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<CreateUserPayload>(EMPTY_FORM);
+  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
+  const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -81,25 +108,62 @@ export default function DashboardAdmin() {
 
   useEffect(() => {
     loadUsers();
-    listOcorrencias(4)
+    listOcorrencias({ limit: 4 })
       .then(setOcorrencias)
       .catch((e: Error) => setOcorrenciasError(e.message))
       .finally(() => setOcorrenciasLoading(false));
+    fetchSantosWeather()
+      .then(setWeather)
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
   }, []);
 
-  function openModal() { setForm(EMPTY_FORM); setFormError(""); setModalOpen(true); }
-  function closeModal() { setModalOpen(false); }
+  function openCreateModal() { setEditingUser(null); setForm(EMPTY_FORM); setFormError(""); setModalOpen(true); }
+  function closeModal() { setModalOpen(false); setEditingUser(null); }
+
+  function openEditModal(user: UserRecord) {
+    setEditingUser(user);
+    setForm({
+      name: user.name,
+      email: user.email,
+      phone: user.phone ?? "",
+      password: "",
+      carPlate: user.car_plate ?? "",
+      petsCount: user.pets_count ?? null,
+      role: user.role,
+      residentType: user.resident_type,
+      status: user.status,
+      apartmentId: user.apartment_id,
+    });
+    setFormError("");
+    setModalOpen(true);
+  }
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     setFormError("");
     try {
-      await createUser(form);
+      if (editingUser) {
+        await updateUserRecord({
+          id: editingUser.id,
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          carPlate: form.carPlate,
+          petsCount: form.petsCount,
+          role: form.role,
+          residentType: form.residentType,
+          status: form.status,
+          apartmentId: form.apartmentId,
+        } satisfies UpdateUserPayload);
+      } else {
+        await createUser(form);
+      }
       closeModal();
       loadUsers();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Erro ao criar usuário.");
+      setFormError(err instanceof Error ? err.message : editingUser ? "Erro ao atualizar usuário." : "Erro ao criar usuário.");
     } finally {
       setSubmitting(false);
     }
@@ -111,6 +175,7 @@ export default function DashboardAdmin() {
   const abertas = ocorrencias.filter(
     (o) => o.status === "Aberto" || o.status === "Em Análise" || o.status === "Em Atendimento"
   );
+  const recentUsers = users.slice(0, 5);
 
   const pendencias: Pending[] = [
     { title: "Reserva • Salão de festas", subtitle: "Apto 32 • 15/03 • 20:00", tag: "Aprovar", tagColor: "bg-indigo-50 text-indigo-600 border-indigo-200" },
@@ -180,6 +245,48 @@ export default function DashboardAdmin() {
         <section className="grid grid-cols-12 gap-4">
 
           {/* Resumo Financeiro — line chart */}
+          <div className="col-span-12 overflow-hidden rounded-[28px] border border-sky-100 bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.35),_transparent_28%),linear-gradient(135deg,_#f0f9ff_0%,_#ffffff_45%,_#ecfeff_100%)] p-5 shadow-sm">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                  <CloudSun size={13} />
+                  Tempo em Santos
+                </div>
+                <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Clima atual para acompanhar operação e rotina do condomínio</h3>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Visão rápida com temperatura, sensação térmica e condições do dia em Santos, SP.</p>
+              </div>
+
+              {weather ? (
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Agora</p>
+                    <p className="mt-1 break-words text-[clamp(1.5rem,2vw,2.2rem)] font-black leading-tight tracking-[-0.04em] text-slate-950">{Math.round(weather.temperature)}°C</p>
+                    <p className="mt-1 text-xs text-slate-500">{weather.condition}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sensacao</p>
+                    <p className="mt-1 text-lg font-bold text-slate-950">{Math.round(weather.apparentTemperature)}°C</p>
+                    <p className="mt-1 text-xs text-slate-500">Max {Math.round(weather.high)}°C - Min {Math.round(weather.low)}°C</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-slate-500"><Droplets size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Umidade</span></div>
+                    <p className="mt-2 text-lg font-bold text-slate-950">{weather.humidity}%</p>
+                    <p className="mt-1 text-xs text-slate-500">{weather.city}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-slate-500"><Wind size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Vento</span></div>
+                    <p className="mt-2 text-lg font-bold text-slate-950">{Math.round(weather.windSpeed)} km/h</p>
+                    <p className="mt-1 text-xs text-slate-500">Atualizado {new Date(`${weather.fetchedAt}:00`).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-4 text-sm text-slate-500 shadow-sm">
+                  {weatherLoading ? "Carregando clima de Santos..." : "Não foi possível carregar o clima agora."}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="col-span-12 lg:col-span-8 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
@@ -532,16 +639,22 @@ export default function DashboardAdmin() {
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <h3 className="m-0 text-sm font-semibold text-gray-900">Usuários cadastrados</h3>
-                <p className="mt-0.5 text-xs text-gray-400">Gerencie os acessos ao sistema</p>
+                <h3 className="m-0 text-sm font-semibold text-gray-900">Usuários recentes</h3>
+                <p className="mt-0.5 text-xs text-gray-400">Últimos cadastros com acesso rápido à edição</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-gray-400 border border-gray-200 px-2.5 py-1 rounded-full whitespace-nowrap">
-                  {users.length} usuários
+                  {recentUsers.length} recentes
                 </span>
                 <button
+                  className="px-3 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold cursor-pointer border border-gray-200 transition-colors"
+                  onClick={() => nav("/usuarios")}
+                >
+                  Ver todos
+                </button>
+                <button
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer border-none transition-colors"
-                  onClick={openModal}
+                  onClick={openCreateModal}
                 >
                   <Plus size={14} />
                   Novo usuário
@@ -556,10 +669,10 @@ export default function DashboardAdmin() {
               <table className="w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="bg-gray-50">
-                    {["Nome", "Email", "Perfil", "Ações"].map((h, i) => (
+                    {["Nome completo", "Email", "Telefone", "Tipo", "Status", "Perfil", "Ações"].map((h, i) => (
                       <th
                         key={h}
-                        className={`text-xs text-gray-500 font-semibold px-3 py-2.5 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg ${i === 3 ? "text-right" : "text-left"}`}
+                        className={`text-xs text-gray-500 font-semibold px-3 py-2.5 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg ${i === 6 ? "text-right" : "text-left"}`}
                       >
                         {h}
                       </th>
@@ -567,10 +680,24 @@ export default function DashboardAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {recentUsers.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-3 py-2.5 border-b border-gray-100 font-medium text-gray-800">{u.name}</td>
+                      <td className="px-3 py-2.5 border-b border-gray-100">
+                        <p className="font-medium text-gray-800 m-0">{u.name}</p>
+                        {(u.car_plate || typeof u.pets_count === "number") && (
+                          <p className="text-[11px] text-gray-400 mt-0.5 mb-0">
+                            {[u.car_plate ? `Placa ${u.car_plate}` : null, typeof u.pets_count === "number" ? `${u.pets_count} pet${u.pets_count === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 border-b border-gray-100 text-gray-500">{u.email}</td>
+                      <td className="px-3 py-2.5 border-b border-gray-100 text-gray-500">{u.phone || "—"}</td>
+                      <td className="px-3 py-2.5 border-b border-gray-100 text-gray-500">{RESIDENT_TYPE_LABEL[u.resident_type]}</td>
+                      <td className="px-3 py-2.5 border-b border-gray-100">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${u.status === "ATIVO" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                          {USER_STATUS_LABEL[u.status]}
+                        </span>
+                      </td>
                       <td className="px-3 py-2.5 border-b border-gray-100">
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${u.role === "ADMIN" ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>
                           {u.role === "ADMIN" ? "Administrador" : "Morador"}
@@ -578,10 +705,15 @@ export default function DashboardAdmin() {
                       </td>
                       <td className="px-3 py-2.5 border-b border-gray-100">
                         <div className="flex gap-1.5 justify-end">
-                          <button className="p-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-gray-400 cursor-pointer transition-colors" title="Editar">
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-gray-400 cursor-pointer transition-colors"
+                            title="Editar"
+                            onClick={() => openEditModal(u)}
+                          >
                             <Pencil size={14} />
                           </button>
-                          <button className="p-1.5 rounded-lg border border-gray-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-500 text-gray-400 cursor-pointer transition-colors" title="Apagar">
+                          <button type="button" className="p-1.5 rounded-lg border border-gray-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-500 text-gray-400 cursor-pointer transition-colors" title="Apagar">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -677,7 +809,7 @@ export default function DashboardAdmin() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h3 className="m-0 text-base font-semibold text-gray-900">Novo usuário</h3>
+              <h3 className="m-0 text-base font-semibold text-gray-900">{editingUser ? "Editar usuário" : "Novo usuário"}</h3>
               <button className="p-1.5 rounded-lg border-none bg-transparent text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer transition-colors" onClick={closeModal}>
                 <X size={18} />
               </button>
@@ -685,9 +817,9 @@ export default function DashboardAdmin() {
 
             <form className="grid gap-4" onSubmit={handleCreate}>
               {[
-                { id: "u-name", label: "Nome", type: "text", placeholder: "Nome completo", key: "name" as const },
+                { id: "u-name", label: "Nome completo", type: "text", placeholder: "Nome completo", key: "name" as const },
                 { id: "u-email", label: "Email", type: "email", placeholder: "email@exemplo.com", key: "email" as const },
-                { id: "u-password", label: "Senha", type: "password", placeholder: "Mínimo 6 caracteres", key: "password" as const },
+                { id: "u-phone", label: "Telefone", type: "tel", placeholder: "(11) 99999-9999", key: "phone" as const },
               ].map((f) => (
                 <div key={f.id} className="grid gap-1.5">
                   <label htmlFor={f.id} className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{f.label}</label>
@@ -698,11 +830,53 @@ export default function DashboardAdmin() {
                     value={form[f.key]}
                     onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                     required
-                    minLength={f.key === "password" ? 6 : undefined}
                     className={inputCls}
                   />
                 </div>
               ))}
+
+              {!editingUser && (
+                <div className="grid gap-1.5">
+                  <label htmlFor="u-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Senha</label>
+                  <input
+                    id="u-password"
+                    type="password"
+                    placeholder="Mínimo 6 caracteres"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    required
+                    minLength={6}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <label htmlFor="u-car-plate" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Placa do carro</label>
+                  <input
+                    id="u-car-plate"
+                    type="text"
+                    placeholder="ABC-1234"
+                    value={form.carPlate}
+                    onChange={(e) => setForm({ ...form, carPlate: e.target.value.toUpperCase() })}
+                    className={inputCls}
+                  />
+                </div>
+
+                <div className="grid gap-1.5">
+                  <label htmlFor="u-pets-count" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Número de pets</label>
+                  <input
+                    id="u-pets-count"
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    value={form.petsCount ?? ""}
+                    onChange={(e) => setForm({ ...form, petsCount: e.target.value === "" ? null : Number(e.target.value) })}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
 
               <div className="grid gap-1.5">
                 <label htmlFor="u-role" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Perfil</label>
@@ -714,6 +888,33 @@ export default function DashboardAdmin() {
                 >
                   <option value="MORADOR">Morador</option>
                   <option value="ADMIN">Administrador</option>
+                </select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <label htmlFor="u-resident-type" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo de morador</label>
+                <select
+                  id="u-resident-type"
+                  value={form.residentType}
+                  onChange={(e) => setForm({ ...form, residentType: e.target.value as CreateUserPayload["residentType"] })}
+                  className={inputCls}
+                >
+                  <option value="PROPRIETARIO">Proprietário</option>
+                  <option value="INQUILINO">Inquilino</option>
+                  <option value="VISITANTE">Visitante</option>
+                </select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <label htmlFor="u-status" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
+                <select
+                  id="u-status"
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value as CreateUserPayload["status"] })}
+                  className={inputCls}
+                >
+                  <option value="ATIVO">Ativo</option>
+                  <option value="INATIVO">Inativo</option>
                 </select>
               </div>
 
@@ -733,7 +934,7 @@ export default function DashboardAdmin() {
                   className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-colors"
                   disabled={submitting}
                 >
-                  {submitting ? "Salvando..." : "Criar usuário"}
+                  {submitting ? "Salvando..." : editingUser ? "Salvar alterações" : "Criar usuário"}
                 </button>
               </div>
             </form>

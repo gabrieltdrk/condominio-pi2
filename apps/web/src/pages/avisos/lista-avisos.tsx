@@ -44,6 +44,44 @@ function isExpired(d: string | null) {
   return parseDate(d) < today;
 }
 
+function SortIcon({
+  col,
+  sortKey,
+  sortDir,
+}: {
+  col: SortKey;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+}) {
+  if (sortKey !== col) return <ArrowUpDown size={13} className="opacity-30 shrink-0" />;
+  return sortDir === "asc"
+    ? <ArrowUp size={13} className="text-indigo-600 shrink-0" />
+    : <ArrowDown size={13} className="text-indigo-600 shrink-0" />;
+}
+
+function SortTh({
+  col,
+  label,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  col: SortKey;
+  label: string;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onSort: (col: SortKey) => void;
+}) {
+  return (
+    <th
+      className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
+      onClick={() => onSort(col)}
+    >
+      <span className="flex items-center gap-1">{label} <SortIcon col={col} sortKey={sortKey} sortDir={sortDir} /></span>
+    </th>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ListaAvisos() {
   const {
@@ -75,23 +113,11 @@ export default function ListaAvisos() {
   }
 
   // ── Sort header ────────────────────────────────────────────────────────────
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) return <ArrowUpDown size={13} className="opacity-30 shrink-0" />;
-    return sortDir === "asc"
-      ? <ArrowUp size={13} className="text-indigo-600 shrink-0" />
-      : <ArrowDown size={13} className="text-indigo-600 shrink-0" />;
-  }
+  // (component definitions moved outside to satisfy lint rule react-hooks/static-components)
 
-  function SortTh({ col, label }: { col: SortKey; label: string }) {
-    return (
-      <th
-        className="text-sm font-semibold px-3 py-3 border-b border-gray-100 cursor-pointer select-none whitespace-nowrap text-left text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => handleSort(col)}
-      >
-        <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
-      </th>
-    );
-  }
+  // ───────────────────────────────────────────────────────────────────────────
+  // Render
+  // ───────────────────────────────────────────────────────────────────────────
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -145,12 +171,12 @@ export default function ListaAvisos() {
                   <tr className="bg-linear-to-r from-gray-50 to-indigo-50/30">
                     <th className="w-1 p-0 border-b border-gray-100" />
                     <th className="w-6 px-3 py-3 border-b border-gray-100" />
-                    <SortTh col="titulo" label="Título" />
-                    <SortTh col="tipo" label="Tipo" />
+                    <SortTh col="titulo" label="Título" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="tipo" label="Tipo" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-left text-gray-500">Publicado por</th>
-                    <SortTh col="created_at" label="Data" />
-                    <SortTh col="data_expiracao" label="Expira em" />
-                    <SortTh col="curtidas_count" label="Curtidas" />
+                    <SortTh col="created_at" label="Data" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="data_expiracao" label="Expira em" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="curtidas_count" label="Curtidas" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     {isAdmin && <th className="text-sm font-semibold px-3 py-3 border-b border-gray-100 text-center text-gray-500">Ações</th>}
                   </tr>
                 </thead>
