@@ -70,6 +70,7 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
   const streamRef = useRef<MediaStream | null>(null);
   const [manualToken, setManualToken] = useState("");
   const [cameraMessage, setCameraMessage] = useState("Abrindo camera traseira para leitura do QR code.");
+  const [manualOpen, setManualOpen] = useState(false);
 
   useEffect(() => {
     let timer: number | null = null;
@@ -133,7 +134,7 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="m-0 text-base font-semibold text-slate-900">{title}</h3>
-            <p className="mt-1 text-sm text-slate-500">Use a camera ou informe o codigo manualmente.</p>
+            <p className="mt-1 text-sm text-slate-500">Use a camera para ler o QR code do visitante.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
         </div>
@@ -144,10 +145,32 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
           </div>
           <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
             <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">{cameraMessage}</p>
-            <textarea rows={7} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={areaClass} placeholder="Cole aqui o token ou a URL do QR code" />
-            <button type="button" onClick={() => void onSubmit(parseScannedToken(manualToken))} disabled={submitting} className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
-              {submitting ? "Validando..." : "Validar codigo"}
-            </button>
+            {!manualOpen && (
+              <button
+                type="button"
+                onClick={() => setManualOpen(true)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Colar codigo manualmente
+              </button>
+            )}
+            {manualOpen && (
+              <>
+                <textarea rows={6} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={areaClass} placeholder="Cole aqui o token ou a URL do QR code" />
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button type="button" onClick={() => void onSubmit(parseScannedToken(manualToken))} disabled={submitting} className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
+                    {submitting ? "Validando..." : "Validar codigo"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setManualOpen(false); setManualToken(""); }}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+                  >
+                    Ocultar campo
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
