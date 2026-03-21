@@ -78,6 +78,27 @@ export function createUserClient(authHeader: string | null) {
   });
 }
 
+export function extractBearerToken(authHeader: string | null) {
+  if (!authHeader) return null;
+  const [scheme, token] = authHeader.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token.trim();
+}
+
+export async function authenticateRequest(admin: ReturnType<typeof createServiceClient>, authHeader: string | null) {
+  const token = extractBearerToken(authHeader);
+  if (!token) {
+    return { user: null, error: "Token ausente." };
+  }
+
+  const authResult = await admin.auth.getUser(token);
+  if (authResult.error || !authResult.data.user) {
+    return { user: null, error: authResult.error?.message ?? "Nao autenticado." };
+  }
+
+  return { user: authResult.data.user, error: null };
+}
+
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,

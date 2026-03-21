@@ -1,7 +1,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import {
+  authenticateRequest,
   createServiceClient,
-  createUserClient,
   fetchVisitorBundle,
   findToken,
 } from "../_shared/visitor-flow.ts";
@@ -13,10 +13,9 @@ Deno.serve(async (request) => {
 
   try {
     const authHeader = request.headers.get("Authorization");
-    const userClient = createUserClient(authHeader);
-    const authResult = await userClient.auth.getUser();
-
-    if (authResult.error || !authResult.data.user) {
+    const admin = createServiceClient();
+    const authResult = await authenticateRequest(admin, authHeader);
+    if (!authResult.user) {
       return new Response(JSON.stringify({ error: "Nao autenticado." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -32,7 +31,6 @@ Deno.serve(async (request) => {
       });
     }
 
-    const admin = createServiceClient();
     const token = await findToken(admin, rawToken, "ACCESS");
     const bundle = await fetchVisitorBundle(admin, token.request_id);
 
@@ -53,7 +51,7 @@ Deno.serve(async (request) => {
     const profileResult = await admin
       .from("profiles")
       .select("role")
-      .eq("id", authResult.data.user.id)
+      .eq("id", authResult.user.id)
       .maybeSingle();
 
     if (profileResult.error) throw new Error(profileResult.error.message);
@@ -61,7 +59,7 @@ Deno.serve(async (request) => {
     const now = new Date().toISOString();
 
     if (!bundle.request.requires_portaria_qr) {
-      const canValidateAsResident = role === "ADMIN" || authResult.data.user.id === bundle.request.resident_id;
+      const canValidateAsResident = role === "ADMIN" || authResult.user.id === bundle.request.resident_id;
       if (!canValidateAsResident) {
         return new Response(JSON.stringify({ error: "Somente o morador responsavel pode validar este QR." }), {
           status: 403,

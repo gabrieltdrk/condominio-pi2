@@ -1,7 +1,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import {
+  authenticateRequest,
   createServiceClient,
-  createUserClient,
   fetchVisitorBundle,
   replaceToken,
   sendApprovalEmail,
@@ -14,11 +14,9 @@ Deno.serve(async (request) => {
 
   try {
     const authHeader = request.headers.get("Authorization");
-    const userClient = createUserClient(authHeader);
     const admin = createServiceClient();
-
-    const authResult = await userClient.auth.getUser();
-    if (authResult.error || !authResult.data.user) {
+    const authResult = await authenticateRequest(admin, authHeader);
+    if (!authResult.user) {
       return new Response(JSON.stringify({ error: "Nao autenticado." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -38,11 +36,11 @@ Deno.serve(async (request) => {
     const profileResult = await admin
       .from("profiles")
       .select("role")
-      .eq("id", authResult.data.user.id)
+      .eq("id", authResult.user.id)
       .maybeSingle();
 
     const role = (profileResult.data?.role ?? "MORADOR") as "ADMIN" | "MORADOR" | "PORTEIRO";
-    const canDispatch = role === "ADMIN" || bundle.request.resident_id === authResult.data.user.id;
+    const canDispatch = role === "ADMIN" || bundle.request.resident_id === authResult.user.id;
     if (!canDispatch) {
       return new Response(JSON.stringify({ error: "Sem permissao para disparar este convite." }), {
         status: 403,
