@@ -69,39 +69,55 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [manualToken, setManualToken] = useState("");
+  const [cameraMessage, setCameraMessage] = useState("Abrindo camera traseira para leitura do QR code.");
 
   useEffect(() => {
     let timer: number | null = null;
     let active = true;
     async function start() {
       const detectorApi = window as typeof window & { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: CanvasImageSource) => Promise<Array<{ rawValue?: string }>> } };
-      if (!detectorApi.BarcodeDetector || !navigator.mediaDevices?.getUserMedia || !videoRef.current || !canvasRef.current) return;
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-      if (!active || !videoRef.current) return;
-      streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      const detector = new detectorApi.BarcodeDetector({ formats: ["qr_code"] });
-      const scan = async () => {
-        if (!active || !videoRef.current || !canvasRef.current) return;
-        if (videoRef.current.readyState < 2) {
-          timer = window.setTimeout(scan, 500);
+      if (!navigator.mediaDevices?.getUserMedia || !videoRef.current || !canvasRef.current) {
+        setCameraMessage("Seu navegador nao permite abrir a camera neste dispositivo. Use a validacao manual abaixo.");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        if (!active || !videoRef.current) return;
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        if (!detectorApi.BarcodeDetector) {
+          setCameraMessage("A camera foi liberada, mas este navegador nao suporta leitura automatica de QR. Use a validacao manual abaixo.");
           return;
         }
-        const canvas = canvasRef.current;
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-        const context = canvas.getContext("2d");
-        if (!context) return;
-        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const token = parseScannedToken((await detector.detect(canvas))[0]?.rawValue ?? "");
-        if (token) {
-          await onSubmit(token);
-          return;
-        }
-        timer = window.setTimeout(scan, 700);
+
+        setCameraMessage("Aponte a camera para o QR code do visitante.");
+        const detector = new detectorApi.BarcodeDetector({ formats: ["qr_code"] });
+        const scan = async () => {
+          if (!active || !videoRef.current || !canvasRef.current) return;
+          if (videoRef.current.readyState < 2) {
+            timer = window.setTimeout(scan, 500);
+            return;
+          }
+          const canvas = canvasRef.current;
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          const context = canvas.getContext("2d");
+          if (!context) return;
+          context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          const token = parseScannedToken((await detector.detect(canvas))[0]?.rawValue ?? "");
+          if (token) {
+            await onSubmit(token);
+            return;
+          }
+          timer = window.setTimeout(scan, 700);
+        };
+        await scan();
+      } catch {
+        setCameraMessage("Nao foi possivel acessar a camera. Verifique a permissao do navegador ou use a validacao manual abaixo.");
       };
-      await scan();
     }
     void start();
     return () => {
@@ -123,10 +139,11 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-[1fr_0.9fr]">
           <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-950">
-            <video ref={videoRef} className="min-h-72 w-full object-cover" muted playsInline />
+            <video ref={videoRef} className="min-h-72 w-full object-cover" muted playsInline autoPlay />
             <canvas ref={canvasRef} className="hidden" />
           </div>
           <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">{cameraMessage}</p>
             <textarea rows={7} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={areaClass} placeholder="Cole aqui o token ou a URL do QR code" />
             <button type="button" onClick={() => void onSubmit(parseScannedToken(manualToken))} disabled={submitting} className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
               {submitting ? "Validando..." : "Validar codigo"}
