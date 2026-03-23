@@ -178,6 +178,60 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
   );
 }
 
+function VisitorDetailsModal({
+  request,
+  onClose,
+}: {
+  request: VisitorRequest | null;
+  onClose: () => void;
+}) {
+  if (!request) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+          <div>
+            <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold ${STATUS_META[request.status].tone}`}>{STATUS_META[request.status].label}</div>
+            <h3 className="mt-3 text-xl font-semibold text-slate-950">{request.primaryGuest?.fullName ?? "Visitante principal"}</h3>
+            <p className="mt-1 text-sm text-slate-500">{request.apartmentLabel} · Morador: {request.residentName}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto px-6 py-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Janela da visita</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">Check-in: {formatDateTime(request.expectedCheckIn)}</p>
+              <p className="mt-1 text-sm text-slate-600">Check-out: {formatDateTime(request.expectedCheckOut)}</p>
+            </div>
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Resumo</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{request.adultsCount} adultos · {request.childrenCount} criancas</p>
+              <p className="mt-1 text-sm text-slate-600">{request.petsCount} animais · {request.requiresPortariaQr ? "QR na portaria" : "QR pelo morador"}</p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-[24px] border border-slate-200 bg-white p-4">
+            <p className="text-sm font-semibold text-slate-900">Visitantes cadastrados</p>
+            <div className="mt-3 space-y-2">
+              {request.guests.map((guest) => (
+                <div key={guest.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
+                    <span>{guest.fullName}{guest.isPrimary ? " · principal" : ""}</span>
+                    <span>{guest.cpf}</span>
+                  </div>
+                  {guest.email ? <p className="mt-1 text-xs text-slate-500">{guest.email}</p> : null}
+                </div>
+              ))}
+            </div>
+          </div>
+          {request.notes ? <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">{request.notes}</div> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VisitantesPage() {
   const user = useMemo(() => getUser(), []);
   const canCreate = user?.role === "ADMIN" || user?.role === "MORADOR";
@@ -201,6 +255,8 @@ export default function VisitantesPage() {
   const [saving, setSaving] = useState(false);
   const [scannerSaving, setScannerSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<VisitorRequestStatus | "TODOS">("TODOS");
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [formError, setFormError] = useState("");
@@ -226,12 +282,13 @@ export default function VisitantesPage() {
 
   const filteredRequests = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return requests;
     return requests.filter((request) => {
+      if (statusFilter !== "TODOS" && request.status !== statusFilter) return false;
+      if (!term) return true;
       const guests = request.guests.map((guest) => `${guest.fullName} ${guest.cpf} ${guest.email}`.toLowerCase()).join(" ");
       return `${request.residentName} ${request.apartmentLabel} ${STATUS_META[request.status].label}`.toLowerCase().includes(term) || guests.includes(term);
     });
-  }, [requests, search]);
+  }, [requests, search, statusFilter]);
 
   const metrics = useMemo(() => ({
     pending: requests.filter((request) => request.status === "PENDENTE_CONFIRMACAO").length,
@@ -239,6 +296,8 @@ export default function VisitantesPage() {
     checkedIn: requests.filter((request) => request.status === "CHECKED_IN").length,
     qrAtGate: requests.filter((request) => request.requiresPortariaQr).length,
   }), [requests]);
+
+  const selectedRequest = selectedRequestId ? requests.find((request) => request.id === selectedRequestId) ?? null : null;
 
   const availableApartments = useMemo(() => {
     if (user?.role === "ADMIN") return apartments;
@@ -383,11 +442,17 @@ export default function VisitantesPage() {
         </section>
 
         <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div><h3 className="text-base font-semibold text-slate-900">Gestão de visitantes</h3><p className="mt-1 text-sm text-slate-500">Acompanhe aprovação, janela prevista e fluxo de check-in em uma visualização única.</p></div>
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por visitante, CPF, morador ou unidade" className={`${inputClass} max-w-md`} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setStatusFilter("TODOS")} className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${statusFilter === "TODOS" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Todas ({requests.length})</button>
+              {Object.entries(STATUS_META).map(([value, meta]) => <button key={value} type="button" onClick={() => setStatusFilter(value as VisitorRequestStatus)} className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${statusFilter === value ? meta.tone : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{meta.label}</button>)}
+            </div>
           </div>
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="hidden mt-5 space-y-3">
             {loading ? <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Carregando visitantes...</div> : filteredRequests.map((request) => {
               const meta = STATUS_META[request.status];
               const canResidentValidate = !request.requiresPortariaQr && request.status === "CONFIRMADO" && !isGatekeeper;
@@ -417,6 +482,47 @@ export default function VisitantesPage() {
                     {canCheckOut && <button type="button" onClick={() => void completeVisitorCheckOut(request.id).then(loadPage).then(() => setMessage("Check-out registrado com sucesso.")).catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao registrar check-out."))} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Registrar check-out</button>}
                     {canCreate && ["PENDENTE_CONFIRMACAO", "CONFIRMADO"].includes(request.status) && <button type="button" onClick={() => void cancelVisitorRequest(request.id).then(loadPage).then(() => setMessage("Visita cancelada com sucesso.")).catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao cancelar visita."))} className="rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Cancelar visita</button>}
                     {canDelete && <button type="button" onClick={() => void handleDelete(request.id)} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><Trash2 size={15} /> Excluir registro</button>}
+                  </div>
+                </article>
+              );
+            })}
+            {!loading && filteredRequests.length === 0 && <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Nenhuma visita encontrada.</div>}
+          </div>
+        </section>
+
+        <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="space-y-3">
+            {loading ? <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Carregando visitantes...</div> : filteredRequests.map((request) => {
+              const meta = STATUS_META[request.status];
+              const canResidentValidate = !request.requiresPortariaQr && request.status === "CONFIRMADO" && !isGatekeeper;
+              const canGatekeeperValidate = request.requiresPortariaQr && request.status === "CONFIRMADO" && (isGatekeeper || user?.role === "ADMIN");
+              const canCheckOut = request.status === "CHECKED_IN" && (isGatekeeper || user?.role === "ADMIN");
+              const canDelete = canCreate && request.status === "CANCELADO";
+              return (
+                <article key={`compact-${request.id}`} className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-slate-300 hover:bg-white">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${meta.tone}`}>{meta.label}</span>
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600">{request.requiresPortariaQr ? "QR na portaria" : "QR pelo morador"}</span>
+                      </div>
+                      <h4 className="mt-3 truncate text-base font-semibold text-slate-950">{request.primaryGuest?.fullName ?? "Visitante principal"}</h4>
+                      <p className="mt-1 truncate text-sm text-slate-500">{request.apartmentLabel} · Morador: {request.residentName}</p>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
+                        <span>Entrada: {formatDateTime(request.expectedCheckIn)}</span>
+                        <span>Saida: {formatDateTime(request.expectedCheckOut)}</span>
+                        <span>{request.adultsCount} adultos · {request.childrenCount} criancas · {request.petsCount} animais</span>
+                        <span>{request.guests.length} visitantes cadastrados</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                      <button type="button" onClick={() => setSelectedRequestId(request.id)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Ver detalhes</button>
+                      {canResidentValidate && <button type="button" onClick={() => setScannerOpen("resident")} className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">Validar QR</button>}
+                      {canGatekeeperValidate && <button type="button" onClick={() => setScannerOpen("gatekeeper")} className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700">Registrar check-in</button>}
+                      {canCheckOut && <button type="button" onClick={() => void completeVisitorCheckOut(request.id).then(loadPage).then(() => setMessage("Check-out registrado com sucesso.")).catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao registrar check-out."))} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Check-out</button>}
+                      {canCreate && ["PENDENTE_CONFIRMACAO", "CONFIRMADO"].includes(request.status) && <button type="button" onClick={() => void cancelVisitorRequest(request.id).then(loadPage).then(() => setMessage("Visita cancelada com sucesso.")).catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao cancelar visita."))} className="rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Cancelar</button>}
+                      {canDelete && <button type="button" onClick={() => void handleDelete(request.id)} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><Trash2 size={15} /> Excluir</button>}
+                    </div>
                   </div>
                 </article>
               );
@@ -506,6 +612,7 @@ export default function VisitantesPage() {
           </div>
         </div>
       )}
+      <VisitorDetailsModal request={selectedRequest} onClose={() => setSelectedRequestId(null)} />
       {scannerOpen && <ScannerModal title={scannerOpen === "gatekeeper" ? "Leitura do QR na portaria" : "Leitura do QR pelo morador"} onClose={() => setScannerOpen(null)} onSubmit={handleScan} submitting={scannerSaving} />}
     </AppLayout>
   );

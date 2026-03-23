@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { BellRing, CheckCircle2, Clock3, Package, PackageCheck, PlusCircle, UserRound, X } from "lucide-react";
+import { BellRing, CheckCircle2, Clock3, Package, PackageCheck, PlusCircle, Search, Trash2, UserRound, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
 import {
   createDelivery,
+  deleteDelivery,
   listDeliveries,
   listDeliveryApartmentOptions,
   markDeliveryPickedUp,
@@ -11,6 +12,7 @@ import {
   type Delivery,
   type DeliveryApartmentOption,
   type DeliveryStatus,
+  uploadDeliveryPhoto,
 } from "../features/encomendas/services/encomendas";
 
 const inputClass =
@@ -92,9 +94,13 @@ export default function EncomendasPage() {
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [busyDeliveryId, setBusyDeliveryId] = useState<string | null>(null);
   const [pickupName, setPickupName] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"TODAS" | DeliveryStatus>("TODAS");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     apartmentId: "",
     carrier: "",
@@ -150,7 +156,20 @@ export default function EncomendasPage() {
   }, [deliveries]);
 
   const selectedDelivery = selectedDeliveryId ? deliveries.find((delivery) => delivery.id === selectedDeliveryId) ?? null : null;
+  const deleteTarget = deleteTargetId ? deliveries.find((delivery) => delivery.id === deleteTargetId) ?? null : null;
   const selectedApartment = apartments.find((apartment) => apartment.id === form.apartmentId) ?? null;
+  const filteredDeliveries = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return deliveries.filter((delivery) => {
+      const matchesStatus = statusFilter === "TODAS" ? true : delivery.status === statusFilter;
+      const haystack = [delivery.apartmentLabel, delivery.recipientName, delivery.carrier, delivery.description, delivery.trackingCode]
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = query ? haystack.includes(query) : true;
+      return matchesStatus && matchesSearch;
+    });
+  }, [deliveries, search, statusFilter]);
 
   async function handleCreateDelivery(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,7 +183,11 @@ export default function EncomendasPage() {
     try {
       setCreating(true);
       setError("");
-      await createDelivery(form);
+      const photoUrl = photoFile ? await uploadDeliveryPhoto(photoFile) : "";
+      await createDelivery({
+        ...form,
+        photoUrl,
+      });
       setForm({
         apartmentId: "",
         carrier: "",
@@ -172,6 +195,7 @@ export default function EncomendasPage() {
         description: "",
         notes: "",
       });
+      setPhotoFile(null);
       setCreateOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel cadastrar a encomenda.");
@@ -194,6 +218,20 @@ export default function EncomendasPage() {
       setSelectedDeliveryId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel registrar a retirada.");
+    } finally {
+      setBusyDeliveryId(null);
+    }
+  }
+
+  async function handleDeleteDelivery(delivery: Delivery) {
+    try {
+      setBusyDeliveryId(delivery.id);
+      setError("");
+      await deleteDelivery(delivery);
+      setDeleteTargetId(null);
+      setSelectedDeliveryId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nao foi possivel excluir a encomenda.");
     } finally {
       setBusyDeliveryId(null);
     }
@@ -251,19 +289,50 @@ export default function EncomendasPage() {
         </section>
 
         <section className="space-y-3">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative w-full lg:max-w-md">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar por apartamento, morador, transportadora ou rastreio"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {(["TODAS", "AVISADA", "RETIRADA"] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition ${
+                      statusFilter === status
+                        ? "border-sky-200 bg-sky-50 text-sky-700"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-sky-200 hover:text-sky-700"
+                    }`}
+                  >
+                    {status === "TODAS" ? "Todas" : status}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {loading ? (
             <div className="rounded-[30px] border border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500 shadow-sm">
               Carregando encomendas...
             </div>
           ) : null}
 
-          {!loading && deliveries.length === 0 ? (
+          {!loading && filteredDeliveries.length === 0 ? (
             <div className="rounded-[30px] border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500 shadow-sm">
-              Nenhuma encomenda registrada ainda.
+              Nenhuma encomenda encontrada com esses filtros.
             </div>
           ) : null}
 
-          {deliveries.map((delivery) => (
+          {filteredDeliveries.map((delivery) => (
             <article key={delivery.id} className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0 flex-1">
@@ -274,9 +343,7 @@ export default function EncomendasPage() {
                     </span>
                   </div>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {delivery.apartmentLabel} • {delivery.recipientName} • {delivery.carrier}
-                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{delivery.apartmentLabel} • {delivery.recipientName} • {delivery.carrier}</p>
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
@@ -285,6 +352,9 @@ export default function EncomendasPage() {
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
                       Rastreio {delivery.trackingCode || "Nao informado"}
                     </span>
+                    {delivery.photoUrl ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">Com foto</span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -341,6 +411,17 @@ export default function EncomendasPage() {
                 <p className="mt-2 text-sm font-semibold text-slate-900">{selectedApartment.residentName}</p>
               </div>
             ) : null}
+
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-600">Foto da encomenda</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                className={`mt-1 ${inputClass}`}
+              />
+              {photoFile ? <p className="mt-2 text-xs text-slate-500">{photoFile.name}</p> : null}
+            </label>
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block">
@@ -414,6 +495,10 @@ export default function EncomendasPage() {
           onClose={() => setSelectedDeliveryId(null)}
         >
           <div className="space-y-5">
+            {selectedDelivery.photoUrl ? (
+              <img src={selectedDelivery.photoUrl} alt={selectedDelivery.description || "Encomenda"} className="h-56 w-full rounded-[28px] object-cover" />
+            ) : null}
+
             <div className={`rounded-[28px] border p-5 ${statusTone[selectedDelivery.status].card}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone[selectedDelivery.status].chip}`}>
@@ -490,6 +575,58 @@ export default function EncomendasPage() {
                 </div>
               </section>
             ) : null}
+
+            {canManage ? (
+              <section className="rounded-[28px] border border-rose-200 bg-rose-50 p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="m-0 text-sm font-semibold text-rose-700">Excluir registro</p>
+                    <p className="mt-1 text-sm text-rose-600">Use somente quando a encomenda tiver sido cadastrada por engano.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTargetId(selectedDelivery.id)}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                  >
+                    <Trash2 size={16} />
+                    Excluir
+                  </button>
+                </div>
+              </section>
+            ) : null}
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {deleteTarget ? (
+        <ModalShell
+          title="Excluir encomenda"
+          subtitle={`${deleteTarget.apartmentLabel} • ${deleteTarget.recipientName}`}
+          onClose={() => setDeleteTargetId(null)}
+        >
+          <div className="space-y-5">
+            <div className="rounded-[24px] border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-700">
+              Essa acao remove o registro da encomenda. Use apenas quando o cadastro tiver sido feito por engano.
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetId(null)}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteDelivery(deleteTarget)}
+                disabled={busyDeliveryId === deleteTarget.id}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 size={16} />
+                {busyDeliveryId === deleteTarget.id ? "Excluindo..." : "Confirmar exclusao"}
+              </button>
+            </div>
           </div>
         </ModalShell>
       ) : null}

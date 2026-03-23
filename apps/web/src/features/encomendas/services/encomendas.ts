@@ -23,6 +23,7 @@ export type Delivery = {
   description: string;
   status: DeliveryStatus;
   notes: string;
+  photoUrl: string;
   receivedAt: string;
   notifiedAt: string | null;
   pickedUpAt: string | null;
@@ -39,6 +40,7 @@ export type CreateDeliveryInput = {
   trackingCode: string;
   description: string;
   notes: string;
+  photoUrl?: string;
 };
 
 type DeliveryRow = {
@@ -51,6 +53,7 @@ type DeliveryRow = {
   description: string | null;
   status: DeliveryStatus;
   notes: string | null;
+  photo_url: string | null;
   received_at: string;
   notified_at: string | null;
   picked_up_at: string | null;
@@ -86,6 +89,7 @@ function mapDelivery(row: DeliveryRow, apartmentMap: Map<string, string>): Deliv
     description: row.description ?? "",
     status: row.status,
     notes: row.notes ?? "",
+    photoUrl: row.photo_url ?? "",
     receivedAt: row.received_at,
     notifiedAt: row.notified_at,
     pickedUpAt: row.picked_up_at,
@@ -95,6 +99,20 @@ function mapDelivery(row: DeliveryRow, apartmentMap: Map<string, string>): Deliv
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function getStoragePathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const marker = `/object/public/${bucket}/`;
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return null;
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
+  } catch {
+    return null;
+  }
 }
 
 async function requireSessionUser() {
@@ -139,7 +157,7 @@ export async function listDeliveries(): Promise<Delivery[]> {
 
   let query = supabase
     .from("deliveries")
-    .select("id, apartment_id, resident_id, recipient_name, carrier, tracking_code, description, status, notes, received_at, notified_at, picked_up_at, picked_up_by_name, created_by_user_id, created_by_name, created_at, updated_at")
+    .select("id, apartment_id, resident_id, recipient_name, carrier, tracking_code, description, status, notes, photo_url, received_at, notified_at, picked_up_at, picked_up_by_name, created_by_user_id, created_by_name, created_at, updated_at")
     .order("received_at", { ascending: false });
 
   if (currentUser?.role === "MORADOR") {
@@ -176,6 +194,7 @@ export async function createDelivery(input: CreateDeliveryInput): Promise<void> 
     tracking_code: input.trackingCode.trim() || null,
     description: input.description.trim() || null,
     notes: input.notes.trim() || null,
+    photo_url: input.photoUrl?.trim() || null,
     created_by_user_id: authUser.id,
     created_by_name: currentUser?.name?.trim() || authUser.email || "Portaria",
   });
@@ -194,6 +213,35 @@ export async function markDeliveryPickedUp(deliveryId: string, pickedUpByName: s
     .eq("id", deliveryId);
 
   if (error) throw new Error(error.message);
+}
+
+export async function uploadDeliveryPhoto(file: File): Promise<string> {
+  const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  if (!allowedTypes.has(file.type)) {
+    throw new Error("Envie uma imagem JPG, PNG ou WEBP.");
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("A foto deve ter no maximo 5 MB.");
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  const upload = await supabase.storage.from("delivery-photos").upload(path, file, { upsert: false });
+  if (upload.error) throw new Error(upload.error.message);
+
+  const { data } = supabase.storage.from("delivery-photos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function deleteDelivery(delivery: Pick<Delivery, "id" | "photoUrl">): Promise<void> {
+  const { error } = await supabase.from("deliveries").delete().eq("id", delivery.id);
+  if (error) throw new Error(error.message);
+
+  const path = getStoragePathFromPublicUrl(delivery.photoUrl, "delivery-photos");
+  if (path) {
+    await supabase.storage.from("delivery-photos").remove([path]);
+  }
 }
 
 export function subscribeToDeliveries(onChange: () => void) {
