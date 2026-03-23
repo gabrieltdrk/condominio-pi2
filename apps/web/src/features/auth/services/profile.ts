@@ -15,6 +15,7 @@ type ProfileRow = {
   pets_count?: number | null;
   resident_type?: ResidentType | null;
   status?: UserStatus | null;
+  avatar_url?: string | null;
 };
 
 type SaveProfileInput = {
@@ -25,10 +26,14 @@ type SaveProfileInput = {
   petsCount?: number;
 };
 
+const PROFILE_AVATARS_BUCKET = "profile-avatars";
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 async function fetchProfile(id: string): Promise<ProfileRow | null> {
   const extended = await supabase
     .from("profiles")
-    .select("name, role, phone, car_plate, pets_count, resident_type, status")
+    .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
     .eq("id", id)
     .single();
 
@@ -58,6 +63,7 @@ function mergeUser(id: string, email: string, profile: ProfileRow | null) {
     status: profile?.status ?? current?.status ?? undefined,
     carPlate: profile?.car_plate ?? current?.carPlate ?? undefined,
     petsCount: profile?.pets_count ?? current?.petsCount ?? undefined,
+    avatarUrl: profile?.avatar_url ?? current?.avatarUrl ?? undefined,
   };
 
   setStoredUser(next);
@@ -125,4 +131,97 @@ export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {
   }
 
   return mergeUser(data.user.id, email, freshProfile);
+}
+
+function getFileExtension(file: File): string {
+  const fromName = file.name.split(".").pop()?.toLowerCase();
+  if (fromName) return fromName;
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
+}
+
+function getStoragePathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const marker = `/object/public/${bucket}/`;
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return null;
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
+  } catch {
+    return null;
+  }
+}
+
+async function updateAvatarUrl(userId: string, avatarUrl: string | null): Promise<User> {
+  const profileUpdate = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl } as never)
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (profileUpdate.error) {
+    throw new Error(profileUpdate.error.message);
+  }
+
+  const freshProfile = await fetchProfile(userId);
+  if (!freshProfile) {
+    throw new Error("A foto foi enviada, mas nao foi possivel atualizar o perfil.");
+  }
+
+  return mergeUser(userId, getUser()?.email ?? "", freshProfile);
+}
+
+export async function uploadOwnProfileAvatar(file: File): Promise<User> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Sessao invalida. Faca login novamente.");
+  }
+
+  if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem JPG, PNG ou WEBP.");
+  }
+
+  if (file.size > MAX_AVATAR_SIZE) {
+    throw new Error("A foto deve ter no maximo 5 MB.");
+  }
+
+  const currentProfile = await fetchProfile(data.user.id);
+  const previousPath = getStoragePathFromPublicUrl(currentProfile?.avatar_url, PROFILE_AVATARS_BUCKET);
+  const extension = getFileExtension(file);
+  const path = `${data.user.id}/${crypto.randomUUID()}.${extension}`;
+
+  const upload = await supabase.storage.from(PROFILE_AVATARS_BUCKET).upload(path, file, { upsert: false });
+  if (upload.error) {
+    throw new Error(`Erro no upload da foto: ${upload.error.message}`);
+  }
+
+  const { data: publicUrlData } = supabase.storage.from(PROFILE_AVATARS_BUCKET).getPublicUrl(path);
+  const user = await updateAvatarUrl(data.user.id, publicUrlData.publicUrl);
+
+  if (previousPath) {
+    await supabase.storage.from(PROFILE_AVATARS_BUCKET).remove([previousPath]);
+  }
+
+  return user;
+}
+
+export async function removeOwnProfileAvatar(): Promise<User> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Sessao invalida. Faca login novamente.");
+  }
+
+  const currentProfile = await fetchProfile(data.user.id);
+  const previousPath = getStoragePathFromPublicUrl(currentProfile?.avatar_url, PROFILE_AVATARS_BUCKET);
+  const user = await updateAvatarUrl(data.user.id, null);
+
+  if (previousPath) {
+    await supabase.storage.from(PROFILE_AVATARS_BUCKET).remove([previousPath]);
+  }
+
+  return user;
 }

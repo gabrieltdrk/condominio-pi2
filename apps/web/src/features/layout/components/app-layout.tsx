@@ -216,9 +216,13 @@ export default function AppLayout({ title, children }: { title: string; children
 
         <div className="shrink-0 border-t border-gray-100 p-3">
           <div className={`flex px-2 py-2 ${collapsed ? "flex-col items-center gap-2" : "items-center gap-2.5"}`}>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100">
-              <span className="text-xs font-bold text-indigo-700">{initials}</span>
-            </div>
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.name} className="h-8 w-8 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                <span className="text-xs font-bold text-indigo-700">{initials}</span>
+              </div>
+            )}
 
             {!collapsed && (
               <div className="min-w-0 flex-1">

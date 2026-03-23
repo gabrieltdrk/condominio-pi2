@@ -15,6 +15,7 @@ export type User = {
   status?: UserStatus;
   carPlate?: string;
   petsCount?: number;
+  avatarUrl?: string;
 };
 
 type ProfileData = {
@@ -25,6 +26,7 @@ type ProfileData = {
   pets_count?: number | null;
   resident_type?: ResidentType | null;
   status?: UserStatus | null;
+  avatar_url?: string | null;
 };
 
 function resolveUserRole(email: string, role?: string | null): UserRole {
@@ -38,7 +40,7 @@ function resolveUserRole(email: string, role?: string | null): UserRole {
 async function getProfile(id: string): Promise<ProfileData | null> {
   const extended = await supabase
     .from("profiles")
-    .select("name, role, phone, car_plate, pets_count, resident_type, status")
+    .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
     .eq("id", id)
     .single();
 
@@ -84,6 +86,7 @@ export async function checkOAuthSession(): Promise<User | null> {
     status: profile?.status ?? undefined,
     carPlate: profile?.car_plate ?? undefined,
     petsCount: profile?.pets_count ?? undefined,
+    avatarUrl: profile?.avatar_url ?? undefined,
   };
 
   localStorage.setItem("token", session.access_token);
@@ -108,6 +111,7 @@ export async function login(email: string, password: string): Promise<User> {
     status: profile?.status ?? undefined,
     carPlate: profile?.car_plate ?? undefined,
     petsCount: profile?.pets_count ?? undefined,
+    avatarUrl: profile?.avatar_url ?? undefined,
   };
 
   localStorage.setItem("token", data.session.access_token);
