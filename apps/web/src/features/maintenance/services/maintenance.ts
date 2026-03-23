@@ -1,4 +1,5 @@
 import { getUser } from "../../auth/services/auth";
+import { supabase } from "../../../lib/supabase";
 
 export type MaintenanceStatus = "AGENDADA" | "EM_ANDAMENTO" | "CONCLUIDA" | "ATRASADA" | "CANCELADA";
 export type MaintenancePriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
@@ -59,274 +60,204 @@ type AccessInput = {
   accessNotes: string;
 };
 
-const STORAGE_KEY = "maintenance:orders";
-const EVENT_NAME = "maintenance:changed";
+type MaintenanceOrderRow = {
+  id: string;
+  title: string;
+  asset_name: string;
+  area: string;
+  category: MaintenanceCategory;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  supplier_name: string;
+  technician_name: string;
+  responsible_name: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by_user_id: string | null;
+  created_by_name: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  last_service_at: string | null;
+  maintenance_interval_days: number;
+  access_notes: string | null;
+};
 
-const seedOrders: MaintenanceOrder[] = [
-  {
-    id: "mnt-001",
-    title: "Revisao da bomba da cisterna",
-    assetName: "Bomba da cisterna",
-    area: "Casa de maquinas",
-    category: "HIDRAULICA",
-    priority: "ALTA",
-    status: "AGENDADA",
-    supplierName: "Aqua Prime",
-    technicianName: "Carlos Henrique",
-    responsibleName: "Zeladoria",
-    scheduledDate: "2026-03-24",
-    scheduledTime: "09:00",
-    notes: "Verificar oscilacao de pressao e ruido no motor principal.",
-    createdAt: "2026-03-22T13:00:00.000Z",
-    updatedAt: "2026-03-22T13:00:00.000Z",
-    createdByUserId: null,
-    createdByName: "Sistema",
-    checkInAt: null,
-    checkOutAt: null,
-    lastServiceAt: "2026-01-15T15:00:00.000Z",
-    maintenanceIntervalDays: 90,
-    accessNotes: "",
-  },
-  {
-    id: "mnt-002",
-    title: "Inspecao do elevador social",
-    assetName: "Elevador social do bloco B",
-    area: "Bloco B",
-    category: "ELEVADORES",
-    priority: "CRITICA",
-    status: "EM_ANDAMENTO",
-    supplierName: "Elevadores Sigma",
-    technicianName: "Marcos Silva",
-    responsibleName: "Portaria",
-    scheduledDate: "2026-03-23",
-    scheduledTime: "10:30",
-    notes: "Manutencao preventiva mensal com checklist completo.",
-    createdAt: "2026-03-21T16:20:00.000Z",
-    updatedAt: "2026-03-23T13:10:00.000Z",
-    createdByUserId: null,
-    createdByName: "Sistema",
-    checkInAt: "2026-03-23T13:05:00.000Z",
-    checkOutAt: null,
-    lastServiceAt: "2026-02-20T11:00:00.000Z",
-    maintenanceIntervalDays: 30,
-    accessNotes: "Tecnico liberado pela portaria e acompanhado ate a casa de maquinas.",
-  },
-  {
-    id: "mnt-003",
-    title: "Reparo de luminarias da garagem",
-    assetName: "Luminarias da garagem",
-    area: "Garagem subsolo 1",
-    category: "ELETRICA",
-    priority: "MEDIA",
-    status: "CONCLUIDA",
-    supplierName: "Luz & Rede",
-    technicianName: "Paulo Roberto",
-    responsibleName: "Sindicancia",
-    scheduledDate: "2026-03-20",
-    scheduledTime: "14:00",
-    notes: "Troca de reator e lampadas do corredor central.",
-    createdAt: "2026-03-19T11:15:00.000Z",
-    updatedAt: "2026-03-20T19:30:00.000Z",
-    createdByUserId: null,
-    createdByName: "Sistema",
-    checkInAt: "2026-03-20T17:05:00.000Z",
-    checkOutAt: "2026-03-20T19:20:00.000Z",
-    lastServiceAt: "2026-03-20T19:20:00.000Z",
-    maintenanceIntervalDays: 120,
-    accessNotes: "Servico finalizado sem intercorrencias.",
-  },
-];
-
-function readStorage(): MaintenanceOrder[] {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return seedOrders;
-
-  try {
-    const parsed = JSON.parse(raw) as MaintenanceOrder[];
-    return parsed.map((order) => ({
-      ...order,
-      assetName: order.assetName ?? order.title,
-      lastServiceAt: order.lastServiceAt ?? order.checkOutAt ?? null,
-      maintenanceIntervalDays: Math.max(1, order.maintenanceIntervalDays ?? 90),
-    }));
-  } catch {
-    return seedOrders;
-  }
+function mapRow(row: MaintenanceOrderRow): MaintenanceOrder {
+  return {
+    id: row.id,
+    title: row.title,
+    assetName: row.asset_name,
+    area: row.area,
+    category: row.category,
+    priority: row.priority,
+    status: row.status,
+    supplierName: row.supplier_name,
+    technicianName: row.technician_name,
+    responsibleName: row.responsible_name,
+    scheduledDate: row.scheduled_date,
+    scheduledTime: row.scheduled_time.slice(0, 5),
+    notes: row.notes ?? "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    createdByUserId: row.created_by_user_id,
+    createdByName: row.created_by_name,
+    checkInAt: row.check_in_at,
+    checkOutAt: row.check_out_at,
+    lastServiceAt: row.last_service_at,
+    maintenanceIntervalDays: row.maintenance_interval_days,
+    accessNotes: row.access_notes ?? "",
+  };
 }
 
-function writeStorage(orders: MaintenanceOrder[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
-  window.dispatchEvent(new Event(EVENT_NAME));
-}
-
-function nextId() {
-  return crypto.randomUUID();
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function sortOrders(orders: MaintenanceOrder[]) {
-  return [...orders].sort((left, right) => {
-    const leftKey = `${left.scheduledDate}T${left.scheduledTime}`;
-    const rightKey = `${right.scheduledDate}T${right.scheduledTime}`;
-    return rightKey.localeCompare(leftKey);
-  });
-}
-
-export async function listMaintenanceOrders(): Promise<MaintenanceOrder[]> {
-  return sortOrders(readStorage());
-}
-
-export async function createMaintenanceOrder(input: MaintenanceOrderInput): Promise<MaintenanceOrder> {
-  const currentUser = getUser();
-  const timestamp = nowIso();
-  const order: MaintenanceOrder = {
-    id: nextId(),
+function mapInsertInput(input: MaintenanceOrderInput, currentUserId: string, createdByName: string) {
+  return {
     title: input.title.trim(),
-    assetName: input.assetName.trim(),
+    asset_name: input.assetName.trim(),
     area: input.area.trim(),
     category: input.category,
     priority: input.priority,
-    status: "AGENDADA",
-    supplierName: input.supplierName.trim(),
-    technicianName: input.technicianName.trim(),
-    responsibleName: input.responsibleName.trim(),
-    scheduledDate: input.scheduledDate,
-    scheduledTime: input.scheduledTime,
-    notes: input.notes.trim(),
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    createdByUserId: currentUser?.id ?? null,
-    createdByName: currentUser?.name ?? "Usuario",
-    checkInAt: null,
-    checkOutAt: null,
-    lastServiceAt: null,
-    maintenanceIntervalDays: Math.max(1, Math.round(input.maintenanceIntervalDays)),
-    accessNotes: "",
+    supplier_name: input.supplierName.trim(),
+    technician_name: input.technicianName.trim(),
+    responsible_name: input.responsibleName.trim(),
+    scheduled_date: input.scheduledDate,
+    scheduled_time: `${input.scheduledTime}:00`,
+    maintenance_interval_days: Math.max(1, Math.round(input.maintenanceIntervalDays)),
+    notes: input.notes.trim() || null,
+    created_by_user_id: currentUserId,
+    created_by_name: createdByName,
   };
+}
 
-  const orders = readStorage();
-  writeStorage([order, ...orders]);
-  return order;
+async function requireSessionUser() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Sessao invalida. Faca login novamente.");
+  }
+
+  return data.user;
+}
+
+export async function listMaintenanceOrders(): Promise<MaintenanceOrder[]> {
+  const { data, error } = await supabase
+    .from("maintenance_orders")
+    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .order("scheduled_date", { ascending: false })
+    .order("scheduled_time", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as MaintenanceOrderRow[]).map(mapRow);
+}
+
+export async function createMaintenanceOrder(input: MaintenanceOrderInput): Promise<MaintenanceOrder> {
+  const authUser = await requireSessionUser();
+  const currentUser = getUser();
+
+  const { data, error } = await supabase
+    .from("maintenance_orders")
+    .insert(mapInsertInput(input, authUser.id, currentUser?.name?.trim() || authUser.email || "Usuario"))
+    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Nao foi possivel criar a manutencao.");
+  }
+
+  return mapRow(data as MaintenanceOrderRow);
 }
 
 export async function updateMaintenanceOrder(orderId: string, input: MaintenanceOrderInput & { status: MaintenanceStatus }): Promise<MaintenanceOrder> {
-  const orders = readStorage();
-  let updatedOrder: MaintenanceOrder | null = null;
-
-  const nextOrders = orders.map((order) => {
-    if (order.id !== orderId) return order;
-
-    updatedOrder = {
-      ...order,
+  const { data, error } = await supabase
+    .from("maintenance_orders")
+    .update({
       title: input.title.trim(),
-      assetName: input.assetName.trim(),
+      asset_name: input.assetName.trim(),
       area: input.area.trim(),
       category: input.category,
       priority: input.priority,
       status: input.status,
-      supplierName: input.supplierName.trim(),
-      technicianName: input.technicianName.trim(),
-      responsibleName: input.responsibleName.trim(),
-      scheduledDate: input.scheduledDate,
-      scheduledTime: input.scheduledTime,
-      maintenanceIntervalDays: Math.max(1, Math.round(input.maintenanceIntervalDays)),
-      notes: input.notes.trim(),
-      updatedAt: nowIso(),
-    };
+      supplier_name: input.supplierName.trim(),
+      technician_name: input.technicianName.trim(),
+      responsible_name: input.responsibleName.trim(),
+      scheduled_date: input.scheduledDate,
+      scheduled_time: `${input.scheduledTime}:00`,
+      maintenance_interval_days: Math.max(1, Math.round(input.maintenanceIntervalDays)),
+      notes: input.notes.trim() || null,
+    })
+    .eq("id", orderId)
+    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .single();
 
-    return updatedOrder;
-  });
-
-  if (!updatedOrder) {
-    throw new Error("Manutencao nao encontrada.");
+  if (error || !data) {
+    throw new Error(error?.message ?? "Manutencao nao encontrada.");
   }
 
-  writeStorage(nextOrders);
-  return updatedOrder;
+  return mapRow(data as MaintenanceOrderRow);
 }
 
 export async function registerMaintenanceCheckIn(orderId: string, input: AccessInput): Promise<MaintenanceOrder> {
-  const orders = readStorage();
-  let updatedOrder: MaintenanceOrder | null = null;
-
-  const nextOrders = orders.map((order) => {
-    if (order.id !== orderId) return order;
-
-    updatedOrder = {
-      ...order,
+  const { data, error } = await supabase
+    .from("maintenance_orders")
+    .update({
       status: "EM_ANDAMENTO",
-      checkInAt: input.happenedAt,
-      checkOutAt: null,
-      accessNotes: input.accessNotes.trim(),
-      updatedAt: nowIso(),
-    };
+      check_in_at: input.happenedAt,
+      check_out_at: null,
+      access_notes: input.accessNotes.trim() || null,
+    })
+    .eq("id", orderId)
+    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .single();
 
-    return updatedOrder;
-  });
-
-  if (!updatedOrder) {
-    throw new Error("Manutencao nao encontrada.");
+  if (error || !data) {
+    throw new Error(error?.message ?? "Manutencao nao encontrada.");
   }
 
-  writeStorage(nextOrders);
-  return updatedOrder;
+  return mapRow(data as MaintenanceOrderRow);
 }
 
 export async function registerMaintenanceCheckOut(orderId: string, input: AccessInput): Promise<MaintenanceOrder> {
-  const orders = readStorage();
-  let updatedOrder: MaintenanceOrder | null = null;
-
-  const nextOrders = orders.map((order) => {
-    if (order.id !== orderId) return order;
-
-    updatedOrder = {
-      ...order,
+  const { data, error } = await supabase
+    .from("maintenance_orders")
+    .update({
       status: "CONCLUIDA",
-      checkOutAt: input.happenedAt,
-      lastServiceAt: input.happenedAt,
-      accessNotes: input.accessNotes.trim() || order.accessNotes,
-      updatedAt: nowIso(),
-    };
+      check_out_at: input.happenedAt,
+      last_service_at: input.happenedAt,
+      access_notes: input.accessNotes.trim() || null,
+    })
+    .eq("id", orderId)
+    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .single();
 
-    return updatedOrder;
-  });
-
-  if (!updatedOrder) {
-    throw new Error("Manutencao nao encontrada.");
+  if (error || !data) {
+    throw new Error(error?.message ?? "Manutencao nao encontrada.");
   }
 
-  writeStorage(nextOrders);
-  return updatedOrder;
+  return mapRow(data as MaintenanceOrderRow);
 }
 
 export async function cancelMaintenanceOrder(orderId: string): Promise<void> {
-  const orders = readStorage();
-  const nextOrders = orders.map((order) =>
-    order.id === orderId
-      ? {
-          ...order,
-          status: "CANCELADA" as const,
-          updatedAt: nowIso(),
-        }
-      : order,
-  );
+  const { error } = await supabase
+    .from("maintenance_orders")
+    .update({ status: "CANCELADA" })
+    .eq("id", orderId);
 
-  writeStorage(nextOrders);
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export function subscribeToMaintenanceOrders(onChange: () => void) {
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) onChange();
-  };
-
-  window.addEventListener(EVENT_NAME, onChange);
-  window.addEventListener("storage", handleStorage);
+  const channel = supabase
+    .channel("maintenance-orders-feed")
+    .on("postgres_changes", { event: "*", schema: "public", table: "maintenance_orders" }, onChange)
+    .subscribe();
 
   return () => {
-    window.removeEventListener(EVENT_NAME, onChange);
-    window.removeEventListener("storage", handleStorage);
+    void supabase.removeChannel(channel);
   };
 }
