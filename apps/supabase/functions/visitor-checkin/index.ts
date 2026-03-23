@@ -118,8 +118,18 @@ Deno.serve(async (request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro ao validar QR." }), {
-      status: 500,
+    const message = error instanceof Error ? error.message : "Erro ao validar QR.";
+    const status =
+      message === "Token de visitante invalido."
+        ? 404
+        : message === "Este token ja foi utilizado." || message === "Este token expirou." || message === "Esta visita foi cancelada." || message === "Esta visita nao esta pronta para check-in."
+          ? 400
+          : message === "Somente o morador responsavel pode validar este QR." || message === "Somente a portaria pode registrar este check-in."
+            ? 403
+            : 500;
+
+    return new Response(JSON.stringify({ error: message }), {
+      status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

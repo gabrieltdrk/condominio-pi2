@@ -5,8 +5,11 @@ import { db } from "../db.js";
 type CreateUserBody = {
   name: string;
   email: string;
+  phone: string;
   password: string;
   role: "ADMIN" | "MORADOR";
+  residentType: "PROPRIETARIO" | "INQUILINO" | "VISITANTE";
+  status: "ATIVO" | "INATIVO";
 };
 
 export async function usersRoutes(app: FastifyInstance) {
@@ -18,7 +21,9 @@ export async function usersRoutes(app: FastifyInstance) {
     }
 
     const result = await db.query(
-      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC"
+      `SELECT id, name, email, phone, role, resident_type, status, created_at
+       FROM users
+       ORDER BY created_at DESC`
     );
 
     return reply.send(result.rows);
@@ -30,12 +35,15 @@ export async function usersRoutes(app: FastifyInstance) {
       schema: {
         body: {
           type: "object",
-          required: ["name", "email", "password", "role"],
+          required: ["name", "email", "phone", "password", "role", "residentType", "status"],
           properties: {
             name: { type: "string", minLength: 1 },
             email: { type: "string", format: "email" },
+            phone: { type: "string", minLength: 8 },
             password: { type: "string", minLength: 6 },
             role: { type: "string", enum: ["ADMIN", "MORADOR"] },
+            residentType: { type: "string", enum: ["PROPRIETARIO", "INQUILINO", "VISITANTE"] },
+            status: { type: "string", enum: ["ATIVO", "INATIVO"] },
           },
         },
       },
@@ -47,16 +55,16 @@ export async function usersRoutes(app: FastifyInstance) {
         return reply.status(403).send({ message: "Acesso restrito a administradores." });
       }
 
-      const { name, email, password, role } = request.body;
+      const { name, email, phone, password, role, residentType, status } = request.body;
 
       const password_hash = await bcrypt.hash(password, 10);
 
       try {
         const result = await db.query(
-          `INSERT INTO users (name, email, password_hash, role)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id, name, email, role, created_at`,
-          [name, email, password_hash, role]
+          `INSERT INTO users (name, email, phone, password_hash, role, resident_type, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING id, name, email, phone, role, resident_type, status, created_at`,
+          [name, email, phone, password_hash, role, residentType, status]
         );
 
         return reply.status(201).send(result.rows[0]);

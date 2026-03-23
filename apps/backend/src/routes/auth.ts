@@ -26,7 +26,9 @@ export async function authRoutes(app: FastifyInstance) {
       const { email, password } = request.body;
 
       const result = await db.query(
-        "SELECT id, name, email, role, password_hash FROM users WHERE email = $1",
+        `SELECT id, name, email, phone, role, resident_type, status, password_hash
+         FROM users
+         WHERE email = $1`,
         [email]
       );
 
@@ -52,7 +54,10 @@ export async function authRoutes(app: FastifyInstance) {
         user: {
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role,
+          residentType: user.resident_type,
+          status: user.status,
         },
       });
     }

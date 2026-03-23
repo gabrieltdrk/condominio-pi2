@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MailCheck, Plus, QrCode, ScanLine, ShieldCheck, Users, X } from "lucide-react";
+import { MailCheck, Plus, QrCode, ScanLine, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import jsQR from "jsqr";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
@@ -8,6 +8,7 @@ import {
   cancelVisitorRequest,
   completeVisitorCheckOut,
   createVisitorRequest,
+  deleteVisitorRequest,
   listVisitorRequests,
   subscribeToVisitorRequests,
   validateVisitorAccessToken,
@@ -18,13 +19,14 @@ import {
 
 const inputClass = "h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100";
 const areaClass = "w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100";
+const labelClass = "text-xs font-semibold uppercase tracking-[0.16em] text-slate-500";
 
 const STATUS_META: Record<VisitorRequestStatus, { label: string; tone: string }> = {
-  PENDENTE_CONFIRMACAO: { label: "Aguardando confirmacao", tone: "border-amber-200 bg-amber-50 text-amber-700" },
+  PENDENTE_CONFIRMACAO: { label: "Aguardando confirmação", tone: "border-amber-200 bg-amber-50 text-amber-700" },
   CONFIRMADO: { label: "Confirmado", tone: "border-sky-200 bg-sky-50 text-sky-700" },
   VALIDADO_MORADOR: { label: "Validado pelo morador", tone: "border-indigo-200 bg-indigo-50 text-indigo-700" },
-  CHECKED_IN: { label: "Check-in concluido", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  CHECKED_OUT: { label: "Check-out concluido", tone: "border-slate-200 bg-slate-100 text-slate-600" },
+  CHECKED_IN: { label: "Check-in concluído", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  CHECKED_OUT: { label: "Check-out concluído", tone: "border-slate-200 bg-slate-100 text-slate-600" },
   CANCELADO: { label: "Cancelado", tone: "border-rose-200 bg-rose-50 text-rose-700" },
 };
 
@@ -65,17 +67,22 @@ function localDateTime(hoursAhead: number) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+function FieldLabel({ children }: { children: string }) {
+  return <label className={labelClass}>{children}</label>;
+}
+
 function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string; onClose: () => void; onSubmit: (token: string) => Promise<void>; submitting: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [manualToken, setManualToken] = useState("");
-  const [cameraMessage, setCameraMessage] = useState("Abrindo camera traseira para leitura do QR code.");
+  const [cameraMessage, setCameraMessage] = useState("Abrindo câmera traseira para leitura do QR code.");
   const [manualOpen, setManualOpen] = useState(false);
 
   useEffect(() => {
     let timer: number | null = null;
     let active = true;
+
     function stopCamera() {
       if (timer) window.clearTimeout(timer);
       for (const track of streamRef.current?.getTracks() ?? []) track.stop();
@@ -84,7 +91,6 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
     }
 
     if (manualOpen) {
-      setCameraMessage("Cole o token manualmente para validar o acesso.");
       stopCamera();
       return () => stopCamera();
     }
@@ -92,7 +98,7 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
     async function start() {
       const detectorApi = window as typeof window & { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: CanvasImageSource) => Promise<Array<{ rawValue?: string }>> } };
       if (!navigator.mediaDevices?.getUserMedia || !videoRef.current || !canvasRef.current) {
-        setCameraMessage("Seu navegador nao permite abrir a camera neste dispositivo. Use a validacao manual abaixo.");
+        setCameraMessage("Seu navegador não permite abrir a câmera neste dispositivo. Use a validação manual abaixo.");
         return;
       }
 
@@ -102,7 +108,7 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
         streamRef.current = stream;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-        setCameraMessage("Aponte a camera para o QR code do visitante.");
+        setCameraMessage("Aponte a câmera para o QR code do visitante.");
         const detector = detectorApi.BarcodeDetector ? new detectorApi.BarcodeDetector({ formats: ["qr_code"] }) : null;
         const scan = async () => {
           if (!active || !videoRef.current || !canvasRef.current) return;
@@ -123,18 +129,18 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
           }
           const image = context.getImageData(0, 0, canvas.width, canvas.height);
           const fallbackToken = parseScannedToken(jsQR(image.data, image.width, image.height)?.data ?? "");
-          const token = nativeToken || fallbackToken;
-          if (token) {
-            await onSubmit(token);
+          if (fallbackToken) {
+            await onSubmit(fallbackToken);
             return;
           }
           timer = window.setTimeout(scan, 700);
         };
         await scan();
       } catch {
-        setCameraMessage("Nao foi possivel acessar a camera. Verifique a permissao do navegador ou use a validacao manual abaixo.");
-      };
+        setCameraMessage("Não foi possível acessar a câmera. Verifique a permissão do navegador ou use a validação manual abaixo.");
+      }
     }
+
     void start();
     return () => {
       active = false;
@@ -148,50 +154,23 @@ function ScannerModal({ title, onClose, onSubmit, submitting }: { title: string;
         <div className="flex items-center justify-between gap-3">
           <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5">
             <h3 className="m-0 text-base font-semibold text-slate-900">{title}</h3>
-            <p className="mt-1 text-sm text-slate-500">{manualOpen ? "Cole o token manualmente para validar o acesso." : "Use a camera para ler o QR code do visitante."}</p>
+            <p className="mt-1 text-sm text-slate-500">{manualOpen ? "Cole o token manualmente para validar o acesso." : "Use a câmera para ler o QR code do visitante."}</p>
           </div>
           <button type="button" onClick={onClose} className="mr-4 mt-[max(1rem,env(safe-area-inset-top))] rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 sm:mr-5 sm:mt-5"><X size={18} /></button>
         </div>
         <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pb-5 md:grid-cols-[1fr_0.9fr]">
-          {!manualOpen && (
-            <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-950">
-              <video ref={videoRef} className="h-[42dvh] w-full object-cover sm:min-h-72 sm:h-auto" muted playsInline autoPlay />
-              <canvas ref={canvasRef} className="hidden" />
-            </div>
-          )}
-          {manualOpen && (
-            <div className="flex items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-500">
-              A leitura por camera foi ocultada para facilitar a validacao manual no mobile.
-            </div>
-          )}
+          {!manualOpen && <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-950"><video ref={videoRef} className="h-[42dvh] w-full object-cover sm:min-h-72 sm:h-auto" muted playsInline autoPlay /><canvas ref={canvasRef} className="hidden" /></div>}
+          {manualOpen && <div className="flex items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-500">A leitura por câmera foi ocultada para facilitar a validação manual no mobile.</div>}
           <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
             <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">{cameraMessage}</p>
-            {!manualOpen && (
-              <button
-                type="button"
-                onClick={() => setManualOpen(true)}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
-                Colar token manualmente
-              </button>
-            )}
-            {manualOpen && (
-              <>
-                <textarea rows={6} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={`${areaClass} min-h-40`} placeholder="Cole aqui o token ou a URL do QR code" />
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <button type="button" onClick={() => void onSubmit(parseScannedToken(manualToken))} disabled={submitting} className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
-                    {submitting ? "Validando..." : "Validar codigo"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setManualOpen(false); setManualToken(""); setCameraMessage("Abrindo camera traseira para leitura do QR code."); }}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
-                  >
-                    Voltar para camera
-                  </button>
-                </div>
-              </>
-            )}
+            {!manualOpen && <button type="button" onClick={() => { setCameraMessage("Cole o token manualmente para validar o acesso."); setManualOpen(true); }} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Colar token manualmente</button>}
+            {manualOpen && <>
+              <textarea rows={6} value={manualToken} onChange={(event) => setManualToken(event.target.value)} className={`${areaClass} min-h-40`} placeholder="Cole aqui o token ou a URL do QR code" />
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button type="button" onClick={() => void onSubmit(parseScannedToken(manualToken))} disabled={submitting} className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">{submitting ? "Validando..." : "Validar código"}</button>
+                <button type="button" onClick={() => { setManualOpen(false); setManualToken(""); setCameraMessage("Abrindo câmera traseira para leitura do QR code."); }} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">Voltar para câmera</button>
+              </div>
+            </>}
           </div>
         </div>
       </div>
@@ -306,8 +285,8 @@ export default function VisitantesPage() {
     const invalidIndex = form.guests.findIndex((guest, index) => !isGuestValid(guest, index === 0));
     if (!form.apartmentId) return setFormError("Selecione a unidade da visita.");
     if (invalidIndex >= 0) return setFormError(`Revise os dados do visitante ${invalidIndex + 1}.`);
-    if (form.adultsCount + form.childrenCount <= 0) return setFormError("Informe ao menos um adulto ou crianca.");
-    if (new Date(form.expectedCheckOut) <= new Date(form.expectedCheckIn)) return setFormError("Check-out deve ser maior que check-in.");
+    if (form.adultsCount + form.childrenCount <= 0) return setFormError("Informe ao menos um adulto ou uma criança.");
+    if (new Date(form.expectedCheckOut) <= new Date(form.expectedCheckIn)) return setFormError("O check-out deve ser maior que o check-in.");
 
     setSaving(true);
     setFormError("");
@@ -336,7 +315,7 @@ export default function VisitantesPage() {
   }
 
   async function handleScan(token: string) {
-    if (!token) return setError("Informe um QR code valido.");
+    if (!token) return setError("Informe um QR code válido.");
     setScannerSaving(true);
     setError("");
     setMessage("");
@@ -352,6 +331,18 @@ export default function VisitantesPage() {
     }
   }
 
+  async function handleDelete(requestId: string) {
+    setError("");
+    setMessage("");
+    try {
+      await deleteVisitorRequest(requestId);
+      setMessage("Reserva excluída com sucesso.");
+      await loadPage();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao excluir reserva.");
+    }
+  }
+
   return (
     <AppLayout title="Visitantes">
       <div className="space-y-5">
@@ -359,8 +350,8 @@ export default function VisitantesPage() {
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700"><ShieldCheck size={13} /> Fluxo de visitantes</div>
-              <h2 className="mt-4 max-w-3xl text-[clamp(1.9rem,4vw,3.2rem)] font-black leading-none tracking-[-0.05em] text-slate-950">Cadastro manual, aprovacao por e-mail e autenticacao por QR code.</h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">O visitante principal recebe o convite por e-mail, confirma a visita e depois apresenta o QR code para validacao na portaria ou pelo morador.</p>
+              <h2 className="mt-4 max-w-3xl text-[clamp(1.9rem,4vw,3.2rem)] font-black leading-none tracking-[-0.05em] text-slate-950">Cadastro manual, aprovação por e-mail e autenticação por QR code.</h2>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">O visitante principal recebe o convite por e-mail, confirma a visita e depois apresenta o QR code para validação na portaria ou pelo morador.</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {canCreate && <button type="button" onClick={() => { resetForm(); setModalOpen(true); }} disabled={user?.role === "MORADOR" && availableApartments.length === 0} className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"><Plus size={16} /> Nova visita</button>}
                 <button type="button" onClick={() => setScannerOpen(isGatekeeper ? "gatekeeper" : "resident")} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><ScanLine size={16} /> {isGatekeeper ? "Validar QR na portaria" : "Validar QR"}</button>
@@ -373,7 +364,7 @@ export default function VisitantesPage() {
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Pendentes</p><p className="mt-2 text-2xl font-black">{metrics.pending}</p></div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Check-ins</p><p className="mt-2 text-2xl font-black">{metrics.checkedIn}</p></div>
               </div>
-              <p className="mt-4 text-sm leading-6 text-slate-300">{isGatekeeper ? "Seu perfil possui acesso restrito a garagem e visitantes." : "Quando o visitante aprova o convite, o morador recebe notificacao no sistema."}</p>
+              <p className="mt-4 text-sm leading-6 text-slate-300">{isGatekeeper ? "Seu perfil possui acesso restrito a garagem e visitantes." : "Quando o visitante aprova o convite, o morador recebe notificação no sistema."}</p>
               {user?.role === "MORADOR" && availableApartments.length === 0 && <p className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">Vincule uma unidade ao morador para liberar o cadastro de visitantes.</p>}
             </div>
           </div>
@@ -382,7 +373,7 @@ export default function VisitantesPage() {
         <section className="grid gap-4 lg:grid-cols-4">
           {[
             { icon: MailCheck, label: "Pendentes", value: metrics.pending, helper: "Aguardando resposta do visitante principal", tone: "border-amber-100 bg-amber-50 text-amber-700" },
-            { icon: Users, label: "Confirmadas", value: metrics.confirmed, helper: "Visitantes que ja aprovaram o e-mail", tone: "border-sky-100 bg-sky-50 text-sky-700" },
+            { icon: Users, label: "Confirmadas", value: metrics.confirmed, helper: "Visitantes que já aprovaram o e-mail", tone: "border-sky-100 bg-sky-50 text-sky-700" },
             { icon: QrCode, label: "QR na portaria", value: metrics.qrAtGate, helper: "Exigem leitura do QR na entrada", tone: "border-indigo-100 bg-indigo-50 text-indigo-700" },
             { icon: ScanLine, label: "Check-ins", value: metrics.checkedIn, helper: "Entradas autenticadas com sucesso", tone: "border-emerald-100 bg-emerald-50 text-emerald-700" },
           ].map((item) => {
@@ -393,7 +384,7 @@ export default function VisitantesPage() {
 
         <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div><h3 className="text-base font-semibold text-slate-900">Gestao de visitantes</h3><p className="mt-1 text-sm text-slate-500">Acompanhe aprovacao, janela prevista e fluxo de check-in em uma visualizacao unica.</p></div>
+            <div><h3 className="text-base font-semibold text-slate-900">Gestão de visitantes</h3><p className="mt-1 text-sm text-slate-500">Acompanhe aprovação, janela prevista e fluxo de check-in em uma visualização única.</p></div>
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por visitante, CPF, morador ou unidade" className={`${inputClass} max-w-md`} />
           </div>
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -402,6 +393,7 @@ export default function VisitantesPage() {
               const canResidentValidate = !request.requiresPortariaQr && request.status === "CONFIRMADO" && !isGatekeeper;
               const canGatekeeperValidate = request.requiresPortariaQr && request.status === "CONFIRMADO" && (isGatekeeper || user?.role === "ADMIN");
               const canCheckOut = request.status === "CHECKED_IN" && (isGatekeeper || user?.role === "ADMIN");
+              const canDelete = canCreate && request.status === "CANCELADO";
               return (
                 <article key={request.id} className="rounded-[28px] border border-slate-200 bg-slate-50 p-5 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -413,7 +405,7 @@ export default function VisitantesPage() {
                     <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-right"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Janela</p><p className="mt-1 text-sm font-semibold text-slate-700">{formatDateTime(request.expectedCheckIn)}</p><p className="text-xs text-slate-500">{formatDateTime(request.expectedCheckOut)}</p></div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{request.adultsCount} adultos · {request.childrenCount} criancas</div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{request.adultsCount} adultos · {request.childrenCount} crianças</div>
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{request.petsCount} animais</div>
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{request.requiresPortariaQr ? "QR na portaria" : "QR pelo morador"}</div>
                   </div>
@@ -424,6 +416,7 @@ export default function VisitantesPage() {
                     {canGatekeeperValidate && <button type="button" onClick={() => setScannerOpen("gatekeeper")} className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700">Registrar check-in</button>}
                     {canCheckOut && <button type="button" onClick={() => void completeVisitorCheckOut(request.id).then(loadPage).then(() => setMessage("Check-out registrado com sucesso.")).catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao registrar check-out."))} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Registrar check-out</button>}
                     {canCreate && ["PENDENTE_CONFIRMACAO", "CONFIRMADO"].includes(request.status) && <button type="button" onClick={() => void cancelVisitorRequest(request.id).then(loadPage).then(() => setMessage("Visita cancelada com sucesso.")).catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao cancelar visita."))} className="rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Cancelar visita</button>}
+                    {canDelete && <button type="button" onClick={() => void handleDelete(request.id)} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><Trash2 size={15} /> Excluir registro</button>}
                   </div>
                 </article>
               );
@@ -435,31 +428,84 @@ export default function VisitantesPage() {
         {message && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{message}</p>}
         {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
       </div>
-
       {modalOpen && (
         <div className="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-950/50 p-4">
           <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5"><div><p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-600">Cadastro manual</p><h3 className="mt-2 text-xl font-semibold text-slate-950">Nova visita</h3><p className="mt-1 text-sm text-slate-500">O primeiro visitante sera o principal e recebera os e-mails da jornada.</p></div><button type="button" onClick={() => setModalOpen(false)} className="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button></div>
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-600">Cadastro manual</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-950">Nova visita</h3>
+                <p className="mt-1 text-sm text-slate-500">O primeiro visitante será o principal e receberá os e-mails da jornada.</p>
+              </div>
+              <button type="button" onClick={() => setModalOpen(false)} className="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
+            </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
                 <section className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm"><Users size={20} /></div><div><h4 className="text-sm font-semibold text-slate-900">Visitantes</h4><p className="text-xs text-slate-500">Cadastre uma ou mais pessoas para a mesma visita.</p></div></div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm"><Users size={20} /></div>
+                    <div><h4 className="text-sm font-semibold text-slate-900">Visitantes</h4><p className="text-xs text-slate-500">Cadastre uma ou mais pessoas para a mesma visita.</p></div>
+                  </div>
                   <div className="mt-4 space-y-4">
-                    {form.guests.map((guest, index) => <div key={`guest-${index}`} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-2"><div className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">{index === 0 ? "Visitante principal" : `Visitante ${index + 1}`}</div>{index > 0 && <button type="button" onClick={() => removeGuest(index)} className="text-xs font-semibold text-rose-600">Remover</button>}</div><div className="mt-4 grid gap-3 md:grid-cols-2"><input value={guest.fullName} onChange={(event) => updateGuest(index, { fullName: event.target.value })} className={inputClass} placeholder="Nome completo" /><input type="date" value={guest.birthDate} onChange={(event) => updateGuest(index, { birthDate: event.target.value })} className={inputClass} /><input value={guest.cpf} onChange={(event) => updateGuest(index, { cpf: formatCpf(event.target.value) })} className={inputClass} placeholder="CPF" /><input type="email" value={guest.email} onChange={(event) => updateGuest(index, { email: event.target.value })} className={inputClass} placeholder={index === 0 ? "E-mail do visitante principal" : "E-mail opcional"} /></div></div>)}
+                    {form.guests.map((guest, index) => (
+                      <div key={`guest-${index}`} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">{index === 0 ? "Visitante principal" : `Visitante ${index + 1}`}</div>
+                          {index > 0 && <button type="button" onClick={() => removeGuest(index)} className="text-xs font-semibold text-rose-600">Remover</button>}
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2"><FieldLabel>Nome completo</FieldLabel><input value={guest.fullName} onChange={(event) => updateGuest(index, { fullName: event.target.value })} className={inputClass} placeholder="Nome completo do visitante" /></div>
+                          <div className="space-y-2"><FieldLabel>Data de nascimento</FieldLabel><input type="date" value={guest.birthDate} onChange={(event) => updateGuest(index, { birthDate: event.target.value })} className={inputClass} /></div>
+                          <div className="space-y-2"><FieldLabel>CPF</FieldLabel><input value={guest.cpf} onChange={(event) => updateGuest(index, { cpf: formatCpf(event.target.value) })} className={inputClass} placeholder="000.000.000-00" /></div>
+                          <div className="space-y-2"><FieldLabel>{index === 0 ? "E-mail do visitante principal" : "E-mail do visitante"}</FieldLabel><input type="email" value={guest.email} onChange={(event) => updateGuest(index, { email: event.target.value })} className={inputClass} placeholder={index === 0 ? "email@exemplo.com" : "Opcional"} /></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   <button type="button" onClick={addGuest} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"><Plus size={16} /> Adicionar visitante</button>
                 </section>
                 <section className="space-y-5">
-                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><h4 className="text-sm font-semibold text-slate-900">Dados da visita</h4><div className="mt-4 grid gap-3"><select value={form.apartmentId ?? ""} onChange={(event) => setForm((current) => ({ ...current, apartmentId: event.target.value || null }))} disabled={user?.role === "MORADOR"} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}><option value="">Selecionar unidade</option>{availableApartments.map((option) => <option key={option.id} value={option.id}>{apartmentLabel(option)}</option>)}</select>{user?.role === "MORADOR" && <p className="text-xs leading-5 text-slate-500">A unidade vinculada ao seu perfil foi selecionada automaticamente para este cadastro.</p>}<div className="grid gap-3 sm:grid-cols-3"><input type="number" min={0} value={form.adultsCount} onChange={(event) => setForm((current) => ({ ...current, adultsCount: Number(event.target.value) }))} className={inputClass} placeholder="Adultos" /><input type="number" min={0} value={form.childrenCount} onChange={(event) => setForm((current) => ({ ...current, childrenCount: Number(event.target.value) }))} className={inputClass} placeholder="Criancas" /><input type="number" min={0} value={form.petsCount} onChange={(event) => setForm((current) => ({ ...current, petsCount: Number(event.target.value) }))} className={inputClass} placeholder="Animais" /></div><input type="datetime-local" value={form.expectedCheckIn} onChange={(event) => setForm((current) => ({ ...current, expectedCheckIn: event.target.value }))} className={inputClass} /><input type="datetime-local" value={form.expectedCheckOut} onChange={(event) => setForm((current) => ({ ...current, expectedCheckOut: event.target.value }))} className={inputClass} /><textarea rows={4} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className={areaClass} placeholder="Observacoes para a portaria" /></div></div>
-                  <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-semibold text-slate-900">Validacao do QR</p><div className="mt-4 grid gap-3"><button type="button" onClick={() => setForm((current) => ({ ...current, requiresPortariaQr: true }))} className={`rounded-[24px] border p-4 text-left transition ${form.requiresPortariaQr ? "border-emerald-300 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}><p className="text-sm font-semibold text-slate-900">QR apresentado na portaria</p><p className="mt-1 text-xs text-slate-500">O porteiro valida o check-in lendo o QR code.</p></button><button type="button" onClick={() => setForm((current) => ({ ...current, requiresPortariaQr: false }))} className={`rounded-[24px] border p-4 text-left transition ${!form.requiresPortariaQr ? "border-indigo-300 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}><p className="text-sm font-semibold text-slate-900">QR validado pelo morador</p><p className="mt-1 text-xs text-slate-500">O morador escaneia o QR code para autenticar a visita.</p></button></div></div>
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="text-sm font-semibold text-slate-900">Dados da visita</h4>
+                    <div className="mt-4 grid gap-4">
+                      <div className="space-y-2">
+                        <FieldLabel>Unidade da visita</FieldLabel>
+                        <select value={form.apartmentId ?? ""} onChange={(event) => setForm((current) => ({ ...current, apartmentId: event.target.value || null }))} className={inputClass}>
+                          <option value="">Selecionar unidade</option>
+                          {availableApartments.map((option) => <option key={option.id} value={option.id}>{apartmentLabel(option)}</option>)}
+                        </select>
+                        {user?.role === "MORADOR" && <p className="text-xs leading-5 text-slate-500">{availableApartments.length > 1 ? "Escolha qual das suas unidades receberá esta visita." : "Sua unidade vinculada foi selecionada para este cadastro."}</p>}
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="space-y-2"><FieldLabel>Adultos</FieldLabel><input type="number" min={0} value={form.adultsCount} onChange={(event) => setForm((current) => ({ ...current, adultsCount: Number(event.target.value) }))} className={inputClass} placeholder="Quantidade de adultos" /></div>
+                        <div className="space-y-2"><FieldLabel>Crianças</FieldLabel><input type="number" min={0} value={form.childrenCount} onChange={(event) => setForm((current) => ({ ...current, childrenCount: Number(event.target.value) }))} className={inputClass} placeholder="Quantidade de crianças" /></div>
+                        <div className="space-y-2"><FieldLabel>Animais de estimação</FieldLabel><input type="number" min={0} value={form.petsCount} onChange={(event) => setForm((current) => ({ ...current, petsCount: Number(event.target.value) }))} className={inputClass} placeholder="Quantidade de animais" /></div>
+                      </div>
+                      <div className="space-y-2"><FieldLabel>Check-in previsto</FieldLabel><input type="datetime-local" value={form.expectedCheckIn} onChange={(event) => setForm((current) => ({ ...current, expectedCheckIn: event.target.value }))} className={inputClass} /><p className="text-xs leading-5 text-slate-500">Informe a data e o horário previstos de chegada do visitante.</p></div>
+                      <div className="space-y-2"><FieldLabel>Check-out previsto</FieldLabel><input type="datetime-local" value={form.expectedCheckOut} onChange={(event) => setForm((current) => ({ ...current, expectedCheckOut: event.target.value }))} className={inputClass} /><p className="text-xs leading-5 text-slate-500">Informe até quando a permanência do visitante está autorizada.</p></div>
+                      <div className="space-y-2"><FieldLabel>Observações para a portaria</FieldLabel><textarea rows={4} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className={areaClass} placeholder="Ex.: visitante chegará de aplicativo, precisa de ajuda com bagagens, etc." /></div>
+                    </div>
+                  </div>
+                  <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                    <p className="text-sm font-semibold text-slate-900">Validação do QR</p>
+                    <div className="mt-4 grid gap-3">
+                      <button type="button" onClick={() => setForm((current) => ({ ...current, requiresPortariaQr: true }))} className={`rounded-[24px] border p-4 text-left transition ${form.requiresPortariaQr ? "border-emerald-300 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}><p className="text-sm font-semibold text-slate-900">QR apresentado na portaria</p><p className="mt-1 text-xs text-slate-500">O porteiro valida o check-in lendo o QR code.</p></button>
+                      <button type="button" onClick={() => setForm((current) => ({ ...current, requiresPortariaQr: false }))} className={`rounded-[24px] border p-4 text-left transition ${!form.requiresPortariaQr ? "border-indigo-300 bg-white shadow-sm" : "border-slate-200 bg-white/70"}`}><p className="text-sm font-semibold text-slate-900">QR validado pelo morador</p><p className="mt-1 text-xs text-slate-500">O morador escaneia o QR code para autenticar a visita.</p></button>
+                    </div>
+                  </div>
                 </section>
               </div>
             </div>
-            <div className="border-t border-slate-200 px-6 py-4">{formError && <p className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{formError}</p>}<div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end"><button type="button" onClick={() => setModalOpen(false)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancelar</button><button type="button" onClick={() => void handleCreate()} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">{saving ? "Salvando..." : "Cadastrar visita"}</button></div></div>
+            <div className="border-t border-slate-200 px-6 py-4">
+              {formError && <p className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{formError}</p>}
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" onClick={() => setModalOpen(false)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancelar</button>
+                <button type="button" onClick={() => void handleCreate()} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">{saving ? "Salvando..." : "Cadastrar visita"}</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
-
       {scannerOpen && <ScannerModal title={scannerOpen === "gatekeeper" ? "Leitura do QR na portaria" : "Leitura do QR pelo morador"} onClose={() => setScannerOpen(null)} onSubmit={handleScan} submitting={scannerSaving} />}
     </AppLayout>
   );

@@ -83,8 +83,16 @@ Deno.serve(async (request) => {
       },
     );
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro ao aprovar visita." }), {
-      status: 500,
+    const message = error instanceof Error ? error.message : "Erro ao aprovar visita.";
+    const status =
+      message === "Token de visitante invalido."
+        ? 404
+        : message === "Este token ja foi utilizado." || message === "Este token expirou." || message === "Esta visita foi cancelada." || message === "Esta visita ja foi confirmada."
+          ? 400
+          : 500;
+
+    return new Response(JSON.stringify({ error: message }), {
+      status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

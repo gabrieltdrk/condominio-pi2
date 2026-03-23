@@ -124,13 +124,14 @@ export default function AppRoutes() {
           }
         />
         <Route
-          path="/maresia"
+          path="/manutencao"
           element={
             <ProtectedRoute>
               <MaresiaPage />
             </ProtectedRoute>
           }
         />
+        <Route path="/maresia" element={<Navigate to="/manutencao" replace />} />
       </Routes>
     </BrowserRouter>
   );

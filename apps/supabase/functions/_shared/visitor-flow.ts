@@ -237,6 +237,11 @@ export function approvalLink(token: string) {
   return `${appBaseUrl.replace(/\/$/, "")}/visitantes/aprovacao?token=${encodeURIComponent(token)}`;
 }
 
+export function accessCardLink(token: string) {
+  const supabaseUrl = requireEnv("SUPABASE_URL").replace(/\/$/, "");
+  return `${supabaseUrl}/functions/v1/visitor-access-card?token=${encodeURIComponent(token)}`;
+}
+
 export function qrPayload(token: string) {
   return `omni-visit:${token}`;
 }
@@ -301,6 +306,7 @@ export async function sendAccessEmail(bundle: VisitorBundle, token: string) {
   const resend = new Resend(requireEnv("RESEND_API_KEY"));
   const from = Deno.env.get("VISITOR_FROM_EMAIL") ?? "Condominio <onboarding@resend.dev>";
   const qrDataUrl = await createQrDataUrl(token);
+  const cardLink = accessCardLink(token);
   const presenterLabel = bundle.request.requires_portaria_qr ? "na portaria" : "ao morador responsavel";
 
   const html = emailLayout(
@@ -309,14 +315,17 @@ export async function sendAccessEmail(bundle: VisitorBundle, token: string) {
       <p>Visita confirmada com sucesso, <strong>${bundle.primaryGuest.full_name}</strong>.</p>
       <p>Apresente este QR code ${presenterLabel} durante o check-in da sua visita em ${apartmentLabel(bundle.apartment)}.</p>
       <p><strong>Janela da visita:</strong> ${formatDateTime(bundle.request.expected_check_in)} ate ${formatDateTime(bundle.request.expected_check_out)}</p>
+      <p style="margin:24px 0 0;">
+        <a href="${cardLink}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:16px;font-weight:700;">Abrir QR code em uma pagina separada</a>
+      </p>
       <div style="margin:28px 0;padding:20px;border:1px solid #e2e8f0;border-radius:20px;background:#f8fafc;text-align:center;">
         <img src="${qrDataUrl}" alt="QR Code da visita" style="width:240px;max-width:100%;height:auto;" />
         <p style="margin:16px 0 0;font-size:12px;color:#64748b;">Codigo manual: ${qrPayload(token)}</p>
       </div>
     `,
     bundle.request.requires_portaria_qr
-      ? "O QR code sera validado pela portaria para autenticar o check-in."
-      : "O morador responsavel deve escanear este QR code para validar a visita.",
+      ? "Se o QR nao aparecer no seu app de e-mail, abra o cartao online pelo botao acima. O QR code sera validado pela portaria para autenticar o check-in."
+      : "Se o QR nao aparecer no seu app de e-mail, abra o cartao online pelo botao acima. O morador responsavel deve escanear este QR code para validar a visita.",
   );
 
   const result = await resend.emails.send({

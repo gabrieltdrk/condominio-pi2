@@ -47,7 +47,7 @@ const navLinks = [
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
   { label: "Edificio", path: "/predio", icon: Building2 },
   { label: "Usuarios", path: "/usuarios", icon: Users },
-  { label: "Maresia", path: "/maresia", icon: Waves },
+  { label: "Manutenção", path: "/manutencao", icon: Waves },
 ];
 
 const adminPaths = new Set(["/financeiro", "/predio", "/usuarios"]);

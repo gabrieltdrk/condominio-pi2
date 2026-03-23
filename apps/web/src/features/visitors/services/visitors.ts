@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { getUser } from "../../auth/services/auth";
 import { supabase } from "../../../lib/supabase";
 
@@ -93,6 +94,11 @@ type VisitorGuestRow = {
   is_primary: boolean;
 };
 
+type FunctionErrorPayload = {
+  error?: string;
+  message?: string;
+};
+
 export type VisitorFlowResult = {
   requestId: string;
   emailQueued: boolean;
@@ -110,6 +116,43 @@ function normalizeGuests(guests: VisitorGuestInput[]) {
     email: guest.email.trim() || null,
     is_primary: guest.isPrimary ?? index === 0,
   }));
+}
+
+async function extractFunctionError(error: unknown, fallback: string) {
+  if (error instanceof FunctionsHttpError && error.context instanceof Response) {
+    try {
+      const payload = (await error.context.clone().json()) as FunctionErrorPayload;
+      const message = payload.error ?? payload.message;
+      if (message) return message;
+    } catch {
+      return fallback;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+async function ensureNoConflictingRequest(apartmentId: string, expectedCheckIn: string, expectedCheckOut: string) {
+  const { data, error } = await supabase
+    .from("visitor_requests")
+    .select("id")
+    .eq("apartment_id", apartmentId)
+    .not("status", "in", '("CANCELADO","CHECKED_OUT")')
+    .lt("expected_check_in", expectedCheckOut)
+    .gt("expected_check_out", expectedCheckIn)
+    .limit(1);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if ((data ?? []).length > 0) {
+    throw new Error("Já existe uma visita ativa para esta unidade na janela informada.");
+  }
 }
 
 function mapGuest(row: VisitorGuestRow): VisitorGuest {
@@ -217,12 +260,12 @@ export async function listVisitorRequests(): Promise<VisitorRequest[]> {
 export async function createVisitorRequest(input: VisitorRequestInput): Promise<VisitorFlowResult> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
-    throw new Error("Sessao invalida. Faca login novamente.");
+    throw new Error("Sessão inválida. Faça login novamente.");
   }
 
   const storedUser = getUser();
   if (storedUser?.role === "PORTEIRO") {
-    throw new Error("A portaria nao pode cadastrar visitas.");
+    throw new Error("A portaria não pode cadastrar visitas.");
   }
 
   const guests = normalizeGuests(input.guests);
@@ -251,9 +294,11 @@ export async function createVisitorRequest(input: VisitorRequestInput): Promise<
     }
 
     if (!apartment || apartment.resident_id !== authData.user.id) {
-      throw new Error("Voce so pode cadastrar visitantes para a sua unidade.");
+      throw new Error("Você só pode cadastrar visitantes para uma unidade vinculada ao seu perfil.");
     }
   }
+
+  await ensureNoConflictingRequest(input.apartmentId, input.expectedCheckIn, input.expectedCheckOut);
 
   const { data: inserted, error } = await supabase
     .from("visitor_requests")
@@ -272,7 +317,7 @@ export async function createVisitorRequest(input: VisitorRequestInput): Promise<
     .single();
 
   if (error || !inserted) {
-    throw new Error(error?.message ?? "Nao foi possivel criar a visita.");
+    throw new Error(error?.message ?? "Não foi possível criar a visita.");
   }
 
   const { error: guestsError } = await supabase.from("visitor_request_guests").insert(
@@ -324,6 +369,17 @@ export async function cancelVisitorRequest(requestId: string): Promise<void> {
   }
 }
 
+export async function deleteVisitorRequest(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from("visitor_requests")
+    .delete()
+    .eq("id", requestId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function completeVisitorCheckOut(requestId: string): Promise<void> {
   const { error } = await supabase
     .from("visitor_requests")
@@ -339,33 +395,41 @@ export async function completeVisitorCheckOut(requestId: string): Promise<void> 
 }
 
 export async function approveVisitorByToken(token: string): Promise<{ status: VisitorRequestStatus; requiresPortariaQr: boolean }> {
-  const result = await supabase.functions.invoke("visitor-approval", {
-    body: { token },
-  });
+  try {
+    const result = await supabase.functions.invoke("visitor-approval", {
+      body: { token },
+    });
 
-  if (result.error) {
-    throw new Error(result.error.message);
+    if (result.error) {
+      throw result.error;
+    }
+
+    return {
+      status: (result.data?.status ?? "CONFIRMADO") as VisitorRequestStatus,
+      requiresPortariaQr: Boolean(result.data?.requiresPortariaQr),
+    };
+  } catch (error) {
+    throw new Error(await extractFunctionError(error, "Não foi possível confirmar esta visita."));
   }
-
-  return {
-    status: (result.data?.status ?? "CONFIRMADO") as VisitorRequestStatus,
-    requiresPortariaQr: Boolean(result.data?.requiresPortariaQr),
-  };
 }
 
 export async function validateVisitorAccessToken(token: string): Promise<{ status: VisitorRequestStatus; actor: "resident" | "gatekeeper" }> {
-  const result = await supabase.functions.invoke("visitor-checkin", {
-    body: { token },
-  });
+  try {
+    const result = await supabase.functions.invoke("visitor-checkin", {
+      body: { token },
+    });
 
-  if (result.error) {
-    throw new Error(result.error.message);
+    if (result.error) {
+      throw result.error;
+    }
+
+    return {
+      status: (result.data?.status ?? "CHECKED_IN") as VisitorRequestStatus,
+      actor: (result.data?.actor ?? "gatekeeper") as "resident" | "gatekeeper",
+    };
+  } catch (error) {
+    throw new Error(await extractFunctionError(error, "Erro ao validar QR."));
   }
-
-  return {
-    status: (result.data?.status ?? "CHECKED_IN") as VisitorRequestStatus,
-    actor: (result.data?.actor ?? "gatekeeper") as "resident" | "gatekeeper",
-  };
 }
 
 export function subscribeToVisitorRequests(onChange: () => void) {
