@@ -3,6 +3,7 @@ import { supabase } from "../../../lib/supabase";
 
 export type MaintenanceStatus = "AGENDADA" | "EM_ANDAMENTO" | "CONCLUIDA" | "ATRASADA" | "CANCELADA";
 export type MaintenancePriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
+export type MaintenanceKind = "PREVENTIVA" | "CORRETIVA" | "INSPECAO";
 export type MaintenanceCategory =
   | "HIDRAULICA"
   | "ELETRICA"
@@ -17,9 +18,11 @@ export type MaintenanceCategory =
 
 export type MaintenanceOrder = {
   id: string;
+  orderCode: string;
   title: string;
   assetName: string;
   area: string;
+  kind: MaintenanceKind;
   category: MaintenanceCategory;
   priority: MaintenancePriority;
   status: MaintenanceStatus;
@@ -37,11 +40,16 @@ export type MaintenanceOrder = {
   checkOutAt: string | null;
   lastServiceAt: string | null;
   maintenanceIntervalDays: number;
+  estimatedCost: number | null;
+  finalCost: number | null;
+  approvedByName: string;
+  approvedAt: string | null;
   accessNotes: string;
 };
 
 type MaintenanceOrderInput = {
   title: string;
+  kind: MaintenanceKind;
   assetName: string;
   area: string;
   category: MaintenanceCategory;
@@ -52,6 +60,9 @@ type MaintenanceOrderInput = {
   scheduledDate: string;
   scheduledTime: string;
   maintenanceIntervalDays: number;
+  estimatedCost: number | null;
+  finalCost: number | null;
+  approvedByName: string;
   notes: string;
 };
 
@@ -62,9 +73,11 @@ type AccessInput = {
 
 type MaintenanceOrderRow = {
   id: string;
+  order_code: string;
   title: string;
   asset_name: string;
   area: string;
+  kind: MaintenanceKind;
   category: MaintenanceCategory;
   priority: MaintenancePriority;
   status: MaintenanceStatus;
@@ -82,15 +95,21 @@ type MaintenanceOrderRow = {
   check_out_at: string | null;
   last_service_at: string | null;
   maintenance_interval_days: number;
+  estimated_cost: number | null;
+  final_cost: number | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
   access_notes: string | null;
 };
 
 function mapRow(row: MaintenanceOrderRow): MaintenanceOrder {
   return {
     id: row.id,
+    orderCode: row.order_code,
     title: row.title,
     assetName: row.asset_name,
     area: row.area,
+    kind: row.kind,
     category: row.category,
     priority: row.priority,
     status: row.status,
@@ -108,6 +127,10 @@ function mapRow(row: MaintenanceOrderRow): MaintenanceOrder {
     checkOutAt: row.check_out_at,
     lastServiceAt: row.last_service_at,
     maintenanceIntervalDays: row.maintenance_interval_days,
+    estimatedCost: row.estimated_cost,
+    finalCost: row.final_cost,
+    approvedByName: row.approved_by_name ?? "",
+    approvedAt: row.approved_at,
     accessNotes: row.access_notes ?? "",
   };
 }
@@ -115,6 +138,7 @@ function mapRow(row: MaintenanceOrderRow): MaintenanceOrder {
 function mapInsertInput(input: MaintenanceOrderInput, currentUserId: string, createdByName: string) {
   return {
     title: input.title.trim(),
+    kind: input.kind,
     asset_name: input.assetName.trim(),
     area: input.area.trim(),
     category: input.category,
@@ -125,6 +149,10 @@ function mapInsertInput(input: MaintenanceOrderInput, currentUserId: string, cre
     scheduled_date: input.scheduledDate,
     scheduled_time: `${input.scheduledTime}:00`,
     maintenance_interval_days: Math.max(1, Math.round(input.maintenanceIntervalDays)),
+    estimated_cost: input.estimatedCost,
+    final_cost: input.finalCost,
+    approved_by_name: input.approvedByName.trim() || null,
+    approved_at: input.approvedByName.trim() ? new Date().toISOString() : null,
     notes: input.notes.trim() || null,
     created_by_user_id: currentUserId,
     created_by_name: createdByName,
@@ -143,7 +171,7 @@ async function requireSessionUser() {
 export async function listMaintenanceOrders(): Promise<MaintenanceOrder[]> {
   const { data, error } = await supabase
     .from("maintenance_orders")
-    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .select("id, order_code, title, asset_name, area, kind, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, estimated_cost, final_cost, approved_by_name, approved_at, access_notes")
     .order("scheduled_date", { ascending: false })
     .order("scheduled_time", { ascending: false });
 
@@ -161,7 +189,7 @@ export async function createMaintenanceOrder(input: MaintenanceOrderInput): Prom
   const { data, error } = await supabase
     .from("maintenance_orders")
     .insert(mapInsertInput(input, authUser.id, currentUser?.name?.trim() || authUser.email || "Usuario"))
-    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .select("id, order_code, title, asset_name, area, kind, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, estimated_cost, final_cost, approved_by_name, approved_at, access_notes")
     .single();
 
   if (error || !data) {
@@ -176,6 +204,7 @@ export async function updateMaintenanceOrder(orderId: string, input: Maintenance
     .from("maintenance_orders")
     .update({
       title: input.title.trim(),
+      kind: input.kind,
       asset_name: input.assetName.trim(),
       area: input.area.trim(),
       category: input.category,
@@ -187,10 +216,14 @@ export async function updateMaintenanceOrder(orderId: string, input: Maintenance
       scheduled_date: input.scheduledDate,
       scheduled_time: `${input.scheduledTime}:00`,
       maintenance_interval_days: Math.max(1, Math.round(input.maintenanceIntervalDays)),
+      estimated_cost: input.estimatedCost,
+      final_cost: input.finalCost,
+      approved_by_name: input.approvedByName.trim() || null,
+      approved_at: input.approvedByName.trim() ? new Date().toISOString() : null,
       notes: input.notes.trim() || null,
     })
     .eq("id", orderId)
-    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .select("id, order_code, title, asset_name, area, kind, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, estimated_cost, final_cost, approved_by_name, approved_at, access_notes")
     .single();
 
   if (error || !data) {
@@ -210,7 +243,7 @@ export async function registerMaintenanceCheckIn(orderId: string, input: AccessI
       access_notes: input.accessNotes.trim() || null,
     })
     .eq("id", orderId)
-    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .select("id, order_code, title, asset_name, area, kind, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, estimated_cost, final_cost, approved_by_name, approved_at, access_notes")
     .single();
 
   if (error || !data) {
@@ -230,7 +263,7 @@ export async function registerMaintenanceCheckOut(orderId: string, input: Access
       access_notes: input.accessNotes.trim() || null,
     })
     .eq("id", orderId)
-    .select("id, title, asset_name, area, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, access_notes")
+    .select("id, order_code, title, asset_name, area, kind, category, priority, status, supplier_name, technician_name, responsible_name, scheduled_date, scheduled_time, notes, created_at, updated_at, created_by_user_id, created_by_name, check_in_at, check_out_at, last_service_at, maintenance_interval_days, estimated_cost, final_cost, approved_by_name, approved_at, access_notes")
     .single();
 
   if (error || !data) {

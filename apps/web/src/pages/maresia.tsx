@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Clock3, Plus, ScanLine, Search, ShieldAlert, Wrench, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Clock3, Plus, ScanLine, Search, ShieldAlert, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
 import {
@@ -11,6 +11,7 @@ import {
   subscribeToMaintenanceOrders,
   updateMaintenanceOrder,
   type MaintenanceCategory,
+  type MaintenanceKind,
   type MaintenanceOrder,
   type MaintenancePriority,
   type MaintenanceStatus,
@@ -56,8 +57,15 @@ const PRIORITY_OPTIONS: Array<{ value: MaintenancePriority; label: string }> = [
   { value: "CRITICA", label: "Critica" },
 ];
 
+const KIND_OPTIONS: Array<{ value: MaintenanceKind; label: string }> = [
+  { value: "PREVENTIVA", label: "Preventiva" },
+  { value: "CORRETIVA", label: "Corretiva" },
+  { value: "INSPECAO", label: "Inspecao" },
+];
+
 type OrderFormState = {
   title: string;
+  kind: MaintenanceKind;
   assetName: string;
   area: string;
   category: MaintenanceCategory;
@@ -69,6 +77,9 @@ type OrderFormState = {
   scheduledDate: string;
   scheduledTime: string;
   maintenanceIntervalDays: string;
+  estimatedCost: string;
+  finalCost: string;
+  approvedByName: string;
   notes: string;
 };
 
@@ -111,6 +122,11 @@ function formatSimpleDate(value: string | null) {
   return new Date(value).toLocaleDateString("pt-BR", { dateStyle: "short" });
 }
 
+function formatCurrency(value: number | null) {
+  if (value === null) return "Nao informado";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
 function isToday(date: string) {
   return date === new Date().toISOString().slice(0, 10);
 }
@@ -139,6 +155,7 @@ function emptyForm(): OrderFormState {
   const today = new Date().toISOString().slice(0, 10);
   return {
     title: "",
+    kind: "PREVENTIVA",
     assetName: "",
     area: "",
     category: "HIDRAULICA",
@@ -150,6 +167,9 @@ function emptyForm(): OrderFormState {
     scheduledDate: today,
     scheduledTime: "09:00",
     maintenanceIntervalDays: "90",
+    estimatedCost: "",
+    finalCost: "",
+    approvedByName: "",
     notes: "",
   };
 }
@@ -157,6 +177,7 @@ function emptyForm(): OrderFormState {
 function formFromOrder(order: MaintenanceOrder): OrderFormState {
   return {
     title: order.title,
+    kind: order.kind,
     assetName: order.assetName,
     area: order.area,
     category: order.category,
@@ -168,6 +189,9 @@ function formFromOrder(order: MaintenanceOrder): OrderFormState {
     scheduledDate: order.scheduledDate,
     scheduledTime: order.scheduledTime,
     maintenanceIntervalDays: String(order.maintenanceIntervalDays),
+    estimatedCost: order.estimatedCost === null ? "" : String(order.estimatedCost),
+    finalCost: order.finalCost === null ? "" : String(order.finalCost),
+    approvedByName: order.approvedByName,
     notes: order.notes,
   };
 }
@@ -206,6 +230,7 @@ function OrderFormModal({
         <div className="overflow-y-auto px-6 py-5">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block md:col-span-2"><span className={labelClass}>Titulo do servico</span><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} className={inputClass} placeholder="Ex.: Revisao da bomba da cisterna" /></label>
+            <label className="block"><span className={labelClass}>Tipo</span><select value={form.kind} onChange={(event) => setForm((current) => ({ ...current, kind: event.target.value as MaintenanceKind }))} className={inputClass}>{KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             <label className="block"><span className={labelClass}>Item monitorado</span><input value={form.assetName} onChange={(event) => setForm((current) => ({ ...current, assetName: event.target.value }))} className={inputClass} placeholder="Ex.: Elevador social" /></label>
             <label className="block"><span className={labelClass}>Area</span><input value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))} className={inputClass} placeholder="Ex.: Casa de maquinas" /></label>
             <label className="block"><span className={labelClass}>Categoria</span><select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as MaintenanceCategory }))} className={inputClass}>{CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -217,6 +242,9 @@ function OrderFormModal({
             <label className="block"><span className={labelClass}>Data prevista</span><input type="date" value={form.scheduledDate} onChange={(event) => setForm((current) => ({ ...current, scheduledDate: event.target.value }))} className={inputClass} /></label>
             <label className="block"><span className={labelClass}>Horario previsto</span><input type="time" value={form.scheduledTime} onChange={(event) => setForm((current) => ({ ...current, scheduledTime: event.target.value }))} className={inputClass} /></label>
             <label className="block md:col-span-2"><span className={labelClass}>Ciclo de manutencao em dias</span><input type="number" min="1" value={form.maintenanceIntervalDays} onChange={(event) => setForm((current) => ({ ...current, maintenanceIntervalDays: event.target.value }))} className={inputClass} placeholder="Ex.: 90" /></label>
+            <label className="block"><span className={labelClass}>Custo estimado</span><input type="number" min="0" step="0.01" value={form.estimatedCost} onChange={(event) => setForm((current) => ({ ...current, estimatedCost: event.target.value }))} className={inputClass} placeholder="Ex.: 450.00" /></label>
+            <label className="block"><span className={labelClass}>Custo final</span><input type="number" min="0" step="0.01" value={form.finalCost} onChange={(event) => setForm((current) => ({ ...current, finalCost: event.target.value }))} className={inputClass} placeholder="Ex.: 480.00" /></label>
+            <label className="block md:col-span-2"><span className={labelClass}>Aprovado por</span><input value={form.approvedByName} onChange={(event) => setForm((current) => ({ ...current, approvedByName: event.target.value }))} className={inputClass} placeholder="Ex.: Sindico / Administradora" /></label>
             <label className="block md:col-span-2"><span className={labelClass}>Observacoes</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} rows={4} className={textareaClass} placeholder="Informacoes importantes para a equipe e para a portaria." /></label>
           </div>
         </div>
@@ -272,6 +300,7 @@ function AccessModal({
 function DetailsModal({
   open,
   order,
+  assetHistory,
   canManage,
   saving,
   onClose,
@@ -282,6 +311,7 @@ function DetailsModal({
 }: {
   open: boolean;
   order: MaintenanceOrder | null;
+  assetHistory: MaintenanceOrder[];
   canManage: boolean;
   saving: boolean;
   onClose: () => void;
@@ -292,6 +322,12 @@ function DetailsModal({
 }) {
   if (!open || !order) return null;
   const health = getAssetHealth(order);
+  const timeline = [
+    { label: "Ordem criada", value: formatDateTime(order.createdAt) },
+    { label: "Aprovacao registrada", value: order.approvedAt ? `${formatDateTime(order.approvedAt)} · ${order.approvedByName || "Responsavel"}` : "Nao registrada" },
+    { label: "Entrada do tecnico", value: formatDateTime(order.checkInAt) },
+    { label: "Saida do tecnico", value: formatDateTime(order.checkOutAt) },
+  ];
 
   return (
     <div className="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-950/50 p-4">
@@ -307,11 +343,15 @@ function DetailsModal({
         <div className="overflow-y-auto px-6 py-5">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Prestador</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.supplierName}</p><p className="mt-1 text-sm text-slate-600">Tecnico: {order.technicianName}</p><p className="mt-1 text-sm text-slate-600">Responsavel interno: {order.responsibleName}</p></div>
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Classificacao</p><div className="mt-2 flex flex-wrap gap-2"><span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span><span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{order.category}</span></div></div>
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Classificacao</p><div className="mt-2 flex flex-wrap gap-2"><span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span><span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{order.category}</span><span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{order.kind}</span></div><p className="mt-3 text-sm text-slate-500">Codigo: <span className="font-semibold text-slate-800">{order.orderCode}</span></p></div>
             <div className="rounded-[24px] border border-slate-200 bg-white p-4 md:col-span-2"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Saude do ativo</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.assetName}</p><p className={`mt-1 text-sm font-medium ${health.statusTone}`}>{health.statusLabel}</p></div><div className="text-right text-sm text-slate-500"><p>{health.percentage}%</p><p>Proxima revisao: {formatSimpleDate(health.nextServiceDate)}</p></div></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>Ultima manutencao: {formatSimpleDate(order.lastServiceAt ?? order.checkOutAt)}</span><span>{health.daysRemaining <= 0 ? `${Math.abs(health.daysRemaining)} dias em atraso` : `${health.daysRemaining} dias restantes`}</span></div></div>
             <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Entrada registrada</p><p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(order.checkInAt)}</p></div>
             <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Saida registrada</p><p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(order.checkOutAt)}</p></div>
+            <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Financeiro</p><p className="mt-2 text-sm text-slate-600">Estimado: <span className="font-semibold text-slate-900">{formatCurrency(order.estimatedCost)}</span></p><p className="mt-1 text-sm text-slate-600">Final: <span className="font-semibold text-slate-900">{formatCurrency(order.finalCost)}</span></p></div>
+            <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Aprovacao</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.approvedByName || "Nao informada"}</p><p className="mt-1 text-sm text-slate-600">{order.approvedAt ? formatDateTime(order.approvedAt) : "Sem data de aprovacao"}</p></div>
           </div>
+          <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Timeline da ordem</p><div className="mt-4 space-y-3">{timeline.map((item) => <div key={item.label} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-900" /><div><p className="text-sm font-semibold text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">{item.value}</p></div></div>)}</div></div>
+          {assetHistory.length > 0 && <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Historico recente do ativo</p><div className="mt-4 space-y-3">{assetHistory.map((historyOrder) => <div key={historyOrder.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-900">{historyOrder.title}</p><span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${STATUS_META[historyOrder.status].tone}`}>{STATUS_META[historyOrder.status].label}</span></div><p className="mt-1 text-xs text-slate-500">{formatDate(historyOrder.scheduledDate, historyOrder.scheduledTime)} · {historyOrder.kind}</p></div>)}</div></div>}
           {order.notes && <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Descricao</p><p className="mt-2 break-words text-sm leading-6 text-slate-700">{order.notes}</p></div>}
           {order.accessNotes && <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Historico de acesso</p><p className="mt-2 break-words text-sm leading-6 text-slate-700">{order.accessNotes}</p></div>}
         </div>
@@ -426,6 +466,17 @@ export default function MaresiaPage() {
     };
   }, [orders]);
 
+  const selectedAssetHistory = useMemo(
+    () =>
+      selectedOrder
+        ? orders
+            .filter((order) => order.assetName === selectedOrder.assetName && order.id !== selectedOrder.id)
+            .sort((left, right) => `${right.scheduledDate}T${right.scheduledTime}`.localeCompare(`${left.scheduledDate}T${left.scheduledTime}`))
+            .slice(0, 4)
+        : [],
+    [orders, selectedOrder],
+  );
+
   function openCreateModal() {
     setFormMode("create");
     setForm(emptyForm());
@@ -467,7 +518,12 @@ export default function MaresiaPage() {
     setMessage("");
 
     try {
-      const payload = { ...form, maintenanceIntervalDays: Number(form.maintenanceIntervalDays) };
+      const payload = {
+        ...form,
+        maintenanceIntervalDays: Number(form.maintenanceIntervalDays),
+        estimatedCost: form.estimatedCost ? Number(form.estimatedCost) : null,
+        finalCost: form.finalCost ? Number(form.finalCost) : null,
+      };
       if (formMode === "create") {
         await createMaintenanceOrder(payload);
         setMessage("Manutencao criada com sucesso.");
@@ -534,31 +590,28 @@ export default function MaresiaPage() {
   return (
     <AppLayout title="Manutencao">
       <div className="space-y-5">
-        <section className="overflow-hidden rounded-[34px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_26%),linear-gradient(135deg,_#ffffff_0%,_#f8fafc_46%,_#eef2ff_100%)] p-6 shadow-sm">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_380px]">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700"><Wrench size={13} /> Central de manutencao</div>
-              <h2 className="mt-4 max-w-3xl text-[clamp(1.9rem,4vw,3rem)] font-black leading-none tracking-[-0.05em] text-slate-950">Panorama de manutencao do predio.</h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">A ideia aqui e voce bater o olho e entender a situacao geral do condominio: o que esta saudavel, o que pede atencao e o que ja pede nova chamada tecnica.</p>
-              {canManage && <button type="button" onClick={openCreateModal} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"><Plus size={16} /> Nova manutencao</button>}
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Central de manutencao</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Controle rapido das ordens, saude dos ativos e chamadas tecnicas do predio.</p>
+            {canManage && <button type="button" onClick={openCreateModal} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"><Plus size={16} /> Nova manutencao</button>}
+          </div>
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Saude geral do predio</p>
+                <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-slate-950">{buildingOverview.overallHealth}%</p>
+                <p className="mt-1 text-sm text-slate-500">{buildingOverview.totalTracked} itens monitorados</p>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-xs font-semibold ${buildingOverview.overallHealth <= 20 ? "bg-rose-100 text-rose-700" : buildingOverview.overallHealth <= 60 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{buildingOverview.overallHealth <= 20 ? "Estado critico" : buildingOverview.overallHealth <= 60 ? "Em observacao" : "Operacao estavel"}</div>
             </div>
-            <div className="rounded-[30px] border border-slate-200 bg-white/90 p-5 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Saude geral do predio</p>
-              <div className="mt-3 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-4xl font-black tracking-[-0.05em] text-slate-950">{buildingOverview.overallHealth}%</p>
-                  <p className="mt-1 text-sm text-slate-500">{buildingOverview.totalTracked} itens monitorados</p>
-                </div>
-                <div className={`rounded-full px-3 py-1 text-xs font-semibold ${buildingOverview.overallHealth <= 20 ? "bg-rose-100 text-rose-700" : buildingOverview.overallHealth <= 60 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{buildingOverview.overallHealth <= 20 ? "Estado critico" : buildingOverview.overallHealth <= 60 ? "Em observacao" : "Operacao estavel"}</div>
-              </div>
-              <div className="mt-4 h-4 overflow-hidden rounded-full bg-slate-100">
-                <div className={`${buildingOverview.overallHealth <= 20 ? "bg-rose-500" : buildingOverview.overallHealth <= 60 ? "bg-amber-500" : "bg-emerald-500"} h-full rounded-full`} style={{ width: `${buildingOverview.overallHealth}%` }} />
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Saudavel</p><p className="mt-2 text-2xl font-black text-slate-950">{buildingOverview.healthyCount}</p></div>
-                <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">Atencao</p><p className="mt-2 text-2xl font-black text-slate-950">{buildingOverview.warningCount}</p></div>
-                <div className="rounded-[22px] border border-rose-200 bg-rose-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700">Urgente</p><p className="mt-2 text-2xl font-black text-slate-950">{buildingOverview.urgentCount}</p></div>
-              </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+              <div className={`${buildingOverview.overallHealth <= 20 ? "bg-rose-500" : buildingOverview.overallHealth <= 60 ? "bg-amber-500" : "bg-emerald-500"} h-full rounded-full`} style={{ width: `${buildingOverview.overallHealth}%` }} />
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Saudavel</p><p className="mt-1 text-xl font-black text-slate-950">{buildingOverview.healthyCount}</p></div>
+              <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">Atencao</p><p className="mt-1 text-xl font-black text-slate-950">{buildingOverview.warningCount}</p></div>
+              <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-700">Urgente</p><p className="mt-1 text-xl font-black text-slate-950">{buildingOverview.urgentCount}</p></div>
             </div>
           </div>
         </section>
@@ -616,7 +669,7 @@ export default function MaresiaPage() {
       </div>
 
       <OrderFormModal open={formOpen} mode={formMode} form={form} setForm={setForm} saving={saving} onClose={() => setFormOpen(false)} onSubmit={handleSubmitForm} />
-      <DetailsModal open={detailsOpen} order={selectedOrder} canManage={canManage} saving={saving} onClose={() => setDetailsOpen(false)} onEdit={openEditModal} onStart={() => openAccessModal("checkin")} onFinish={() => openAccessModal("checkout")} onCancelOrder={handleCancelOrder} />
+      <DetailsModal open={detailsOpen} order={selectedOrder} assetHistory={selectedAssetHistory} canManage={canManage} saving={saving} onClose={() => setDetailsOpen(false)} onEdit={openEditModal} onStart={() => openAccessModal("checkin")} onFinish={() => openAccessModal("checkout")} onCancelOrder={handleCancelOrder} />
       <AccessModal open={accessMode !== null} mode={accessMode ?? "checkin"} value={accessDateTime} setValue={setAccessDateTime} notes={accessNotes} setNotes={setAccessNotes} order={selectedOrder} saving={saving} onClose={() => setAccessMode(null)} onSubmit={handleAccessSubmit} />
     </AppLayout>
   );

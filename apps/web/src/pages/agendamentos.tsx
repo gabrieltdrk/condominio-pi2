@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Droplet, Users, X } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight, Droplet, Users, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
 import {
@@ -333,31 +333,14 @@ export default function Agendamentos() {
   return (
     <AppLayout title="Agendamentos">
       <div className="space-y-5">
-        <section className="rounded-[34px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.15),_transparent_26%),linear-gradient(135deg,_#ffffff_0%,_#f8fafc_46%,_#eef2ff_100%)] p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                <CalendarDays size={13} />
-                Agenda visual
-              </div>
-              <h2 className="mt-4 max-w-3xl text-[clamp(1.9rem,4vw,3rem)] font-black leading-none tracking-[-0.05em] text-slate-950">
-                Agende por calendario, sem poluicao na tela.
-              </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
-                Escolha a area comum e clique no dia desejado. Os detalhes aparecem em um modal quando voce precisa deles.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Ocupados</p>
-                <p className="mt-1 text-2xl font-black text-slate-950">{occupiedCount}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Livres</p>
-                <p className="mt-1 text-2xl font-black text-slate-950">{availableCount}</p>
-              </div>
-            </div>
+        <section className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Ocupados</p>
+            <p className="mt-1 text-2xl font-black text-slate-950">{occupiedCount}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Livres</p>
+            <p className="mt-1 text-2xl font-black text-slate-950">{availableCount}</p>
           </div>
         </section>
 
@@ -409,8 +392,8 @@ export default function Agendamentos() {
               </div>
             </div>
 
-            <div className="mt-5 overflow-x-auto pb-2">
-              <div className="min-w-[760px]">
+            <div className="mt-4 overflow-x-auto pb-2">
+              <div className="min-w-[720px]">
                 <div className="grid grid-cols-7 gap-2">
                   {WEEK_DAYS.map((day) => (
                     <div key={day} className="px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -430,7 +413,7 @@ export default function Agendamentos() {
                         key={key}
                         type="button"
                         onClick={() => openDay(day)}
-                        className={`min-h-[96px] rounded-[22px] border p-3 text-left transition ${
+                        className={`min-h-[78px] rounded-[18px] border px-2.5 py-2 text-left transition ${
                           isSelected
                             ? "border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/10"
                             : inCurrentMonth
@@ -446,12 +429,12 @@ export default function Agendamentos() {
                             </span>
                           )}
                         </div>
-                        <div className="mt-4">
-                          <div className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-semibold ${booking ? (isSelected ? "bg-rose-400/20 text-rose-100" : "bg-rose-50 text-rose-700") : (isSelected ? "bg-emerald-400/20 text-emerald-100" : "bg-emerald-50 text-emerald-700")}`}>
+                        <div className="mt-3">
+                          <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${booking ? (isSelected ? "bg-rose-400/20 text-rose-100" : "bg-rose-50 text-rose-700") : (isSelected ? "bg-emerald-400/20 text-emerald-100" : "bg-emerald-50 text-emerald-700")}`}>
                             <span className={`inline-block h-2 w-2 rounded-full ${booking ? "bg-rose-500" : "bg-emerald-500"}`} />
                             {booking ? "Reservado" : "Livre"}
                           </div>
-                          {booking && <p className={`mt-2 truncate text-xs ${isSelected ? "text-slate-200" : "text-slate-500"}`}>{booking.time}</p>}
+                          {booking && <p className={`mt-1 truncate text-[10px] ${isSelected ? "text-slate-200" : "text-slate-500"}`}>{booking.time}</p>}
                         </div>
                       </button>
                     );
