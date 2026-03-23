@@ -19,6 +19,7 @@ import {
   MessageCircleMore,
   MessageSquare,
   Moon,
+  Package,
   Settings,
   Sun,
   User,
@@ -41,6 +42,7 @@ const navLinks = [
   { label: "Avisos", path: "/avisos", icon: Megaphone },
   { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
   { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
+  { label: "Encomendas", path: "/encomendas", icon: Package },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
   { label: "Visitantes", path: "/visitantes", icon: UserRoundCheck },
   { label: "Garagem", path: "/garagem", icon: CarFront },
@@ -51,7 +53,7 @@ const navLinks = [
 ];
 
 const adminPaths = new Set(["/financeiro", "/predio", "/usuarios"]);
-const gatekeeperPaths = new Set(["/garagem", "/visitantes"]);
+const gatekeeperPaths = new Set(["/garagem", "/visitantes", "/encomendas"]);
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

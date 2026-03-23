@@ -8,6 +8,7 @@ import ListaAvisos from "../pages/avisos/lista-avisos.tsx";
 import MapaPredio from "../pages/predio/mapa-predio";
 import Agendamentos from "../pages/agendamentos";
 import EnquetesPage from "../pages/enquetes";
+import EncomendasPage from "../pages/encomendas";
 import FinanceiroPage from "../pages/financeiro";
 import GaragemPage from "../pages/garagem";
 import MaresiaPage from "../pages/maresia";
@@ -78,6 +79,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={["ADMIN", "MORADOR", "PORTEIRO"]}>
               <VisitantesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/encomendas"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN", "MORADOR", "PORTEIRO"]}>
+              <EncomendasPage />
             </ProtectedRoute>
           }
         />
