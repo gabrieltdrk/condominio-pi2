@@ -150,8 +150,8 @@ export default function MapaPredio() {
       total: apartments.length,
       proprietarios: apartments.filter((apt) => apt.resident?.status === "Proprietário").length,
       inquilinos: apartments.filter((apt) => apt.resident?.status === "Inquilino").length,
-      visitantes: apartments.filter((apt) => apt.resident?.status === "Visitante").length,
-      vagos: apartments.filter((apt) => !apt.resident || apt.resident.status === "Vago").length,
+      visitantes: apartments.filter((apt) => apt.activeVisitors.length > 0 || apt.resident?.status === "Visitante").length,
+      vagos: apartments.filter((apt) => (!apt.resident || apt.resident.status === "Vago") && apt.activeVisitors.length === 0).length,
     };
   }, [floors]);
 
@@ -159,8 +159,8 @@ export default function MapaPredio() {
     if (!currentFloor) return null;
     return {
       total: currentFloor.apartments.length,
-      ocupados: currentFloor.apartments.filter((apt) => apt.resident && apt.resident.status !== "Vago").length,
-      vagos: currentFloor.apartments.filter((apt) => !apt.resident || apt.resident.status === "Vago").length,
+      ocupados: currentFloor.apartments.filter((apt) => (apt.resident && apt.resident.status !== "Vago") || apt.activeVisitors.length > 0).length,
+      vagos: currentFloor.apartments.filter((apt) => (!apt.resident || apt.resident.status === "Vago") && apt.activeVisitors.length === 0).length,
     };
   }, [currentFloor]);
 
@@ -171,12 +171,14 @@ export default function MapaPredio() {
       .map((floor) => ({
         ...floor,
         apartments: floor.apartments.filter((apt) => {
-          const residentStatus = apt.resident?.status ?? "Vago";
+          const residentStatus = apt.activeVisitors.length > 0 ? "Visitante" : apt.resident?.status ?? "Vago";
           const residentName = (apt.resident?.name ?? "").toLowerCase();
           const residentEmail = (apt.resident?.email ?? "").toLowerCase();
+          const visitorNames = apt.activeVisitors.map((visitor) => visitor.name.toLowerCase()).join(" ");
+          const visitorEmails = apt.activeVisitors.map((visitor) => visitor.email.toLowerCase()).join(" ");
           const matchesStatus = statusFilter === "Todos" || residentStatus === statusFilter;
           const matchesSearch =
-            term.length === 0 || apt.number.toLowerCase().includes(term) || residentName.includes(term) || residentEmail.includes(term);
+            term.length === 0 || apt.number.toLowerCase().includes(term) || residentName.includes(term) || residentEmail.includes(term) || visitorNames.includes(term) || visitorEmails.includes(term);
           return matchesStatus && matchesSearch;
         }),
       }))

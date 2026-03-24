@@ -39,8 +39,9 @@ export function ApartmentCard({
   onClick: () => void;
   isSelected?: boolean;
 }) {
-  const status = apt.resident?.status ?? "Vago";
-  const name = apt.resident?.name ?? "Disponível";
+  const hasActiveVisitors = apt.activeVisitors.length > 0;
+  const status = hasActiveVisitors ? "Visitante" : apt.resident?.status ?? "Vago";
+  const name = hasActiveVisitors ? apt.activeVisitors[0]?.name ?? "Visitante em check-in" : apt.resident?.name ?? "Disponível";
   const styles = STATUS_STYLES[status];
 
   return (
@@ -53,22 +54,14 @@ export function ApartmentCard({
           : "border-slate-200 bg-white hover:-translate-y-0.5 hover:shadow-sm"
       }`}
     >
-      <div
-        className={`min-w-0 overflow-hidden rounded-[20px] border px-3 py-3 ${styles.accent}`}
-      >
+      <div className={`min-w-0 overflow-hidden rounded-[20px] border px-3 py-3 ${styles.accent}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Apto
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Apto</p>
             <p className="text-lg font-bold leading-none text-slate-900">{apt.number}</p>
           </div>
 
-          <span
-            className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${styles.badge}`}
-          >
-            {status}
-          </span>
+          <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${styles.badge}`}>{status}</span>
         </div>
 
         <div className="my-4 grid grid-cols-2 gap-2">
@@ -81,7 +74,7 @@ export function ApartmentCard({
         <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-2">
           <p className="max-w-full truncate text-sm font-semibold text-slate-800">{name}</p>
           <p className="mt-0.5 max-w-full truncate text-xs text-slate-500">
-            {isSelected ? "Selecionado para acoes" : "Clique para selecionar"}
+            {hasActiveVisitors ? `${apt.activeVisitors.length} visitante(s) presente(s)` : isSelected ? "Selecionado para acoes" : "Clique para selecionar"}
           </p>
         </div>
       </div>

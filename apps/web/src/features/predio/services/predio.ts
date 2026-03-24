@@ -12,11 +12,20 @@ export type Resident = {
   petsCount?: number;
 };
 
+export type ActiveVisitor = {
+  id: string;
+  name: string;
+  email: string;
+  checkedInAt: string | null;
+  expectedCheckOut: string;
+};
+
 export type Apartment = {
   id: string;
   number: string;
   floor: number;
   resident: Resident | null;
+  activeVisitors: ActiveVisitor[];
 };
 
 export type Floor = {
@@ -69,6 +78,19 @@ type CondoApartmentRow = {
   number: string;
   resident_id: string | null;
   resident?: ProfileRow | null;
+};
+
+type VisitorRequestActiveRow = {
+  id: string;
+  apartment_id: string | null;
+  checked_in_at: string | null;
+  expected_check_out: string;
+  guests?: Array<{
+    id: string;
+    full_name: string;
+    email: string | null;
+    is_primary: boolean;
+  }> | null;
 };
 
 const MOCK_ASSIGNMENTS_KEY = "predio:assignments";
@@ -205,6 +227,7 @@ function rowsToFloors(rows: Array<CondoApartmentRow | CustomApartmentRow>): Floo
       number: row.number,
       floor: row.level,
       resident: "resident" in row && row.resident ? profileToResident(row.resident) : null,
+      activeVisitors: [],
     });
   }
 
@@ -214,6 +237,49 @@ function rowsToFloors(rows: Array<CondoApartmentRow | CustomApartmentRow>): Floo
   }));
 
   return sortFloors(floors);
+}
+
+function mapActiveVisitors(rows: VisitorRequestActiveRow[]) {
+  const visitorsByApartment = new Map<string, ActiveVisitor[]>();
+
+  for (const row of rows) {
+    if (!row.apartment_id) continue;
+    const primaryGuest = row.guests?.find((guest) => guest.is_primary) ?? row.guests?.[0];
+    if (!primaryGuest) continue;
+
+    const current = visitorsByApartment.get(row.apartment_id) ?? [];
+    current.push({
+      id: row.id,
+      name: primaryGuest.full_name,
+      email: primaryGuest.email ?? "",
+      checkedInAt: row.checked_in_at,
+      expectedCheckOut: row.expected_check_out,
+    });
+    visitorsByApartment.set(row.apartment_id, current);
+  }
+
+  return visitorsByApartment;
+}
+
+async function fetchActiveVisitorsByApartment(): Promise<Map<string, ActiveVisitor[]>> {
+  const admin = getSupabaseAdmin();
+  const result = await admin
+    .from("visitor_requests")
+    .select("id, apartment_id, checked_in_at, expected_check_out, guests:visitor_request_guests(id, full_name, email, is_primary)")
+    .eq("status", "CHECKED_IN");
+
+  if (result.error) return new Map<string, ActiveVisitor[]>();
+  return mapActiveVisitors((result.data ?? []) as VisitorRequestActiveRow[]);
+}
+
+function attachActiveVisitors(floors: Floor[], visitorsByApartment: Map<string, ActiveVisitor[]>) {
+  return floors.map((floor) => ({
+    ...floor,
+    apartments: floor.apartments.map((apartment) => ({
+      ...apartment,
+      activeVisitors: visitorsByApartment.get(apartment.id) ?? [],
+    })),
+  }));
 }
 
 function mergeFloors(base: Floor[], extra: Floor[]): Floor[] {
@@ -878,5 +944,11 @@ export function getMockBuilding(): Floor[] {
     },
   ];
 
-  return floors;
+  return floors.map((floor) => ({
+    ...floor,
+    apartments: floor.apartments.map((apartment) => ({
+      ...apartment,
+      activeVisitors: [],
+    })),
+  }));
 }
