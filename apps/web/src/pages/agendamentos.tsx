@@ -62,6 +62,10 @@ function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function isSameMonth(left: Date, right: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
 }
@@ -215,6 +219,7 @@ function DayModal({
 
 export default function Agendamentos() {
   const today = useMemo(() => new Date(), []);
+  const todayStart = useMemo(() => startOfDay(today), [today]);
   const currentUser = useMemo(() => getUser(), []);
   const [selectedResourceId, setSelectedResourceId] = useState(RESOURCES[0].id);
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(today));
@@ -274,11 +279,24 @@ export default function Agendamentos() {
   const monthPrefix = `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}`;
   const monthBookings = useMemo(() => resourceBookings.filter((booking) => booking.date.startsWith(monthPrefix)), [monthPrefix, resourceBookings]);
   const occupiedCount = monthBookings.length;
-  const availableCount = monthDays.filter((day) => isSameMonth(day, currentMonth) && !bookingsByDate.has(toDateInputValue(day))).length;
+  const availableCount = monthDays.filter((day) => {
+    const dayStart = startOfDay(day);
+    return isSameMonth(day, currentMonth) && dayStart.getTime() >= todayStart.getTime() && !bookingsByDate.has(toDateInputValue(day));
+  }).length;
   const nextBookings = useMemo(() => resourceBookings.slice(0, 4), [resourceBookings]);
+  const canGoToPreviousMonth = useMemo(() => startOfMonth(currentMonth).getTime() > startOfMonth(todayStart).getTime(), [currentMonth, todayStart]);
 
   function openDay(day: Date) {
-    setSelectedDate(toDateInputValue(day));
+    const key = toDateInputValue(day);
+    const booking = (bookingsByDate.get(key) ?? [])[0] ?? null;
+    const isPastDay = startOfDay(day).getTime() < todayStart.getTime();
+    const lockedByAnotherResident = booking !== null && booking.userId !== currentUser?.id;
+
+    if (isPastDay || lockedByAnotherResident) {
+      return;
+    }
+
+    setSelectedDate(key);
     setCurrentMonth(startOfMonth(day));
     setMessage("");
     setError("");
@@ -379,7 +397,7 @@ export default function Agendamentos() {
                 <p className="mt-1 text-sm text-slate-500">Toque em um dia para ver a disponibilidade e reservar.</p>
               </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
-                <button type="button" onClick={() => setCurrentMonth((value) => addMonths(value, -1))} className="rounded-2xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-100">
+                <button type="button" onClick={() => setCurrentMonth((value) => addMonths(value, -1))} disabled={!canGoToPreviousMonth} className="rounded-2xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">
                   <ChevronLeft size={18} />
                 </button>
                 <div className="min-w-[180px] text-center">
@@ -394,6 +412,11 @@ export default function Agendamentos() {
 
             <div className="mt-4 overflow-x-auto pb-2">
               <div className="min-w-[720px]">
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Livre</span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700"><span className="h-2 w-2 rounded-full bg-rose-500" />Reservado</span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500"><span className="h-2 w-2 rounded-full bg-slate-400" />Indisponivel</span>
+                </div>
                 <div className="grid grid-cols-7 gap-2">
                   {WEEK_DAYS.map((day) => (
                     <div key={day} className="px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -407,19 +430,28 @@ export default function Agendamentos() {
                     const isToday = key === toDateInputValue(today);
                     const isSelected = key === selectedDate;
                     const booking = (bookingsByDate.get(key) ?? [])[0] ?? null;
+                    const isPastDay = startOfDay(day).getTime() < todayStart.getTime();
+                    const isLockedByAnotherResident = booking !== null && booking.userId !== currentUser?.id;
+                    const isBlocked = !inCurrentMonth || isPastDay || isLockedByAnotherResident;
+                    const dayTone = isPastDay
+                      ? "border-slate-200 bg-slate-100 text-slate-400"
+                      : isLockedByAnotherResident
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : inCurrentMonth
+                          ? "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300"
+                          : "border-slate-200 bg-slate-100/80 text-slate-400";
 
                     return (
                       <button
                         key={key}
                         type="button"
                         onClick={() => openDay(day)}
+                        disabled={isBlocked}
                         className={`min-h-[78px] rounded-[18px] border px-2.5 py-2 text-left transition ${
                           isSelected
                             ? "border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/10"
-                            : inCurrentMonth
-                              ? "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300"
-                              : "border-slate-200 bg-slate-100/80 text-slate-400"
-                        }`}
+                            : dayTone
+                        } ${isBlocked ? "cursor-not-allowed hover:translate-y-0" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className={`text-sm font-semibold ${!inCurrentMonth && !isSelected ? "text-slate-400" : ""}`}>{day.getDate()}</span>
@@ -430,11 +462,23 @@ export default function Agendamentos() {
                           )}
                         </div>
                         <div className="mt-3">
-                          <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${booking ? (isSelected ? "bg-rose-400/20 text-rose-100" : "bg-rose-50 text-rose-700") : (isSelected ? "bg-emerald-400/20 text-emerald-100" : "bg-emerald-50 text-emerald-700")}`}>
-                            <span className={`inline-block h-2 w-2 rounded-full ${booking ? "bg-rose-500" : "bg-emerald-500"}`} />
-                            {booking ? "Reservado" : "Livre"}
+                          <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            isPastDay
+                              ? isSelected
+                                ? "bg-white/15 text-white"
+                                : "bg-slate-200 text-slate-500"
+                              : booking
+                                ? isSelected
+                                  ? "bg-rose-400/20 text-rose-100"
+                                  : "bg-rose-50 text-rose-700"
+                                : isSelected
+                                  ? "bg-emerald-400/20 text-emerald-100"
+                                  : "bg-emerald-50 text-emerald-700"
+                          }`}>
+                            <span className={`inline-block h-2 w-2 rounded-full ${isPastDay ? "bg-slate-400" : booking ? "bg-rose-500" : "bg-emerald-500"}`} />
+                            {isPastDay ? "Encerrado" : booking ? "Reservado" : "Livre"}
                           </div>
-                          {booking && <p className={`mt-1 truncate text-[10px] ${isSelected ? "text-slate-200" : "text-slate-500"}`}>{booking.time}</p>}
+                          {booking && <p className={`mt-1 truncate text-[10px] ${isSelected ? "text-slate-200" : isLockedByAnotherResident ? "text-rose-600" : "text-slate-500"}`}>{booking.time}</p>}
                         </div>
                       </button>
                     );

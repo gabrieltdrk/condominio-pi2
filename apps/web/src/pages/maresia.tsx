@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Clock3, Plus, ScanLine, Search, ShieldAlert, X } from "lucide-react";
+﻿import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Clock3, Paperclip, Plus, ScanLine, Search, ShieldAlert, Upload, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
 import {
   cancelMaintenanceOrder,
   createMaintenanceOrder,
+  deleteMaintenanceAttachment,
+  listMaintenanceOrderAttachments,
   listMaintenanceOrders,
   registerMaintenanceCheckIn,
   registerMaintenanceCheckOut,
   subscribeToMaintenanceOrders,
   updateMaintenanceOrder,
+  uploadMaintenanceAttachment,
+  type MaintenanceAttachment,
   type MaintenanceCategory,
   type MaintenanceKind,
   type MaintenanceOrder,
@@ -19,8 +23,9 @@ import {
 
 const inputClass = "mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100";
 const textareaClass = "mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100";
-const labelClass = "text-xs font-semibold uppercase tracking-[0.16em] text-slate-500";
+const labelClass = "text-xs font-semibold uppercase tracking-[0.12em] text-slate-500";
 const MAP_PAGE_SIZE = 6;
+const requiredLabel = (label: string) => <>{label}<span className="ml-1 text-rose-500">*</span></>;
 
 const STATUS_META: Record<MaintenanceStatus, { label: string; tone: string }> = {
   AGENDADA: { label: "Agendada", tone: "border-sky-200 bg-sky-50 text-sky-700" },
@@ -127,6 +132,12 @@ function formatCurrency(value: number | null) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+function formatFileSize(value: number | null) {
+  if (!value) return "Tamanho nao informado";
+  if (value >= 1024 * 1024) return `${(value / 1048576).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(value / 1024))} KB`;
+}
+
 function isToday(date: string) {
   return date === new Date().toISOString().slice(0, 10);
 }
@@ -217,7 +228,7 @@ function OrderFormModal({
 
   return (
     <div className="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-600">Central de manutencao</p>
@@ -228,20 +239,24 @@ function OrderFormModal({
           </button>
         </div>
         <div className="overflow-y-auto px-6 py-5">
+          <div className="mb-5 rounded-[24px] border border-sky-100 bg-sky-50 px-4 py-4 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Preenchimento guiado</p>
+            <p className="mt-1">Campos com <span className="font-semibold text-rose-500">*</span> sao obrigatorios. Custos, aprovacao e observacoes podem ser preenchidos depois.</p>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block md:col-span-2"><span className={labelClass}>Titulo do servico</span><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} className={inputClass} placeholder="Ex.: Revisao da bomba da cisterna" /></label>
+            <label className="block md:col-span-2"><span className={labelClass}>{requiredLabel("Titulo do servico")}</span><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} className={inputClass} placeholder="Ex.: Revisao da bomba da cisterna" /></label>
             <label className="block"><span className={labelClass}>Tipo</span><select value={form.kind} onChange={(event) => setForm((current) => ({ ...current, kind: event.target.value as MaintenanceKind }))} className={inputClass}>{KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-            <label className="block"><span className={labelClass}>Item monitorado</span><input value={form.assetName} onChange={(event) => setForm((current) => ({ ...current, assetName: event.target.value }))} className={inputClass} placeholder="Ex.: Elevador social" /></label>
-            <label className="block"><span className={labelClass}>Area</span><input value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))} className={inputClass} placeholder="Ex.: Casa de maquinas" /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Item monitorado")}</span><input value={form.assetName} onChange={(event) => setForm((current) => ({ ...current, assetName: event.target.value }))} className={inputClass} placeholder="Ex.: Elevador social" /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Area")}</span><input value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))} className={inputClass} placeholder="Ex.: Casa de maquinas" /></label>
             <label className="block"><span className={labelClass}>Categoria</span><select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as MaintenanceCategory }))} className={inputClass}>{CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             <label className="block"><span className={labelClass}>Prioridade</span><select value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value as MaintenancePriority }))} className={inputClass}>{PRIORITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             {mode === "edit" && <label className="block"><span className={labelClass}>Status</span><select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as MaintenanceStatus }))} className={inputClass}>{Object.entries(STATUS_META).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>}
-            <label className="block"><span className={labelClass}>Empresa prestadora</span><input value={form.supplierName} onChange={(event) => setForm((current) => ({ ...current, supplierName: event.target.value }))} className={inputClass} placeholder="Ex.: Elevadores Sigma" /></label>
-            <label className="block"><span className={labelClass}>Tecnico responsavel</span><input value={form.technicianName} onChange={(event) => setForm((current) => ({ ...current, technicianName: event.target.value }))} className={inputClass} placeholder="Nome de quem vem executar" /></label>
-            <label className="block"><span className={labelClass}>Responsavel interno</span><input value={form.responsibleName} onChange={(event) => setForm((current) => ({ ...current, responsibleName: event.target.value }))} className={inputClass} placeholder="Ex.: Portaria" /></label>
-            <label className="block"><span className={labelClass}>Data prevista</span><input type="date" value={form.scheduledDate} onChange={(event) => setForm((current) => ({ ...current, scheduledDate: event.target.value }))} className={inputClass} /></label>
-            <label className="block"><span className={labelClass}>Horario previsto</span><input type="time" value={form.scheduledTime} onChange={(event) => setForm((current) => ({ ...current, scheduledTime: event.target.value }))} className={inputClass} /></label>
-            <label className="block md:col-span-2"><span className={labelClass}>Ciclo de manutencao em dias</span><input type="number" min="1" value={form.maintenanceIntervalDays} onChange={(event) => setForm((current) => ({ ...current, maintenanceIntervalDays: event.target.value }))} className={inputClass} placeholder="Ex.: 90" /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Empresa prestadora")}</span><input value={form.supplierName} onChange={(event) => setForm((current) => ({ ...current, supplierName: event.target.value }))} className={inputClass} placeholder="Ex.: Elevadores Sigma" /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Tecnico responsavel")}</span><input value={form.technicianName} onChange={(event) => setForm((current) => ({ ...current, technicianName: event.target.value }))} className={inputClass} placeholder="Nome de quem vem executar" /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Responsavel interno")}</span><input value={form.responsibleName} onChange={(event) => setForm((current) => ({ ...current, responsibleName: event.target.value }))} className={inputClass} placeholder="Ex.: Portaria" /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Data prevista")}</span><input type="date" value={form.scheduledDate} onChange={(event) => setForm((current) => ({ ...current, scheduledDate: event.target.value }))} className={inputClass} /></label>
+            <label className="block"><span className={labelClass}>{requiredLabel("Horario previsto")}</span><input type="time" value={form.scheduledTime} onChange={(event) => setForm((current) => ({ ...current, scheduledTime: event.target.value }))} className={inputClass} /></label>
+            <label className="block md:col-span-2"><span className={labelClass}>{requiredLabel("Ciclo de manutencao em dias")}</span><input type="number" min="1" value={form.maintenanceIntervalDays} onChange={(event) => setForm((current) => ({ ...current, maintenanceIntervalDays: event.target.value }))} className={inputClass} placeholder="Ex.: 90" /><p className="mt-2 text-xs text-slate-500">Esse valor alimenta o indicador de saude do ativo e a previsao da proxima revisao.</p></label>
             <label className="block"><span className={labelClass}>Custo estimado</span><input type="number" min="0" step="0.01" value={form.estimatedCost} onChange={(event) => setForm((current) => ({ ...current, estimatedCost: event.target.value }))} className={inputClass} placeholder="Ex.: 450.00" /></label>
             <label className="block"><span className={labelClass}>Custo final</span><input type="number" min="0" step="0.01" value={form.finalCost} onChange={(event) => setForm((current) => ({ ...current, finalCost: event.target.value }))} className={inputClass} placeholder="Ex.: 480.00" /></label>
             <label className="block md:col-span-2"><span className={labelClass}>Aprovado por</span><input value={form.approvedByName} onChange={(event) => setForm((current) => ({ ...current, approvedByName: event.target.value }))} className={inputClass} placeholder="Ex.: Sindico / Administradora" /></label>
@@ -301,24 +316,32 @@ function DetailsModal({
   open,
   order,
   assetHistory,
+  attachments,
   canManage,
   saving,
+  uploading,
   onClose,
   onEdit,
   onStart,
   onFinish,
   onCancelOrder,
+  onUploadImage,
+  onDeleteAttachment,
 }: {
   open: boolean;
   order: MaintenanceOrder | null;
   assetHistory: MaintenanceOrder[];
+  attachments: MaintenanceAttachment[];
   canManage: boolean;
   saving: boolean;
+  uploading: boolean;
   onClose: () => void;
   onEdit: () => void;
   onStart: () => void;
   onFinish: () => void;
   onCancelOrder: () => Promise<void>;
+  onUploadImage: (file: File) => Promise<void>;
+  onDeleteAttachment: (attachment: MaintenanceAttachment) => Promise<void>;
 }) {
   if (!open || !order) return null;
   const health = getAssetHealth(order);
@@ -335,22 +358,79 @@ function DetailsModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
           <div>
             <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold ${STATUS_META[order.status].tone}`}>{STATUS_META[order.status].label}</div>
-            <h3 className="mt-3 text-2xl font-semibold text-slate-950">{order.title}</h3>
-            <p className="mt-1 text-sm text-slate-500">{order.assetName} · {order.area} · {formatDate(order.scheduledDate, order.scheduledTime)}</p>
+            <h3 className="mt-3 break-words text-2xl font-semibold text-slate-950">{order.title}</h3>
+            <p className="mt-1 break-words text-sm text-slate-500">{order.assetName} · {order.area} · {formatDate(order.scheduledDate, order.scheduledTime)}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
         </div>
         <div className="overflow-y-auto px-6 py-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Prestador</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.supplierName}</p><p className="mt-1 text-sm text-slate-600">Tecnico: {order.technicianName}</p><p className="mt-1 text-sm text-slate-600">Responsavel interno: {order.responsibleName}</p></div>
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Classificacao</p><div className="mt-2 flex flex-wrap gap-2"><span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span><span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{order.category}</span><span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{order.kind}</span></div><p className="mt-3 text-sm text-slate-500">Codigo: <span className="font-semibold text-slate-800">{order.orderCode}</span></p></div>
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4 md:col-span-2"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Saude do ativo</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.assetName}</p><p className={`mt-1 text-sm font-medium ${health.statusTone}`}>{health.statusLabel}</p></div><div className="text-right text-sm text-slate-500"><p>{health.percentage}%</p><p>Proxima revisao: {formatSimpleDate(health.nextServiceDate)}</p></div></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>Ultima manutencao: {formatSimpleDate(order.lastServiceAt ?? order.checkOutAt)}</span><span>{health.daysRemaining <= 0 ? `${Math.abs(health.daysRemaining)} dias em atraso` : `${health.daysRemaining} dias restantes`}</span></div></div>
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Entrada registrada</p><p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(order.checkInAt)}</p></div>
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Saida registrada</p><p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(order.checkOutAt)}</p></div>
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Financeiro</p><p className="mt-2 text-sm text-slate-600">Estimado: <span className="font-semibold text-slate-900">{formatCurrency(order.estimatedCost)}</span></p><p className="mt-1 text-sm text-slate-600">Final: <span className="font-semibold text-slate-900">{formatCurrency(order.finalCost)}</span></p></div>
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Aprovacao</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.approvedByName || "Nao informada"}</p><p className="mt-1 text-sm text-slate-600">{order.approvedAt ? formatDateTime(order.approvedAt) : "Sem data de aprovacao"}</p></div>
+          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Resumo rapido</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold ${STATUS_META[order.status].tone}`}>{STATUS_META[order.status].label}</span>
+              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">{order.category}</span>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">{order.kind}</span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="min-w-0 rounded-2xl border border-white/80 bg-white px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Ativo</p>
+                <p className="mt-2 break-words text-sm font-semibold text-slate-900">{order.assetName}</p>
+              </div>
+              <div className="min-w-0 rounded-2xl border border-white/80 bg-white px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Agendamento</p>
+                <p className="mt-2 break-words text-sm font-semibold text-slate-900">{formatDate(order.scheduledDate, order.scheduledTime)}</p>
+              </div>
+              <div className="min-w-0 rounded-2xl border border-white/80 bg-white px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Codigo</p>
+                <p className="mt-2 break-all text-sm font-semibold text-slate-900">{order.orderCode}</p>
+              </div>
+              <div className="min-w-0 rounded-2xl border border-white/80 bg-white px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Proxima revisao</p>
+                <p className="mt-2 break-words text-sm font-semibold text-slate-900">{formatSimpleDate(health.nextServiceDate)}</p>
+              </div>
+            </div>
           </div>
-          <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Timeline da ordem</p><div className="mt-4 space-y-3">{timeline.map((item) => <div key={item.label} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-900" /><div><p className="text-sm font-semibold text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">{item.value}</p></div></div>)}</div></div>
+
+          <div className="mt-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Operacao</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="min-w-0 rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Prestador</p><p className="mt-2 break-words text-sm font-semibold text-slate-900">{order.supplierName}</p><p className="mt-1 break-words text-sm text-slate-600">Tecnico: {order.technicianName}</p><p className="mt-1 break-words text-sm text-slate-600">Responsavel interno: {order.responsibleName}</p></div>
+              <div className="min-w-0 rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Saude do ativo</p><div className="mt-2 flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{order.assetName}</p><p className={`mt-1 break-words text-sm font-medium ${health.statusTone}`}>{health.statusLabel}</p></div><div className="shrink-0 text-right text-sm text-slate-500"><p>{health.percentage}%</p><p>{health.daysRemaining <= 0 ? `${Math.abs(health.daysRemaining)} dias em atraso` : `${health.daysRemaining} dias restantes`}</p></div></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><p className="mt-3 break-words text-xs text-slate-500">Ultima manutencao: {formatSimpleDate(order.lastServiceAt ?? order.checkOutAt)}</p></div>
+              <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Entrada registrada</p><p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(order.checkInAt)}</p></div>
+              <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Saida registrada</p><p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(order.checkOutAt)}</p></div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Financeiro e aprovacao</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Financeiro</p><p className="mt-2 text-sm text-slate-600">Estimado: <span className="font-semibold text-slate-900">{formatCurrency(order.estimatedCost)}</span></p><p className="mt-1 text-sm text-slate-600">Final: <span className="font-semibold text-slate-900">{formatCurrency(order.finalCost)}</span></p></div>
+              <div className="rounded-[24px] border border-slate-200 bg-white p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Aprovacao</p><p className="mt-2 text-sm font-semibold text-slate-900">{order.approvedByName || "Nao informada"}</p><p className="mt-1 text-sm text-slate-600">{order.approvedAt ? formatDateTime(order.approvedAt) : "Sem data de aprovacao"}</p></div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Timeline da ordem</p>
+                <p className="mt-1 text-xs text-slate-500">Eventos principais desta manutencao em ordem de acompanhamento.</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">{timeline.map((item) => <div key={item.label} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-900" /><div><p className="text-sm font-semibold text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">{item.value}</p></div></div>)}</div>
+          </div>
+          <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Evidencias</p>
+                <p className="mt-1 text-xs text-slate-500">Imagens, PDFs e comprovantes ligados a esta manutencao.</p>
+              </div>
+              {canManage && <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><Upload size={16} />{uploading ? "Enviando..." : "Enviar imagem"}<input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ""; if (file) void onUploadImage(file); }} /></label>}
+            </div>
+            <div className="mt-4 space-y-3">
+              {attachments.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">Nenhuma evidencia enviada ainda.</div> : attachments.map((attachment) => <div key={attachment.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600"><Paperclip size={16} /></div><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{attachment.fileName}</p><p className="mt-1 text-xs text-slate-500">{formatDateTime(attachment.createdAt)} · {attachment.createdByName} · {formatFileSize(attachment.sizeBytes)}</p></div></div></div><div className="flex flex-wrap gap-2"><a href={attachment.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"><Paperclip size={15} />Abrir</a>{canManage && <button type="button" onClick={() => void onDeleteAttachment(attachment)} className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Remover</button>}</div></div>)}
+            </div>
+          </div>
           {assetHistory.length > 0 && <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Historico recente do ativo</p><div className="mt-4 space-y-3">{assetHistory.map((historyOrder) => <div key={historyOrder.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-900">{historyOrder.title}</p><span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${STATUS_META[historyOrder.status].tone}`}>{STATUS_META[historyOrder.status].label}</span></div><p className="mt-1 text-xs text-slate-500">{formatDate(historyOrder.scheduledDate, historyOrder.scheduledTime)} · {historyOrder.kind}</p></div>)}</div></div>}
           {order.notes && <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Descricao</p><p className="mt-2 break-words text-sm leading-6 text-slate-700">{order.notes}</p></div>}
           {order.accessNotes && <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Historico de acesso</p><p className="mt-2 break-words text-sm leading-6 text-slate-700">{order.accessNotes}</p></div>}
@@ -367,12 +447,14 @@ export default function MaresiaPage() {
   const [orders, setOrders] = useState<MaintenanceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MaintenanceStatus | "TODOS">("TODOS");
   const [mapPage, setMapPage] = useState(1);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<MaintenanceOrder | null>(null);
+  const [attachments, setAttachments] = useState<MaintenanceAttachment[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
@@ -390,6 +472,14 @@ export default function MaresiaPage() {
       setError(err instanceof Error ? err.message : "Erro ao carregar manutencoes.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAttachments(orderId: string) {
+    try {
+      setAttachments(await listMaintenanceOrderAttachments(orderId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao carregar anexos.");
     }
   }
 
@@ -485,6 +575,7 @@ export default function MaresiaPage() {
 
   function openDetails(order: MaintenanceOrder) {
     setSelectedOrder(order);
+    void loadAttachments(order.id);
     setDetailsOpen(true);
   }
 
@@ -492,6 +583,7 @@ export default function MaresiaPage() {
     if (!selectedOrder) return;
     setFormMode("edit");
     setForm(formFromOrder(selectedOrder));
+    setDetailsOpen(false);
     setFormOpen(true);
   }
 
@@ -568,6 +660,42 @@ export default function MaresiaPage() {
     }
   }
 
+  async function handleUploadAttachment(file: File) {
+    if (!selectedOrder) return;
+
+    setUploading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await uploadMaintenanceAttachment(selectedOrder.id, file);
+      setMessage("Imagem enviada com sucesso.");
+      await loadAttachments(selectedOrder.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao enviar imagem.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDeleteAttachment(attachment: MaintenanceAttachment) {
+    if (!selectedOrder) return;
+
+    setUploading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await deleteMaintenanceAttachment(attachment);
+      setMessage("Arquivo removido com sucesso.");
+      await loadAttachments(selectedOrder.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao remover arquivo.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleCancelOrder() {
     if (!selectedOrder) return;
 
@@ -590,17 +718,21 @@ export default function MaresiaPage() {
   return (
     <AppLayout title="Manutencao">
       <div className="space-y-5">
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="rounded-[30px] border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fafc_100%)] p-6 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Central de manutencao</p>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Controle rapido das ordens, saude dos ativos e chamadas tecnicas do predio.</p>
-            {canManage && <button type="button" onClick={openCreateModal} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"><Plus size={16} /> Nova manutencao</button>}
+            <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">Uma visao clara das ordens e da saude dos ativos</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Acompanhe o que precisa de atencao, o que acontece hoje no predio e o andamento das manutencoes em um fluxo unico.</p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {canManage && <button type="button" onClick={openCreateModal} className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"><Plus size={16} /> Nova manutencao</button>}
+              <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600">{stats.scheduled + stats.inProgress + stats.completed} ordens acompanhadas</div>
+            </div>
           </div>
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Saude geral do predio</p>
-                <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-slate-950">{buildingOverview.overallHealth}%</p>
+                <p className="mt-2 text-4xl font-black tracking-[-0.06em] text-slate-950">{buildingOverview.overallHealth}%</p>
                 <p className="mt-1 text-sm text-slate-500">{buildingOverview.totalTracked} itens monitorados</p>
               </div>
               <div className={`rounded-full px-3 py-1 text-xs font-semibold ${buildingOverview.overallHealth <= 20 ? "bg-rose-100 text-rose-700" : buildingOverview.overallHealth <= 60 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{buildingOverview.overallHealth <= 20 ? "Estado critico" : buildingOverview.overallHealth <= 60 ? "Em observacao" : "Operacao estavel"}</div>
@@ -617,7 +749,7 @@ export default function MaresiaPage() {
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Leitura rapida do condominio</h3>
@@ -627,40 +759,48 @@ export default function MaresiaPage() {
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[{ icon: CalendarClock, label: "Agendadas", value: stats.scheduled, tone: "border-sky-100 bg-sky-50 text-sky-700" }, { icon: ScanLine, label: "Em andamento", value: stats.inProgress, tone: "border-amber-100 bg-amber-50 text-amber-700" }, { icon: CheckCircle2, label: "Concluidas", value: stats.completed, tone: "border-emerald-100 bg-emerald-50 text-emerald-700" }, { icon: Clock3, label: "Hoje", value: stats.today, tone: "border-slate-200 bg-slate-100 text-slate-700" }].map((item) => {
                 const Icon = item.icon;
-                return <div key={item.label} className={`rounded-[24px] border p-4 ${item.tone}`}><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 shadow-sm"><Icon size={18} /></div><p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p><p className="mt-2 text-3xl font-black tracking-[-0.05em] text-slate-950">{item.value}</p></div>;
+                return <div key={item.label} className={`h-full min-w-0 rounded-[24px] border p-4 ${item.tone}`}><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 shadow-sm"><Icon size={18} /></div><p className="mt-4 break-words text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p><p className="mt-2 text-3xl font-black tracking-[-0.05em] text-slate-950">{item.value}</p></div>;
               })}
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-100 text-rose-700"><AlertTriangle size={20} /></div><div><h3 className="text-base font-semibold text-slate-900">Pontos de atencao</h3><p className="mt-1 text-sm text-slate-500">Os itens mais proximos de nova chamada.</p></div></div>
-            <div className="mt-4 space-y-3">{buildingOverview.nextCritical.length === 0 ? <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Nenhum ponto critico no momento.</div> : buildingOverview.nextCritical.map(({ order, health }) => <button key={order.id} type="button" onClick={() => openDetails(order)} className="w-full rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-slate-300 hover:bg-white"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold text-slate-900">{order.assetName}</p><p className="mt-1 text-xs text-slate-500">{order.area}</p></div><p className={`text-xs font-semibold ${health.statusTone}`}>{health.percentage}%</p></div><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><p className="mt-2 text-xs text-slate-500">{health.daysRemaining <= 0 ? "Precisa chamar tecnico novamente" : `${health.daysRemaining} dias restantes`}</p></button>)}</div>
+            <div className="mt-4 space-y-3">{buildingOverview.nextCritical.length === 0 ? <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Nenhum ponto critico no momento.</div> : buildingOverview.nextCritical.map(({ order, health }) => <button key={order.id} type="button" onClick={() => openDetails(order)} className="w-full min-w-0 rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-slate-300 hover:bg-white"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{order.assetName}</p><p className="mt-1 break-words text-xs text-slate-500">{order.area}</p></div><p className={`shrink-0 text-xs font-semibold ${health.statusTone}`}>{health.percentage}%</p></div><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><p className="mt-2 break-words text-xs text-slate-500">{health.daysRemaining <= 0 ? "Precisa chamar tecnico novamente" : `${health.daysRemaining} dias restantes`}</p></button>)}</div>
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_360px]">
-          <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div><h3 className="text-base font-semibold text-slate-900">Mapa de manutencao</h3><p className="mt-1 text-sm text-slate-500">Uma lista mais direta para entender rapido cada item do predio.</p></div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <label className="relative block"><Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por item, area ou tecnico" className="h-11 w-full min-w-[280px] rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" /></label>
-                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as MaintenanceStatus | "TODOS")} className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"><option value="TODOS">Todos os status</option>{Object.entries(STATUS_META).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select>
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,360px)]">
+          <div className="min-w-0 rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-4">
+              <div className="min-w-0 space-y-3">
+                <div className="min-w-0"><h3 className="text-base font-semibold text-slate-900">Mapa de manutencao</h3><p className="mt-1 break-words text-sm text-slate-500">Uma leitura mais direta para localizar rapidamente o que precisa de acao.</p></div>
+                <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="w-full min-w-0 rounded-[22px] border border-slate-200 bg-white px-3 py-2">
+                    <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Buscar</p>
+                    <label className="relative mt-2 block w-full min-w-0 overflow-hidden rounded-2xl">
+                      <Search size={16} className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-slate-400" />
+                      <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Por item, area ou tecnico" className="block h-11 w-full min-w-0 rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+                    </label>
+                  </div>
+                  <div className="w-full min-w-0 rounded-[22px] border border-slate-200 bg-white px-3 py-2 sm:w-[220px] sm:flex-none">
+                    <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Filtrar por status</p>
+                    <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as MaintenanceStatus | "TODOS")} className="mt-2 h-11 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"><option value="TODOS">Todos os status</option>{Object.entries(STATUS_META).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="hidden mt-5">
-              {loading ? <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Carregando manutencoes...</div> : ordersWithHealth.length === 0 ? <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Nenhuma manutencao encontrada.</div> : <><div className="grid gap-3 2xl:grid-cols-2">{visibleOrdersWithHealth.map(({ order, health }) => <article key={order.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap gap-2"><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${STATUS_META[order.status].tone}`}>{STATUS_META[order.status].label}</span><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span></div><h4 className="mt-2 truncate text-base font-semibold text-slate-950">{order.assetName}</h4><p className="mt-1 truncate text-xs text-slate-500">{order.area} · {order.technicianName}</p></div><button type="button" onClick={() => openDetails(order)} className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Abrir</button></div><div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px]"><div className="min-w-0"><div className="flex items-center justify-between gap-2"><p className={`text-lg font-black tracking-[-0.05em] ${health.statusTone}`}>{health.percentage}%</p><p className="text-[11px] text-slate-500">{health.daysRemaining <= 0 ? "Atrasado" : `${health.daysRemaining} dias`}</p></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500"><span className={health.statusTone}>{health.statusLabel}</span><span>Revisao: {formatSimpleDate(health.nextServiceDate)}</span><span>Ciclo: {order.maintenanceIntervalDays} dias</span></div></div><div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5 text-[11px] text-slate-600"><p className="font-semibold text-slate-900">{order.title}</p><p className="mt-1 line-clamp-2">{order.technicianName}</p></div></div></article>)}</div><div className="mt-4 flex flex-col gap-3 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Pagina {mapPage} de {mapTotalPages} · {ordersWithHealth.length} manutencoes encontradas</p><div className="flex gap-2"><button type="button" onClick={() => setMapPage((current) => Math.max(1, current - 1))} disabled={mapPage === 1} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Anterior</button><button type="button" onClick={() => setMapPage((current) => Math.min(mapTotalPages, current + 1))} disabled={mapPage === mapTotalPages} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Proxima</button></div></div></>}
-            </div>
             <div className="mt-5 space-y-3">
-              {loading ? <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Carregando manutencoes...</div> : ordersWithHealth.length === 0 ? <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Nenhuma manutencao encontrada.</div> : <><div className="space-y-3">{visibleOrdersWithHealth.map(({ order, health }) => <article key={`compact-${order.id}`} className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-slate-300 hover:bg-white"><div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${STATUS_META[order.status].tone}`}>{STATUS_META[order.status].label}</span><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span></div><h4 className="mt-3 truncate text-base font-semibold text-slate-950">{order.assetName}</h4><p className="mt-1 truncate text-sm text-slate-500">{order.area} · {order.technicianName}</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500"><span className={health.statusTone}>{health.percentage}% · {health.statusLabel}</span><span>Revisao: {formatSimpleDate(health.nextServiceDate)}</span><span>{health.daysRemaining <= 0 ? "Precisa chamar tecnico" : `${health.daysRemaining} dias restantes`}</span><span>Ciclo: {order.maintenanceIntervalDays} dias</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div></div><div className="flex flex-wrap gap-2 xl:justify-end"><div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"><p className="font-semibold text-slate-900">{order.title}</p><p className="mt-1">{formatDate(order.scheduledDate, order.scheduledTime)}</p></div><button type="button" onClick={() => openDetails(order)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Abrir</button></div></div></article>)}</div><div className="flex flex-col gap-3 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Pagina {mapPage} de {mapTotalPages} · {ordersWithHealth.length} manutencoes encontradas</p><div className="flex gap-2"><button type="button" onClick={() => setMapPage((current) => Math.max(1, current - 1))} disabled={mapPage === 1} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Anterior</button><button type="button" onClick={() => setMapPage((current) => Math.min(mapTotalPages, current + 1))} disabled={mapPage === mapTotalPages} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Proxima</button></div></div></>}
+              {loading ? <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Carregando manutencoes...</div> : ordersWithHealth.length === 0 ? <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Nenhuma manutencao encontrada.</div> : <><div className="space-y-3">{visibleOrdersWithHealth.map(({ order, health }) => <article key={`compact-${order.id}`} className="min-w-0 overflow-hidden rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"><div className="flex min-w-0 flex-col gap-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${STATUS_META[order.status].tone}`}>{STATUS_META[order.status].label}</span><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${PRIORITY_META[order.priority]}`}>{order.priority}</span></div><h4 className="mt-3 break-words text-base font-semibold text-slate-950">{order.assetName}</h4><p className="mt-1 break-words text-sm text-slate-500">{order.area} · {order.technicianName}</p></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Saude</p><p className={`mt-1 break-words text-sm font-semibold ${health.statusTone}`}>{health.percentage}%</p></div><div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Revisao</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{formatSimpleDate(health.nextServiceDate)}</p></div><div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Ciclo</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{order.maintenanceIntervalDays} dias</p></div><div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Agendamento</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{formatDate(order.scheduledDate, order.scheduledTime)}</p></div></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${health.barTone}`} style={{ width: `${health.percentage}%` }} /></div><div className="flex flex-col gap-2 rounded-[22px] border border-slate-200 bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0 text-xs text-slate-600"><p className="break-words font-semibold text-slate-900">{order.title}</p><p className="mt-1 break-words">{health.daysRemaining <= 0 ? "Precisa chamar tecnico" : `${health.daysRemaining} dias restantes`}</p></div><button type="button" onClick={() => openDetails(order)} className="shrink-0 self-start rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Abrir</button></div></div></article>)}</div><div className="flex flex-col gap-3 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Pagina {mapPage} de {mapTotalPages} · {ordersWithHealth.length} manutencoes encontradas</p><div className="flex gap-2"><button type="button" onClick={() => setMapPage((current) => Math.max(1, current - 1))} disabled={mapPage === 1} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Anterior</button><button type="button" onClick={() => setMapPage((current) => Math.min(mapTotalPages, current + 1))} disabled={mapPage === mapTotalPages} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Proxima</button></div></div></>}
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="min-w-0 space-y-4">
+            <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-700"><ShieldAlert size={20} /></div><div><h3 className="text-base font-semibold text-slate-900">Hoje no predio</h3><p className="mt-1 text-sm text-slate-500">Resumo rapido das visitas tecnicas agendadas para hoje.</p></div></div>
               <div className="mt-4 space-y-3">{todayOrders.length === 0 ? <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Nenhuma manutencao programada para hoje.</div> : todayOrders.map((order) => <button key={order.id} type="button" onClick={() => openDetails(order)} className="w-full rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-slate-300 hover:bg-white"><p className="text-sm font-semibold text-slate-900">{order.title}</p><p className="mt-1 text-xs text-slate-500">{order.scheduledTime} · {order.technicianName}</p><p className="mt-3 text-xs text-slate-500">{order.area}</p></button>)}</div>
             </div>
-            <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"><ClipboardList size={20} /></div><div><h3 className="text-base font-semibold text-slate-900">Fluxo sugerido</h3><p className="mt-1 text-sm text-slate-500">Uma referencia clara para uso da equipe.</p></div></div>
               <div className="mt-4 space-y-3">{["Cadastre o item monitorado, o tecnico e o ciclo em dias.", "Quando o prestador chegar, abra a ordem e registre a entrada.", "Ao finalizar o servico, registre a saida para recarregar a barra de saude.", "Use o modal de detalhes para revisar historico e decidir a proxima chamada."].map((item, index) => <div key={item} className="flex items-start gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">{index + 1}</div><p className="text-sm leading-6 text-slate-700">{item}</p></div>)}</div>
             </div>
@@ -672,8 +812,9 @@ export default function MaresiaPage() {
       </div>
 
       <OrderFormModal open={formOpen} mode={formMode} form={form} setForm={setForm} saving={saving} onClose={() => setFormOpen(false)} onSubmit={handleSubmitForm} />
-      <DetailsModal open={detailsOpen} order={selectedOrder} assetHistory={selectedAssetHistory} canManage={canManage} saving={saving} onClose={() => setDetailsOpen(false)} onEdit={openEditModal} onStart={() => openAccessModal("checkin")} onFinish={() => openAccessModal("checkout")} onCancelOrder={handleCancelOrder} />
+      <DetailsModal open={detailsOpen} order={selectedOrder} assetHistory={selectedAssetHistory} attachments={attachments} canManage={canManage} saving={saving} uploading={uploading} onClose={() => setDetailsOpen(false)} onEdit={openEditModal} onStart={() => openAccessModal("checkin")} onFinish={() => openAccessModal("checkout")} onCancelOrder={handleCancelOrder} onUploadImage={handleUploadAttachment} onDeleteAttachment={handleDeleteAttachment} />
       <AccessModal open={accessMode !== null} mode={accessMode ?? "checkin"} value={accessDateTime} setValue={setAccessDateTime} notes={accessNotes} setNotes={setAccessNotes} order={selectedOrder} saving={saving} onClose={() => setAccessMode(null)} onSubmit={handleAccessSubmit} />
     </AppLayout>
   );
 }
+
