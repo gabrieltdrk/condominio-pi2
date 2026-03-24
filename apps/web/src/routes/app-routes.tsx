@@ -16,6 +16,7 @@ import Perfil from "../pages/perfil";
 import UsuariosPage from "../pages/usuarios";
 import VisitantesPage from "../pages/visitantes";
 import VisitorApprovalPage from "../pages/visitantes-aprovacao";
+import VisitorAccessCardPage from "../pages/visitantes-cartao";
 import ProtectedRoute from "./protected-route";
 
 export default function AppRoutes() {
@@ -26,6 +27,7 @@ export default function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/visitantes/aprovacao" element={<VisitorApprovalPage />} />
+        <Route path="/visitantes/cartao" element={<VisitorAccessCardPage />} />
         <Route
           path="/dashboard"
           element={

@@ -99,6 +99,13 @@ type FunctionErrorPayload = {
   message?: string;
 };
 
+export type VisitorAccessCard = {
+  qrDataUrl: string;
+  manualCode: string;
+  expectedCheckIn: string;
+  expectedCheckOut: string;
+};
+
 export type VisitorFlowResult = {
   requestId: string;
   emailQueued: boolean;
@@ -430,6 +437,31 @@ export async function validateVisitorAccessToken(token: string): Promise<{ statu
   } catch (error) {
     throw new Error(await extractFunctionError(error, "Erro ao validar QR."));
   }
+}
+
+export async function fetchVisitorAccessCard(token: string): Promise<VisitorAccessCard> {
+  const baseUrl = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/functions/v1/visitor-access-card?token=${encodeURIComponent(token)}&format=json`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as Partial<VisitorAccessCard> & FunctionErrorPayload;
+  if (!response.ok) {
+    throw new Error(payload.error ?? payload.message ?? "Nao foi possivel abrir este QR code.");
+  }
+
+  if (!payload.qrDataUrl || !payload.manualCode || !payload.expectedCheckIn || !payload.expectedCheckOut) {
+    throw new Error("Resposta invalida ao carregar o QR code.");
+  }
+
+  return {
+    qrDataUrl: payload.qrDataUrl,
+    manualCode: payload.manualCode,
+    expectedCheckIn: payload.expectedCheckIn,
+    expectedCheckOut: payload.expectedCheckOut,
+  };
 }
 
 export function subscribeToVisitorRequests(onChange: () => void) {
