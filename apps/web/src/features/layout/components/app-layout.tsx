@@ -40,7 +40,7 @@ const ADMIN_SECTION_STORAGE_KEY = "omni:admin-section-open";
 const navLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
-  { label: "Enquetes", path: "/enquetes", icon: MessageSquare },
+  { label: "Assembleia", path: "/enquetes", icon: MessageSquare },
   { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
   { label: "Encomendas", path: "/encomendas", icon: Package },
   { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
