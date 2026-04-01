@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import AppLayout from "../../features/layout/components/app-layout";
 import { getUser } from "../../features/auth/services/auth";
 import { fetchSantosWeather, type WeatherSnapshot } from "../../features/dashboard/services/weather";
+import { listFinanceBills, type FinanceBill } from "../../features/financeiro/services/financeiro";
 import { listOcorrencias, type Ocorrencia, type OcorrenciaStatus } from "../../features/ocorrencias/services/ocorrencias";
 
 const STATUS_COLORS: Record<OcorrenciaStatus, string> = {
@@ -42,6 +43,7 @@ export default function DashboardUser() {
   const nav = useNavigate();
   const user = getUser();
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
+  const [, setBills] = useState<FinanceBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
@@ -51,11 +53,24 @@ export default function DashboardUser() {
       .then(setOcorrencias)
       .catch(() => {})
       .finally(() => setLoading(false));
+    listFinanceBills({ limit: 100 })
+      .then((items) => {
+        const email = user?.email?.trim().toLowerCase();
+        const name = user?.name?.trim().toLowerCase();
+        setBills(
+          items.filter((bill) => {
+            const matchesEmail = !!email && bill.resident_email?.trim().toLowerCase() === email;
+            const matchesName = !!name && bill.resident.trim().toLowerCase() === name;
+            return matchesEmail || matchesName;
+          }),
+        );
+      })
+      .catch(() => setBills([]));
     fetchSantosWeather()
       .then(setWeather)
       .catch(() => setWeather(null))
       .finally(() => setWeatherLoading(false));
-  }, []);
+  }, [user?.email, user?.name]);
 
   const abertas = ocorrencias.filter((o) =>
     ["Aberto", "Em Análise", "Em Atendimento", "Pendente Terceiros"].includes(o.status)

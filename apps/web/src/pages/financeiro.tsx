@@ -3,19 +3,22 @@ import {
   AlertTriangle,
   Building2,
   CalendarClock,
+  CheckCircle2,
+  Copy,
   FileBarChart2,
   Landmark,
   PlusCircle,
+  Printer,
+  Receipt,
   Wallet,
   X,
 } from "lucide-react";
 import {
   Area,
-  AreaChart,
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -25,8 +28,14 @@ import {
 } from "recharts";
 import AppLayout from "../features/layout/components/app-layout";
 import {
+  createFinanceBill,
   createFinanceEntry,
+  listFinanceBills,
   listFinanceEntries,
+  updateFinanceBillStatus,
+  type CreateFinanceBillPayload,
+  type FinanceBill,
+  type FinanceBillStatus,
   type FinanceEntry,
 } from "../features/financeiro/services/financeiro";
 import { fetchBuilding, getMockBuilding, type Floor } from "../features/predio/services/predio";
@@ -35,18 +44,18 @@ type RevenueCategory = "Taxa condominial" | "Multa" | "Juros por atraso" | "Alug
 type ExpenseCategory = "Funcionarios" | "Energia" | "Agua" | "Manutencao" | "Limpeza" | "Seguranca" | "Outros";
 type RevenueStatus = "Recebido" | "Em aberto" | "Atrasado";
 type ExpenseStatus = "Pago" | "Pendente" | "Em negociacao";
-type UnitOption = { value: string; label: string; resident: string };
+type FinanceModal = "revenue" | "expense" | "bill" | null;
 type MonthlyPoint = { month: string; receitas: number; despesas: number; saldo: number };
-type FinanceModal = "revenue" | "expense" | null;
+type UnitOption = { value: string; label: string; resident: string; email: string };
 
 const revenueCategories: RevenueCategory[] = ["Taxa condominial", "Multa", "Juros por atraso", "Aluguel areas comuns"];
 const expenseCategories: ExpenseCategory[] = ["Funcionarios", "Energia", "Agua", "Manutencao", "Limpeza", "Seguranca", "Outros"];
 const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" });
 const inputClass =
   "h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100";
+const fieldLabelClass = "grid gap-2 text-sm font-medium text-slate-700";
 const panelClass =
   "rounded-[28px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] backdrop-blur";
-const fieldLabelClass = "grid gap-2 text-sm font-medium text-slate-700";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -58,11 +67,11 @@ function formatCurrency(value: number) {
 
 function formatDate(value: string | null) {
   if (!value) return "-";
-  return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR");
+  return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR");
 }
 
 function getMonthKey(value: string) {
-  const date = new Date(`${value}T12:00:00`);
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -74,13 +83,29 @@ function formatMonthLabel(key: string) {
 function getUnitOptions(floors: Floor[]): UnitOption[] {
   return floors
     .flatMap((floor) =>
-      floor.apartments.map((apartment) => ({
-        value: `${floor.tower} - Ap ${apartment.number}`,
-        label: `${floor.tower} - Ap ${apartment.number}${apartment.resident ? ` - ${apartment.resident.name}` : ""}`,
-        resident: apartment.resident?.name ?? "Morador nao informado",
-      })),
+      floor.apartments
+        .filter((apartment) => apartment.resident)
+        .map((apartment) => ({
+          value: `${floor.tower} - Ap ${apartment.number}`,
+          label: `${floor.tower} - Ap ${apartment.number} - ${apartment.resident?.name ?? "Morador"}`,
+          resident: apartment.resident?.name ?? "Morador nao informado",
+          email: apartment.resident?.email ?? "",
+        })),
     )
     .sort((a, b) => a.value.localeCompare(b.value, "pt-BR", { numeric: true }));
+}
+
+function getBillStatusMeta(status: FinanceBillStatus) {
+  switch (status) {
+    case "PAID":
+      return { label: "Pago", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+    case "OVERDUE":
+      return { label: "Atrasado", className: "border-rose-200 bg-rose-50 text-rose-700" };
+    case "CANCELLED":
+      return { label: "Cancelado", className: "border-slate-200 bg-slate-100 text-slate-600" };
+    default:
+      return { label: "Em aberto", className: "border-amber-200 bg-amber-50 text-amber-700" };
+  }
 }
 
 function FinanceTooltip({
@@ -106,13 +131,59 @@ function FinanceTooltip({
   );
 }
 
+function openBillPrintView(bill: FinanceBill) {
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+
+  win.document.write(`<!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <title>${bill.bill_code}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 32px; color: #0f172a; }
+          .card { border: 1px solid #cbd5e1; border-radius: 20px; padding: 24px; }
+          .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 12px; font-weight: bold; }
+          .line { font-family: monospace; font-size: 20px; letter-spacing: 1px; margin: 18px 0; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+          .label { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .value { font-size: 16px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="pill">Boleto mockado</div>
+          <h1>${bill.bill_code}</h1>
+          <p>Documento interno para cobranca condominial sem integracao bancaria.</p>
+          <div class="line">${bill.digitable_line}</div>
+          <div class="grid">
+            <div><div class="label">Unidade</div><div class="value">${bill.unit}</div></div>
+            <div><div class="label">Morador</div><div class="value">${bill.resident}</div></div>
+            <div><div class="label">Competencia</div><div class="value">${formatDate(bill.competence_date)}</div></div>
+            <div><div class="label">Vencimento</div><div class="value">${formatDate(bill.due_date)}</div></div>
+            <div><div class="label">Valor</div><div class="value">${formatCurrency(bill.amount)}</div></div>
+            <div><div class="label">Codigo de barras</div><div class="value">${bill.barcode}</div></div>
+          </div>
+          <p style="margin-top: 24px; font-size: 12px; color: #64748b;">Gerado para demonstracao do fluxo financeiro do condominio.</p>
+        </div>
+        <script>window.print()</script>
+      </body>
+    </html>`);
+  win.document.close();
+}
+
 export default function FinanceiroPage() {
   const [building, setBuilding] = useState<Floor[]>(() => getMockBuilding());
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
+  const [bills, setBills] = useState<FinanceBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const [activeModal, setActiveModal] = useState<FinanceModal>(null);
+  const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
+  const [updatingBillId, setUpdatingBillId] = useState<number | null>(null);
+
   const [revenueForm, setRevenueForm] = useState({
     identifier: "",
     description: "",
@@ -139,17 +210,32 @@ export default function FinanceiroPage() {
     documentName: "",
     notes: "",
   });
+  const [billForm, setBillForm] = useState({
+    unit: "",
+    resident: "",
+    residentEmail: "",
+    amount: "",
+    competenceDate: "2026-04-01",
+    issueDate: "2026-04-01",
+    dueDate: "2026-04-10",
+    instructions: "Nao receber apos 30 dias do vencimento.",
+  });
 
   async function loadData() {
     setLoading(true);
     setError("");
+
     try {
-      const [floors, financeEntries] = await Promise.all([
+      const [floors, financeEntries, financeBills] = await Promise.all([
         fetchBuilding().catch(() => getMockBuilding()),
         listFinanceEntries(),
+        listFinanceBills({ limit: 200 }),
       ]);
+
       setBuilding(floors);
       setEntries(financeEntries);
+      setBills(financeBills);
+      setSelectedBillId((current) => current ?? financeBills[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar financeiro.");
     } finally {
@@ -158,12 +244,19 @@ export default function FinanceiroPage() {
   }
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const unitOptions = useMemo(() => getUnitOptions(building), [building]);
+  const selectedBill = useMemo(
+    () => bills.find((bill) => bill.id === selectedBillId) ?? bills[0] ?? null,
+    [bills, selectedBillId],
+  );
   const revenues = useMemo(() => entries.filter((item) => item.type === "REVENUE"), [entries]);
   const expenses = useMemo(() => entries.filter((item) => item.type === "EXPENSE"), [entries]);
+  const paidBills = useMemo(() => bills.filter((bill) => bill.status === "PAID"), [bills]);
+  const pendingBills = useMemo(() => bills.filter((bill) => bill.status === "PENDING"), [bills]);
+  const overdueBills = useMemo(() => bills.filter((bill) => bill.status === "OVERDUE"), [bills]);
   const receivedRevenue = useMemo(
     () => revenues.filter((item) => item.status === "Recebido").reduce((sum, item) => sum + item.amount, 0),
     [revenues],
@@ -172,10 +265,18 @@ export default function FinanceiroPage() {
     () => expenses.filter((item) => item.status === "Pago").reduce((sum, item) => sum + item.amount, 0),
     [expenses],
   );
+  const openBillsAmount = useMemo(
+    () => pendingBills.concat(overdueBills).reduce((sum, bill) => sum + bill.amount, 0),
+    [overdueBills, pendingBills],
+  );
+  const delinquencyAmount = useMemo(
+    () => overdueBills.reduce((sum, bill) => sum + bill.amount, 0),
+    [overdueBills],
+  );
   const balance = useMemo(() => receivedRevenue - paidExpense, [paidExpense, receivedRevenue]);
 
   const monthlySeries = useMemo<MonthlyPoint[]>(() => {
-    const current = new Date("2026-03-12T12:00:00");
+    const current = new Date("2026-04-01T12:00:00");
     const map = new Map<string, MonthlyPoint>();
 
     for (let index = 5; index >= 0; index -= 1) {
@@ -197,35 +298,23 @@ export default function FinanceiroPage() {
     return Array.from(map.values()).map((item) => ({ ...item, saldo: item.receitas - item.despesas }));
   }, [expenses, revenues]);
 
-  const revenueByStatus = useMemo(
+  const billStatusChart = useMemo(
     () =>
-      ["Recebido", "Em aberto", "Atrasado"].map((status) => ({
-        name: status,
-        value: revenues.filter((item) => item.status === status).reduce((sum, item) => sum + item.amount, 0),
-      })),
-    [revenues],
-  );
-
-  const expensesByCategory = useMemo(
-    () =>
-      expenseCategories
-        .map((category) => ({
-          name: category,
-          value: expenses.filter((item) => item.category === category).reduce((sum, item) => sum + item.amount, 0),
-        }))
-        .filter((item) => item.value > 0)
-        .sort((a, b) => b.value - a.value),
-    [expenses],
-  );
-
-  const delinquencyRows = useMemo(
-    () => revenues.filter((item) => item.category === "Taxa condominial" && item.status !== "Recebido").slice(0, 6),
-    [revenues],
+      [
+        { name: "Pago", value: paidBills.reduce((sum, bill) => sum + bill.amount, 0) },
+        { name: "Em aberto", value: pendingBills.reduce((sum, bill) => sum + bill.amount, 0) },
+        { name: "Atrasado", value: overdueBills.reduce((sum, bill) => sum + bill.amount, 0) },
+      ].filter((item) => item.value > 0),
+    [overdueBills, paidBills, pendingBills],
   );
 
   const recentEntries = useMemo(
-    () => [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 6),
+    () => [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8),
     [entries],
+  );
+  const recentBills = useMemo(
+    () => [...bills].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8),
+    [bills],
   );
 
   async function handleCreateRevenue(event: React.FormEvent<HTMLFormElement>) {
@@ -263,6 +352,7 @@ export default function FinanceiroPage() {
         notes: "",
       });
       setActiveModal(null);
+      setActionMessage("Receita cadastrada com sucesso.");
       await loadData();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar receita.");
@@ -303,9 +393,63 @@ export default function FinanceiroPage() {
         notes: "",
       });
       setActiveModal(null);
+      setActionMessage("Despesa cadastrada com sucesso.");
       await loadData();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar despesa.");
+    }
+  }
+
+  async function handleIssueBill(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
+
+    try {
+      const payload: CreateFinanceBillPayload = {
+        unit: billForm.unit,
+        resident: billForm.resident.trim(),
+        residentEmail: billForm.residentEmail.trim() || null,
+        amount: Number(billForm.amount),
+        competenceDate: billForm.competenceDate,
+        issueDate: billForm.issueDate,
+        dueDate: billForm.dueDate,
+        instructions: billForm.instructions.trim() || null,
+      };
+
+      const created = await createFinanceBill(payload);
+      setBillForm({
+        unit: "",
+        resident: "",
+        residentEmail: "",
+        amount: "",
+        competenceDate: "2026-04-01",
+        issueDate: "2026-04-01",
+        dueDate: "2026-04-10",
+        instructions: "Nao receber apos 30 dias do vencimento.",
+      });
+      setActiveModal(null);
+      setActionMessage(`Boleto ${created.bill_code} emitido com sucesso.`);
+      await loadData();
+      setSelectedBillId(created.id);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Erro ao emitir boleto.");
+    }
+  }
+
+  async function handleBillStatusChange(bill: FinanceBill, status: FinanceBillStatus) {
+    setUpdatingBillId(bill.id);
+    setActionMessage("");
+
+    try {
+      const updated = await updateFinanceBillStatus(bill.id, status);
+      setBills((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
+      setSelectedBillId(updated.id);
+      setActionMessage(`Boleto ${updated.bill_code} atualizado para ${getBillStatusMeta(status).label.toLowerCase()}.`);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao atualizar boleto.");
+    } finally {
+      setUpdatingBillId(null);
     }
   }
 
@@ -321,9 +465,9 @@ export default function FinanceiroPage() {
                 <Landmark size={13} />
                 Central financeira
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-900">Visao geral do caixa</h2>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">
-                O grafico principal mostra a evolucao do caixa. Abaixo, os cards ficam separados por analise e operacao.
+              <h2 className="mt-3 text-xl font-semibold text-slate-900">Caixa, cobrancas e boletos mockados</h2>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                A aba agora concentra lancamentos, cobranca condominial e emissao de boleto mockado com linha digitavel, status e segunda via interna.
               </p>
             </div>
 
@@ -332,9 +476,20 @@ export default function FinanceiroPage() {
                 type="button"
                 onClick={() => {
                   setFormError("");
+                  setActiveModal("bill");
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                <Receipt size={16} />
+                Emitir boleto
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormError("");
                   setActiveModal("revenue");
                 }}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_34px_-18px_rgba(5,150,105,0.9)] transition hover:bg-emerald-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 <PlusCircle size={16} />
                 Cadastrar receita
@@ -355,12 +510,38 @@ export default function FinanceiroPage() {
         </section>
 
         {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
-        {!activeModal && formError && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{formError}</p>}
+        {actionMessage && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{actionMessage}</p>}
         {loading && <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">Carregando financeiro...</p>}
 
         {!loading && !error && (
           <>
-            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_320px]">
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {[
+                { title: "Saldo liquido", value: formatCurrency(balance), sub: "Recebido menos despesas pagas", icon: Wallet, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                { title: "Carteira em aberto", value: formatCurrency(openBillsAmount), sub: `${pendingBills.length + overdueBills.length} boletos aguardando baixa`, icon: Receipt, tone: "bg-amber-50 text-amber-700 border-amber-200" },
+                { title: "Inadimplencia", value: formatCurrency(delinquencyAmount), sub: `${overdueBills.length} boletos atrasados`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700 border-rose-200" },
+                { title: "Boletos pagos", value: formatCurrency(paidBills.reduce((sum, bill) => sum + bill.amount, 0)), sub: `${paidBills.length} cobrancas compensadas`, icon: CheckCircle2, tone: "bg-sky-50 text-sky-700 border-sky-200" },
+              ].map((card) => {
+                const Icon = card.icon;
+                return (
+                  <div key={card.title} className={`${panelClass} border ${card.tone}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${card.tone}`}>
+                        <Icon size={20} />
+                      </div>
+                      <span className="rounded-full border border-white/80 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Financeiro
+                      </span>
+                    </div>
+                    <p className="mt-4 text-2xl font-black tracking-[-0.04em] text-slate-900">{card.value}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-700">{card.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{card.sub}</p>
+                  </div>
+                );
+              })}
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_340px]">
               <div className={`${panelClass} overflow-hidden bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))]`}>
                 <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-end lg:justify-between">
                   <div className="flex items-center gap-3">
@@ -386,7 +567,7 @@ export default function FinanceiroPage() {
                 </div>
                 <div className="mt-5 h-[340px] rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.08),_transparent_34%),linear-gradient(180deg,_rgba(248,250,252,0.9),_rgba(255,255,255,1))] p-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={monthlySeries} margin={{ top: 10, right: 16, left: -24, bottom: 0 }}>
+                    <ComposedChart data={monthlySeries} margin={{ top: 10, right: 16, left: -24, bottom: 0 }}>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
                       <YAxis tickFormatter={(v: number) => `R$ ${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
@@ -394,127 +575,246 @@ export default function FinanceiroPage() {
                       <Bar dataKey="receitas" name="Receitas" radius={[10, 10, 0, 0]} fill="#10b981" />
                       <Bar dataKey="despesas" name="Despesas" radius={[10, 10, 0, 0]} fill="#f59e0b" />
                       <Area type="monotone" dataKey="saldo" name="Saldo" stroke="#4f46e5" fill="#c7d2fe" fillOpacity={0.42} strokeWidth={3} />
-                    </AreaChart>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <aside className={`${panelClass} !bg-slate-950 text-white`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200">Resumo rapido</p>
-                <p className="mt-3 text-3xl font-black tracking-[-0.04em] text-white">{formatCurrency(balance)}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Saldo liquido considerando o que entrou e o que ja foi pago.</p>
-                <div className="mt-5 space-y-3">
-                  <div className="rounded-[22px] border border-slate-800 bg-slate-900 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Receitas recebidas</p>
-                    <p className="mt-2 text-xl font-bold text-white">{formatCurrency(receivedRevenue)}</p>
+              <aside className={`${panelClass} bg-[linear-gradient(180deg,_#fff,_#f8fafc)]`}>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                    <Receipt size={20} />
                   </div>
-                  <div className="rounded-[22px] border border-slate-800 bg-slate-900 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200">Despesas pagas</p>
-                    <p className="mt-2 text-xl font-bold text-white">{formatCurrency(paidExpense)}</p>
+                  <div>
+                    <h3 className="m-0 text-base font-semibold text-slate-900">Carteira de cobranca</h3>
+                    <p className="mt-1 text-sm text-slate-500">Distribuicao financeira dos boletos emitidos.</p>
                   </div>
-                  <div className="rounded-[22px] border border-slate-800 bg-slate-900 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-200">Inadimplencia</p>
-                    <p className="mt-2 text-xl font-bold text-white">{formatCurrency(delinquencyRows.reduce((sum, item) => sum + item.amount, 0))}</p>
-                  </div>
+                </div>
+                <div className="mt-4 h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={billStatusChart} dataKey="value" nameKey="name" innerRadius={54} outerRadius={84} paddingAngle={4}>
+                        {billStatusChart.map((entry, index) => (
+                          <Cell key={entry.name} fill={["#10b981", "#f59e0b", "#f43f5e"][index % 3]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-2 space-y-3">
+                  {billStatusChart.map((item, index) => (
+                    <div key={item.name} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: ["#10b981", "#f59e0b", "#f43f5e"][index % 3] }} />
+                        <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-slate-900">{formatCurrency(item.value)}</span>
+                    </div>
+                  ))}
                 </div>
               </aside>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <div className="grid gap-4">
-                <div className="px-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Analise</p>
-                </div>
-                <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fffb)]`}>
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+              <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#fffaf1)]`}>
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
-                      <Wallet size={20} />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                      <CalendarClock size={20} />
                     </div>
                     <div>
-                      <h3 className="m-0 text-base font-semibold text-slate-900">Receitas por status</h3>
-                      <p className="mt-1 text-sm text-slate-500">Veja rapidamente o que entrou e o que ainda esta em aberto.</p>
+                      <h3 className="m-0 text-base font-semibold text-slate-900">Boletos emitidos</h3>
+                      <p className="mt-1 text-sm text-slate-500">Selecione um boleto para ver a cobranca completa e atualizar o status.</p>
                     </div>
                   </div>
-                  <div className="mt-4 h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={revenueByStatus} dataKey="value" nameKey="name" innerRadius={56} outerRadius={84} paddingAngle={5}>
-                          {revenueByStatus.map((entry, index) => (
-                            <Cell key={entry.name} fill={["#10b981", "#f59e0b", "#f43f5e"][index % 3]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {bills.length} documentos
+                  </span>
                 </div>
 
-                <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fbff)]`}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
-                      <Building2 size={20} />
-                    </div>
-                    <div>
-                      <h3 className="m-0 text-base font-semibold text-slate-900">Despesas por categoria</h3>
-                      <p className="mt-1 text-sm text-slate-500">Entenda quais custos mais pesam na operacao do condominio.</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={expensesByCategory} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" width={105} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
-                        <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-                        <Bar dataKey="value" radius={[0, 12, 12, 0]}>
-                          {expensesByCategory.map((entry, index) => (
-                            <Cell key={entry.name} fill={["#0f766e", "#2563eb", "#f59e0b", "#ef4444", "#7c3aed", "#14b8a6", "#64748b"][index % 7]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="mt-5 space-y-3">
+                  {recentBills.map((bill) => {
+                    const statusMeta = getBillStatusMeta(bill.status);
+                    return (
+                      <button
+                        key={bill.id}
+                        type="button"
+                        onClick={() => setSelectedBillId(bill.id)}
+                        className={`w-full rounded-[22px] border px-4 py-4 text-left transition ${selectedBillId === bill.id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className={`text-sm font-semibold ${selectedBillId === bill.id ? "text-white" : "text-slate-900"}`}>{bill.bill_code}</p>
+                            <p className={`mt-1 text-xs ${selectedBillId === bill.id ? "text-slate-200" : "text-slate-500"}`}>{bill.unit} - {bill.resident}</p>
+                          </div>
+                          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${selectedBillId === bill.id ? "border-white/20 bg-white/10 text-white" : statusMeta.className}`}>
+                            {statusMeta.label}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                          <span className={`text-sm font-semibold ${selectedBillId === bill.id ? "text-white" : "text-slate-900"}`}>{formatCurrency(bill.amount)}</span>
+                          <span className={`text-xs ${selectedBillId === bill.id ? "text-slate-300" : "text-slate-500"}`}>Vence em {formatDate(bill.due_date)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="grid gap-4">
-                <div className="px-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Operacao</p>
+              <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fbff)]`}>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                    <Building2 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="m-0 text-base font-semibold text-slate-900">Detalhe do boleto</h3>
+                    <p className="mt-1 text-sm text-slate-500">Linha digitavel, vencimento, instrucoes e acoes operacionais.</p>
+                  </div>
                 </div>
-                <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#fff7f7)]`}>
+
+                {selectedBill ? (
+                  <div className="mt-5 space-y-4">
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-950 p-5 text-white">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-200">Boleto mockado</p>
+                          <p className="mt-2 text-2xl font-black tracking-[-0.04em]">{selectedBill.bill_code}</p>
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBillStatusMeta(selectedBill.status).className}`}>
+                          {getBillStatusMeta(selectedBill.status).label}
+                        </span>
+                      </div>
+                      <p className="mt-4 break-all rounded-2xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100">
+                        {selectedBill.digitable_line}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Unidade</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{selectedBill.unit}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Morador</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{selectedBill.resident}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Competencia</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{formatDate(selectedBill.competence_date)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Vencimento</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{formatDate(selectedBill.due_date)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Valor</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(selectedBill.amount)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Baixa</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{selectedBill.paid_at ? formatDate(selectedBill.paid_at) : "Nao baixado"}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Instrucoes</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{selectedBill.instructions || "Sem instrucoes adicionais para este documento."}</p>
+                      <p className="mt-4 break-all text-xs text-slate-500">Codigo de barras: {selectedBill.barcode}</p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(selectedBill.digitable_line);
+                          setActionMessage(`Linha digitavel de ${selectedBill.bill_code} copiada.`);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        <Copy size={16} />
+                        Copiar linha
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openBillPrintView(selectedBill)}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        <Printer size={16} />
+                        Imprimir 2a via
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        disabled={updatingBillId === selectedBill.id}
+                        onClick={() => void handleBillStatusChange(selectedBill, "PAID")}
+                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        Marcar como pago
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updatingBillId === selectedBill.id}
+                        onClick={() => void handleBillStatusChange(selectedBill, "OVERDUE")}
+                        className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                      >
+                        Marcar atrasado
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updatingBillId === selectedBill.id}
+                        onClick={() => void handleBillStatusChange(selectedBill, "CANCELLED")}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        Cancelar boleto
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                    Nenhum boleto emitido ainda.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#fff7f7)]`}>
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
                     <AlertTriangle size={20} />
                   </div>
                   <div>
-                    <h3 className="m-0 text-base font-semibold text-slate-900">Inadimplencia</h3>
-                    <p className="mt-1 text-sm text-slate-500">Unidades que exigem acompanhamento mais proximo.</p>
+                    <h3 className="m-0 text-base font-semibold text-slate-900">Inadimplencia atual</h3>
+                    <p className="mt-1 text-sm text-slate-500">Unidades com cobranca que exigem acompanhamento mais proximo.</p>
                   </div>
                 </div>
                 <div className="mt-4 space-y-3">
-                  {delinquencyRows.map((item) => (
-                    <div key={item.id} className="rounded-[22px] border border-rose-100 bg-[linear-gradient(135deg,_#fff1f2,_#ffffff)] p-4 shadow-sm">
+                  {overdueBills.map((bill) => (
+                    <div key={bill.id} className="rounded-[22px] border border-rose-100 bg-[linear-gradient(135deg,_#fff1f2,_#ffffff)] p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900">{item.unit || "Unidade nao informada"}</p>
-                          <p className="truncate text-xs text-slate-500">{item.counterparty}</p>
+                          <p className="truncate text-sm font-semibold text-slate-900">{bill.unit}</p>
+                          <p className="truncate text-xs text-slate-500">{bill.resident}</p>
                         </div>
-                        <span className="break-words text-right text-sm font-semibold text-rose-700">{formatCurrency(item.amount)}</span>
+                        <span className="break-words text-right text-sm font-semibold text-rose-700">{formatCurrency(bill.amount)}</span>
                       </div>
                       <p className="mt-2 text-xs text-slate-500">
-                        {item.status} - Referencia {formatDate(item.reference_date)}
+                        Vencimento {formatDate(bill.due_date)} - {bill.bill_code}
                       </p>
                     </div>
                   ))}
-                  {delinquencyRows.length === 0 && (
+                  {overdueBills.length === 0 && (
                     <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                      Nenhuma taxa em atraso no momento.
+                      Nenhum boleto em atraso no momento.
                     </div>
                   )}
                 </div>
-                </div>
+              </div>
 
-                <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fafc)]`}>
+              <div className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fafc)]`}>
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
                     <CalendarClock size={20} />
@@ -539,7 +839,6 @@ export default function FinanceiroPage() {
                   ))}
                 </div>
               </div>
-              </div>
             </section>
           </>
         )}
@@ -552,12 +851,12 @@ export default function FinanceiroPage() {
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Financeiro</p>
                 <h3 className="mt-1 text-xl font-semibold text-slate-900">
-                  {activeModal === "revenue" ? "Cadastrar receita" : "Cadastrar despesa"}
+                  {activeModal === "revenue" ? "Cadastrar receita" : activeModal === "expense" ? "Cadastrar despesa" : "Emitir boleto mockado"}
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  {activeModal === "revenue"
-                    ? "Preencha os dados da entrada financeira."
-                    : "Preencha os dados da despesa do condominio."}
+                  {activeModal === "bill"
+                    ? "Gere a cobranca condominial com linha digitavel e segunda via interna."
+                    : "Preencha os dados da movimentacao financeira."}
                 </p>
               </div>
               <button
@@ -577,54 +876,27 @@ export default function FinanceiroPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Codigo</span>
-                      <input
-                        value={revenueForm.identifier}
-                        onChange={(e) => setRevenueForm((current) => ({ ...current, identifier: e.target.value }))}
-                        placeholder="Ex.: REC-0326"
-                        className={inputClass}
-                      />
+                      <input value={revenueForm.identifier} onChange={(e) => setRevenueForm((current) => ({ ...current, identifier: e.target.value }))} placeholder="Ex.: REC-0426-001" className={inputClass} />
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Valor</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={revenueForm.amount}
-                        onChange={(e) => setRevenueForm((current) => ({ ...current, amount: e.target.value }))}
-                        placeholder="0,00"
-                        className={inputClass}
-                      />
+                      <input type="number" min={0} step="0.01" value={revenueForm.amount} onChange={(e) => setRevenueForm((current) => ({ ...current, amount: e.target.value }))} placeholder="0,00" className={inputClass} />
                     </label>
                   </div>
 
                   <label className={fieldLabelClass}>
                     <span>Descricao</span>
-                    <input
-                      value={revenueForm.description}
-                      onChange={(e) => setRevenueForm((current) => ({ ...current, description: e.target.value }))}
-                      placeholder="Ex.: Taxa condominial de marco"
-                      className={inputClass}
-                    />
+                    <input value={revenueForm.description} onChange={(e) => setRevenueForm((current) => ({ ...current, description: e.target.value }))} placeholder="Ex.: Aluguel do salao" className={inputClass} />
                   </label>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Data de referencia</span>
-                      <input
-                        type="date"
-                        value={revenueForm.referenceDate}
-                        onChange={(e) => setRevenueForm((current) => ({ ...current, referenceDate: e.target.value }))}
-                        className={inputClass}
-                      />
+                      <input type="date" value={revenueForm.referenceDate} onChange={(e) => setRevenueForm((current) => ({ ...current, referenceDate: e.target.value }))} className={inputClass} />
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Categoria</span>
-                      <select
-                        value={revenueForm.category}
-                        onChange={(e) => setRevenueForm((current) => ({ ...current, category: e.target.value as RevenueCategory }))}
-                        className={inputClass}
-                      >
+                      <select value={revenueForm.category} onChange={(e) => setRevenueForm((current) => ({ ...current, category: e.target.value as RevenueCategory }))} className={inputClass}>
                         {revenueCategories.map((category) => (
                           <option key={category} value={category}>
                             {category}
@@ -660,20 +932,11 @@ export default function FinanceiroPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Morador</span>
-                      <input
-                        value={revenueForm.resident}
-                        onChange={(e) => setRevenueForm((current) => ({ ...current, resident: e.target.value }))}
-                        placeholder="Nome do morador"
-                        className={inputClass}
-                      />
+                      <input value={revenueForm.resident} onChange={(e) => setRevenueForm((current) => ({ ...current, resident: e.target.value }))} placeholder="Nome do morador" className={inputClass} />
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Status</span>
-                      <select
-                        value={revenueForm.status}
-                        onChange={(e) => setRevenueForm((current) => ({ ...current, status: e.target.value as RevenueStatus }))}
-                        className={inputClass}
-                      >
+                      <select value={revenueForm.status} onChange={(e) => setRevenueForm((current) => ({ ...current, status: e.target.value as RevenueStatus }))} className={inputClass}>
                         <option value="Recebido">Recebido</option>
                         <option value="Em aberto">Em aberto</option>
                         <option value="Atrasado">Atrasado</option>
@@ -682,17 +945,10 @@ export default function FinanceiroPage() {
                   </div>
 
                   <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setActiveModal(null)}
-                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
+                    <button type="button" onClick={() => setActiveModal(null)} className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                       Cancelar
                     </button>
-                    <button
-                      type="submit"
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                    >
+                    <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
                       <PlusCircle size={16} />
                       Salvar receita
                     </button>
@@ -705,75 +961,38 @@ export default function FinanceiroPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Codigo</span>
-                      <input
-                        value={expenseForm.identifier}
-                        onChange={(e) => setExpenseForm((current) => ({ ...current, identifier: e.target.value }))}
-                        placeholder="Ex.: DESP-0326"
-                        className={inputClass}
-                      />
+                      <input value={expenseForm.identifier} onChange={(e) => setExpenseForm((current) => ({ ...current, identifier: e.target.value }))} placeholder="Ex.: DESP-0426-001" className={inputClass} />
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Valor</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={expenseForm.amount}
-                        onChange={(e) => setExpenseForm((current) => ({ ...current, amount: e.target.value }))}
-                        placeholder="0,00"
-                        className={inputClass}
-                      />
+                      <input type="number" min={0} step="0.01" value={expenseForm.amount} onChange={(e) => setExpenseForm((current) => ({ ...current, amount: e.target.value }))} placeholder="0,00" className={inputClass} />
                     </label>
                   </div>
 
                   <label className={fieldLabelClass}>
                     <span>Descricao</span>
-                    <input
-                      value={expenseForm.description}
-                      onChange={(e) => setExpenseForm((current) => ({ ...current, description: e.target.value }))}
-                      placeholder="Ex.: Conta de energia"
-                      className={inputClass}
-                    />
+                    <input value={expenseForm.description} onChange={(e) => setExpenseForm((current) => ({ ...current, description: e.target.value }))} placeholder="Ex.: Conta de energia" className={inputClass} />
                   </label>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Data de referencia</span>
-                      <input
-                        type="date"
-                        value={expenseForm.referenceDate}
-                        onChange={(e) => setExpenseForm((current) => ({ ...current, referenceDate: e.target.value }))}
-                        className={inputClass}
-                      />
+                      <input type="date" value={expenseForm.referenceDate} onChange={(e) => setExpenseForm((current) => ({ ...current, referenceDate: e.target.value }))} className={inputClass} />
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Vencimento</span>
-                      <input
-                        type="date"
-                        value={expenseForm.dueDate}
-                        onChange={(e) => setExpenseForm((current) => ({ ...current, dueDate: e.target.value }))}
-                        className={inputClass}
-                      />
+                      <input type="date" value={expenseForm.dueDate} onChange={(e) => setExpenseForm((current) => ({ ...current, dueDate: e.target.value }))} className={inputClass} />
                     </label>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Fornecedor</span>
-                      <input
-                        value={expenseForm.counterparty}
-                        onChange={(e) => setExpenseForm((current) => ({ ...current, counterparty: e.target.value }))}
-                        placeholder="Nome do fornecedor"
-                        className={inputClass}
-                      />
+                      <input value={expenseForm.counterparty} onChange={(e) => setExpenseForm((current) => ({ ...current, counterparty: e.target.value }))} placeholder="Nome do fornecedor" className={inputClass} />
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Categoria</span>
-                      <select
-                        value={expenseForm.category}
-                        onChange={(e) => setExpenseForm((current) => ({ ...current, category: e.target.value as ExpenseCategory }))}
-                        className={inputClass}
-                      >
+                      <select value={expenseForm.category} onChange={(e) => setExpenseForm((current) => ({ ...current, category: e.target.value as ExpenseCategory }))} className={inputClass}>
                         {expenseCategories.map((category) => (
                           <option key={category} value={category}>
                             {category}
@@ -784,19 +1003,88 @@ export default function FinanceiroPage() {
                   </div>
 
                   <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setActiveModal(null)}
-                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
+                    <button type="button" onClick={() => setActiveModal(null)} className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                       Cancelar
                     </button>
-                    <button
-                      type="submit"
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-600"
-                    >
+                    <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-600">
                       <PlusCircle size={16} />
                       Salvar despesa
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {activeModal === "bill" && (
+                <form onSubmit={handleIssueBill} className="grid gap-4">
+                  <label className={fieldLabelClass}>
+                    <span>Unidade</span>
+                    <select
+                      value={billForm.unit}
+                      onChange={(e) => {
+                        const option = unitOptions.find((item) => item.value === e.target.value);
+                        setBillForm((current) => ({
+                          ...current,
+                          unit: e.target.value,
+                          resident: option?.resident ?? current.resident,
+                          residentEmail: option?.email ?? current.residentEmail,
+                        }));
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">Selecione a unidade</option>
+                      {unitOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className={fieldLabelClass}>
+                      <span>Morador</span>
+                      <input value={billForm.resident} onChange={(e) => setBillForm((current) => ({ ...current, resident: e.target.value }))} placeholder="Nome do morador" className={inputClass} />
+                    </label>
+                    <label className={fieldLabelClass}>
+                      <span>Email do morador</span>
+                      <input type="email" value={billForm.residentEmail} onChange={(e) => setBillForm((current) => ({ ...current, residentEmail: e.target.value }))} placeholder="morador@exemplo.com" className={inputClass} />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className={fieldLabelClass}>
+                      <span>Valor</span>
+                      <input type="number" min={0} step="0.01" value={billForm.amount} onChange={(e) => setBillForm((current) => ({ ...current, amount: e.target.value }))} placeholder="0,00" className={inputClass} />
+                    </label>
+                    <label className={fieldLabelClass}>
+                      <span>Competencia</span>
+                      <input type="date" value={billForm.competenceDate} onChange={(e) => setBillForm((current) => ({ ...current, competenceDate: e.target.value }))} className={inputClass} />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className={fieldLabelClass}>
+                      <span>Emissao</span>
+                      <input type="date" value={billForm.issueDate} onChange={(e) => setBillForm((current) => ({ ...current, issueDate: e.target.value }))} className={inputClass} />
+                    </label>
+                    <label className={fieldLabelClass}>
+                      <span>Vencimento</span>
+                      <input type="date" value={billForm.dueDate} onChange={(e) => setBillForm((current) => ({ ...current, dueDate: e.target.value }))} className={inputClass} />
+                    </label>
+                  </div>
+
+                  <label className={fieldLabelClass}>
+                    <span>Instrucoes</span>
+                    <textarea value={billForm.instructions} onChange={(e) => setBillForm((current) => ({ ...current, instructions: e.target.value }))} rows={4} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" />
+                  </label>
+
+                  <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={() => setActiveModal(null)} className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                      Cancelar
+                    </button>
+                    <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
+                      <Receipt size={16} />
+                      Emitir boleto
                     </button>
                   </div>
                 </form>

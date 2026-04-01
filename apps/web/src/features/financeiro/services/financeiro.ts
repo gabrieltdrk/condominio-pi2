@@ -1,7 +1,9 @@
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3333";
-const FINANCE_STORAGE_KEY = "omni:finance:entries:v3";
+const FINANCE_STORAGE_KEY = "omni:finance:entries:v4";
+const BILL_STORAGE_KEY = "omni:finance:bills:v1";
 
 export type FinanceEntryType = "REVENUE" | "EXPENSE";
+export type FinanceBillStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
 
 export type FinanceEntry = {
   id: number;
@@ -22,6 +24,27 @@ export type FinanceEntry = {
   created_at: string;
 };
 
+export type FinanceBill = {
+  id: number;
+  entry_id: number;
+  bill_code: string;
+  unit: string;
+  resident: string;
+  resident_email: string | null;
+  competence_date: string;
+  issue_date: string;
+  due_date: string;
+  amount: number;
+  instructions: string | null;
+  status: FinanceBillStatus;
+  digitable_line: string;
+  barcode: string;
+  pdf_url: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CreateFinanceEntryPayload = {
   type: FinanceEntryType;
   identifier: string;
@@ -39,6 +62,17 @@ export type CreateFinanceEntryPayload = {
   notes?: string | null;
 };
 
+export type CreateFinanceBillPayload = {
+  unit: string;
+  resident: string;
+  residentEmail?: string | null;
+  amount: number;
+  competenceDate: string;
+  dueDate: string;
+  issueDate?: string | null;
+  instructions?: string | null;
+};
+
 const defaultEntries: FinanceEntry[] = [
   {
     id: 1,
@@ -47,7 +81,7 @@ const defaultEntries: FinanceEntry[] = [
     description: "Taxa condominial de marco",
     amount: 780,
     reference_date: "2026-03-05",
-    due_date: null,
+    due_date: "2026-03-10",
     counterparty: "Gabriel Ferreira",
     unit: "Torre A - Ap 101",
     resident: "Gabriel Ferreira",
@@ -65,7 +99,7 @@ const defaultEntries: FinanceEntry[] = [
     description: "Taxa condominial de marco",
     amount: 780,
     reference_date: "2026-03-08",
-    due_date: null,
+    due_date: "2026-03-10",
     counterparty: "Helena Moraes",
     unit: "Torre B - Ap 101",
     resident: "Helena Moraes",
@@ -83,7 +117,7 @@ const defaultEntries: FinanceEntry[] = [
     description: "Taxa condominial fevereiro",
     amount: 1240,
     reference_date: "2026-02-23",
-    due_date: null,
+    due_date: "2026-02-10",
     counterparty: "Carlos Henrique",
     unit: "Torre A - Ap 203",
     resident: "Carlos Henrique",
@@ -132,6 +166,130 @@ const defaultEntries: FinanceEntry[] = [
   },
 ];
 
+const defaultBills: FinanceBill[] = [
+  {
+    id: 1,
+    entry_id: 1,
+    bill_code: "BOL-202603-0001",
+    unit: "Torre A - Ap 101",
+    resident: "Gabriel Ferreira",
+    resident_email: "gabriel.ferreira@example.com",
+    competence_date: "2026-03-01",
+    issue_date: "2026-03-01",
+    due_date: "2026-03-10",
+    amount: 780,
+    instructions: "Nao receber apos 30 dias do vencimento.",
+    status: "PAID",
+    digitable_line: "34191.09008 00001.780007 32026.030107 8 000000078000",
+    barcode: "34192026030100000007800000017800073202603",
+    pdf_url: "/finance/bills/BOL-202603-0001/mock-pdf",
+    paid_at: "2026-03-08T12:00:00.000Z",
+    created_at: "2026-03-01T09:00:00.000Z",
+    updated_at: "2026-03-08T12:00:00.000Z",
+  },
+  {
+    id: 2,
+    entry_id: 2,
+    bill_code: "BOL-202603-0002",
+    unit: "Torre B - Ap 101",
+    resident: "Helena Moraes",
+    resident_email: "helena.moraes@example.com",
+    competence_date: "2026-03-01",
+    issue_date: "2026-03-01",
+    due_date: "2026-03-10",
+    amount: 780,
+    instructions: "Multa de 2% apos o vencimento.",
+    status: "PAID",
+    digitable_line: "34191.09008 00002.780004 32026.030206 1 000000078000",
+    barcode: "34112026030100000007800000027800043202603",
+    pdf_url: "/finance/bills/BOL-202603-0002/mock-pdf",
+    paid_at: "2026-03-08T14:30:00.000Z",
+    created_at: "2026-03-01T09:10:00.000Z",
+    updated_at: "2026-03-08T14:30:00.000Z",
+  },
+  {
+    id: 3,
+    entry_id: 3,
+    bill_code: "BOL-202602-0003",
+    unit: "Torre A - Ap 203",
+    resident: "Carlos Henrique",
+    resident_email: "carlos.henrique@example.com",
+    competence_date: "2026-02-01",
+    issue_date: "2026-02-01",
+    due_date: "2026-02-10",
+    amount: 1240,
+    instructions: "Contato com a administracao em caso de duvidas.",
+    status: "OVERDUE",
+    digitable_line: "34191.09008 00003.124004 22026.020302 3 000000124000",
+    barcode: "34132026020100000012400000031240042202602",
+    pdf_url: "/finance/bills/BOL-202602-0003/mock-pdf",
+    paid_at: null,
+    created_at: "2026-02-01T09:00:00.000Z",
+    updated_at: "2026-02-11T09:00:00.000Z",
+  },
+];
+
+function ensureNumber(value: unknown) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return Number(value);
+  return 0;
+}
+
+function pad(value: number | string, length: number) {
+  return String(value).padStart(length, "0");
+}
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function buildBarcode(seed: number, amount: number, dueDate: string) {
+  const amountDigits = pad(Math.round(amount * 100), 10);
+  const dueDigits = digitsOnly(dueDate).slice(-8);
+  const sequence = pad(seed, 14);
+  const freeField = `${sequence}${dueDigits}${amountDigits}`.slice(0, 25);
+  return `3419${dueDigits}${amountDigits}${freeField}`.slice(0, 44);
+}
+
+function buildDigitableLine(seed: number, amount: number, dueDate: string) {
+  const barcode = buildBarcode(seed, amount, dueDate);
+  return `${barcode.slice(0, 5)}.${barcode.slice(5, 10)} ${barcode.slice(10, 15)}.${barcode.slice(15, 21)} ${barcode.slice(21, 26)}.${barcode.slice(26, 32)} ${barcode.slice(32, 33)} ${barcode.slice(33, 47)}`.trim();
+}
+
+function buildBillCode(seed: number, competenceDate: string) {
+  return `BOL-${competenceDate.slice(0, 7).replace("-", "")}-${pad(seed, 4)}`;
+}
+
+function buildEntryIdentifier(seed: number, competenceDate: string) {
+  return `REC-${competenceDate.slice(0, 7).replace("-", "")}-${pad(seed, 4)}`;
+}
+
+function formatCompetence(competenceDate: string) {
+  const [year, month] = competenceDate.split("-").map(Number);
+  return `${pad(month, 2)}/${year}`;
+}
+
+function mapBillStatusToEntryStatus(status: FinanceBillStatus) {
+  switch (status) {
+    case "PAID":
+      return "Recebido";
+    case "OVERDUE":
+      return "Atrasado";
+    case "CANCELLED":
+      return "Cancelado";
+    default:
+      return "Em aberto";
+  }
+}
+
+function mapEntry(row: FinanceEntry): FinanceEntry {
+  return { ...row, amount: ensureNumber(row.amount) };
+}
+
+function mapBill(row: FinanceBill): FinanceBill {
+  return { ...row, amount: ensureNumber(row.amount) };
+}
+
 function readLocalEntries() {
   if (typeof window === "undefined") return defaultEntries;
 
@@ -142,7 +300,7 @@ function readLocalEntries() {
   }
 
   try {
-    return JSON.parse(raw) as FinanceEntry[];
+    return (JSON.parse(raw) as FinanceEntry[]).map(mapEntry);
   } catch {
     return defaultEntries;
   }
@@ -151,6 +309,27 @@ function readLocalEntries() {
 function writeLocalEntries(entries: FinanceEntry[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(FINANCE_STORAGE_KEY, JSON.stringify(entries));
+}
+
+function readLocalBills() {
+  if (typeof window === "undefined") return defaultBills;
+
+  const raw = window.localStorage.getItem(BILL_STORAGE_KEY);
+  if (!raw) {
+    window.localStorage.setItem(BILL_STORAGE_KEY, JSON.stringify(defaultBills));
+    return defaultBills;
+  }
+
+  try {
+    return (JSON.parse(raw) as FinanceBill[]).map(mapBill);
+  } catch {
+    return defaultBills;
+  }
+}
+
+function writeLocalBills(bills: FinanceBill[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(BILL_STORAGE_KEY, JSON.stringify(bills));
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -167,11 +346,59 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function buildLocalEntryForBill(seed: number, payload: CreateFinanceBillPayload, billCode: string): FinanceEntry {
+  const createdAt = new Date().toISOString();
+  return {
+    id: Date.now(),
+    type: "REVENUE",
+    identifier: buildEntryIdentifier(seed, payload.competenceDate),
+    description: `Taxa condominial ${formatCompetence(payload.competenceDate)} - ${payload.unit}`,
+    amount: payload.amount,
+    reference_date: payload.issueDate ?? new Date().toISOString().slice(0, 10),
+    due_date: payload.dueDate,
+    counterparty: payload.resident,
+    unit: payload.unit,
+    resident: payload.resident,
+    category: "Taxa condominial",
+    payment_method: "Boleto",
+    status: "Em aberto",
+    document_name: `${billCode}.pdf`,
+    notes: payload.instructions ?? null,
+    created_at: createdAt,
+  };
+}
+
+function buildLocalBill(seed: number, entryId: number, payload: CreateFinanceBillPayload): FinanceBill {
+  const createdAt = new Date().toISOString();
+  const billCode = buildBillCode(seed, payload.competenceDate);
+  return {
+    id: Date.now(),
+    entry_id: entryId,
+    bill_code: billCode,
+    unit: payload.unit,
+    resident: payload.resident,
+    resident_email: payload.residentEmail ?? null,
+    competence_date: payload.competenceDate,
+    issue_date: payload.issueDate ?? new Date().toISOString().slice(0, 10),
+    due_date: payload.dueDate,
+    amount: payload.amount,
+    instructions: payload.instructions ?? null,
+    status: "PENDING",
+    digitable_line: buildDigitableLine(seed, payload.amount, payload.dueDate),
+    barcode: buildBarcode(seed, payload.amount, payload.dueDate),
+    pdf_url: `/finance/bills/${billCode}/mock-pdf`,
+    paid_at: null,
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+}
+
 export async function listFinanceEntries() {
   try {
     const entries = await request<FinanceEntry[]>("/finance/entries");
-    writeLocalEntries(entries);
-    return entries;
+    const normalized = entries.map(mapEntry);
+    writeLocalEntries(normalized);
+    return normalized;
   } catch {
     return readLocalEntries();
   }
@@ -179,10 +406,12 @@ export async function listFinanceEntries() {
 
 export async function createFinanceEntry(payload: CreateFinanceEntryPayload) {
   try {
-    const entry = await request<FinanceEntry>("/finance/entries", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    const entry = mapEntry(
+      await request<FinanceEntry>("/finance/entries", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    );
 
     const current = readLocalEntries().filter((item) => item.id !== entry.id);
     writeLocalEntries([entry, ...current]);
@@ -210,5 +439,101 @@ export async function createFinanceEntry(payload: CreateFinanceEntryPayload) {
 
     writeLocalEntries([entry, ...current]);
     return entry;
+  }
+}
+
+export async function listFinanceBills(filters?: {
+  resident?: string;
+  residentEmail?: string;
+  unit?: string;
+  status?: FinanceBillStatus;
+  limit?: number;
+}) {
+  try {
+    const params = new URLSearchParams();
+    if (filters?.resident) params.set("resident", filters.resident);
+    if (filters?.residentEmail) params.set("residentEmail", filters.residentEmail);
+    if (filters?.unit) params.set("unit", filters.unit);
+    if (filters?.status) params.set("status", filters.status);
+    if (typeof filters?.limit === "number") params.set("limit", String(filters.limit));
+
+    const query = params.toString();
+    const bills = await request<FinanceBill[]>(`/finance/bills${query ? `?${query}` : ""}`);
+    const normalized = bills.map(mapBill);
+    writeLocalBills(normalized);
+    return normalized;
+  } catch {
+    const bills = readLocalBills();
+    return bills.filter((bill) => {
+      if (filters?.resident && !bill.resident.toLowerCase().includes(filters.resident.toLowerCase())) return false;
+      if (filters?.residentEmail && bill.resident_email !== filters.residentEmail) return false;
+      if (filters?.unit && !bill.unit.toLowerCase().includes(filters.unit.toLowerCase())) return false;
+      if (filters?.status && bill.status !== filters.status) return false;
+      return true;
+    });
+  }
+}
+
+export async function createFinanceBill(payload: CreateFinanceBillPayload) {
+  try {
+    const bill = mapBill(
+      await request<FinanceBill>("/finance/bills", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    const current = readLocalBills().filter((item) => item.id !== bill.id);
+    writeLocalBills([bill, ...current]);
+    return bill;
+  } catch {
+    const currentBills = readLocalBills();
+    const seed = currentBills.length + 1;
+    const billCode = buildBillCode(seed, payload.competenceDate);
+    const entry = buildLocalEntryForBill(seed, payload, billCode);
+    const bill = buildLocalBill(seed, entry.id, payload);
+    writeLocalEntries([entry, ...readLocalEntries()]);
+    writeLocalBills([bill, ...currentBills]);
+    return bill;
+  }
+}
+
+export async function updateFinanceBillStatus(id: number, status: FinanceBillStatus, paidAt?: string | null) {
+  try {
+    const bill = mapBill(
+      await request<FinanceBill>(`/finance/bills/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, paidAt: paidAt ?? null }),
+      }),
+    );
+
+    const currentBills = readLocalBills().filter((item) => item.id !== bill.id);
+    writeLocalBills([bill, ...currentBills]);
+
+    const currentEntries = readLocalEntries().map((entry) =>
+      entry.id === bill.entry_id ? { ...entry, status: mapBillStatusToEntryStatus(status) } : entry,
+    );
+    writeLocalEntries(currentEntries);
+    return bill;
+  } catch {
+    const currentBills = readLocalBills();
+    const target = currentBills.find((item) => item.id === id);
+    if (!target) throw new Error("Boleto nao encontrado.");
+
+    const updated: FinanceBill = {
+      ...target,
+      status,
+      paid_at: status === "PAID" ? paidAt ?? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    };
+
+    writeLocalBills([updated, ...currentBills.filter((item) => item.id !== id)]);
+
+    const currentEntries = readLocalEntries().map((entry) =>
+      entry.id === updated.entry_id ? { ...entry, status: mapBillStatusToEntryStatus(status) } : entry,
+    );
+    writeLocalEntries(currentEntries);
+
+    return updated;
   }
 }

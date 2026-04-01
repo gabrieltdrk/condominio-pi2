@@ -431,13 +431,17 @@ async function applyMockAssignments(floors: Floor[]): Promise<Floor[]> {
 }
 
 export async function fetchBuilding(): Promise<Floor[]> {
+  const visitorsByApartment = await fetchActiveVisitorsByApartment();
+
   try {
     const supabaseFloors = await fetchBuildingFromSupabase();
     const merged = await mergeWithCustomApartments(supabaseFloors);
-    return applyMockAssignments(merged);
+    const withAssignments = await applyMockAssignments(merged);
+    return attachActiveVisitors(withAssignments, visitorsByApartment);
   } catch {
     const merged = await mergeWithCustomApartments(getMockBuilding());
-    return applyMockAssignments(merged);
+    const withAssignments = await applyMockAssignments(merged);
+    return attachActiveVisitors(withAssignments, visitorsByApartment);
   }
 }
 
@@ -801,7 +805,10 @@ export async function listTowerSummaries(): Promise<TowerSummary[]> {
 
 
 export function getMockBuilding(): Floor[] {
-  const floors: Floor[] = [
+  type MockApartment = Omit<Apartment, "activeVisitors">;
+  type MockFloor = Omit<Floor, "apartments"> & { apartments: MockApartment[] };
+
+  const floors: MockFloor[] = [
     {
       tower: "Torre A",
       level: 7,
