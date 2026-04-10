@@ -180,9 +180,16 @@ export default function FinanceiroPage() {
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [revenueErrors, setRevenueErrors] = useState<Record<string, string>>({});
+  const [expenseErrors, setExpenseErrors] = useState<Record<string, string>>({});
+  const [billErrors, setBillErrors] = useState<Record<string, string>>({});
+  const [savingRevenue, setSavingRevenue] = useState(false);
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [savingBill, setSavingBill] = useState(false);
   const [activeModal, setActiveModal] = useState<FinanceModal>(null);
   const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
   const [updatingBillId, setUpdatingBillId] = useState<number | null>(null);
+  const [copiedBillCode, setCopiedBillCode] = useState("");
 
   const [revenueForm, setRevenueForm] = useState({
     identifier: "",
@@ -218,7 +225,7 @@ export default function FinanceiroPage() {
     competenceDate: "2026-04-01",
     issueDate: "2026-04-01",
     dueDate: "2026-04-10",
-    instructions: "Nao receber apos 30 dias do vencimento.",
+    instructions: "",
   });
 
   async function loadData() {
@@ -308,20 +315,77 @@ export default function FinanceiroPage() {
     [overdueBills, paidBills, pendingBills],
   );
 
-  const recentEntries = useMemo(
-    () => [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8),
-    [entries],
-  );
-  const recentBills = useMemo(
-    () => [...bills].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8),
-    [bills],
-  );
+  const recentEntries = useMemo(() => {
+    const safeDate = (d?: string | null) => d ?? "";
+    return [...entries]
+      .sort((a, b) => safeDate(b.created_at).localeCompare(safeDate(a.created_at)))
+      .slice(0, 8);
+  }, [entries]);
+
+  const recentBills = useMemo(() => {
+    const safeDate = (d?: string | null) => d ?? "";
+    return [...bills]
+      .sort((a, b) => safeDate(b.created_at).localeCompare(safeDate(a.created_at)))
+      .slice(0, 8);
+  }, [bills]);
+
+  function validateRequiredRevenue() {
+    const errors: Record<string, string> = {};
+    if (!revenueForm.identifier.trim()) errors.identifier = "Obrigatório";
+    if (!revenueForm.description.trim()) errors.description = "Obrigatório";
+    if (!revenueForm.amount || Number(revenueForm.amount) <= 0) errors.amount = "Valor deve ser maior que zero";
+    if (!revenueForm.referenceDate) errors.referenceDate = "Obrigatório";
+    setRevenueErrors(errors);
+    setFormError(Object.keys(errors).length ? "Corrija os campos destacados." : "");
+    return Object.keys(errors).length === 0;
+  }
+
+  function validateRequiredExpense() {
+    const errors: Record<string, string> = {};
+    if (!expenseForm.identifier.trim()) errors.identifier = "Obrigatório";
+    if (!expenseForm.description.trim()) errors.description = "Obrigatório";
+    if (!expenseForm.amount || Number(expenseForm.amount) <= 0) errors.amount = "Valor deve ser maior que zero";
+    if (!expenseForm.referenceDate) errors.referenceDate = "Obrigatório";
+    if (!expenseForm.dueDate) errors.dueDate = "Obrigatório";
+    if (!expenseForm.counterparty.trim()) errors.counterparty = "Obrigatório";
+    setExpenseErrors(errors);
+    setFormError(Object.keys(errors).length ? "Corrija os campos destacados." : "");
+    return Object.keys(errors).length === 0;
+  }
+
+  function validateRequiredBill() {
+    const errors: Record<string, string> = {};
+    if (!billForm.unit) errors.unit = "Obrigatório";
+    if (!billForm.resident.trim()) errors.resident = "Obrigatório";
+    if (!billForm.amount || Number(billForm.amount) <= 0) errors.amount = "Valor deve ser maior que zero";
+    if (!billForm.competenceDate) errors.competenceDate = "Obrigatório";
+    if (!billForm.issueDate) errors.issueDate = "Obrigatório";
+    if (!billForm.dueDate) errors.dueDate = "Obrigatório";
+    setBillErrors(errors);
+    setFormError(Object.keys(errors).length ? "Corrija os campos destacados." : "");
+    return Object.keys(errors).length === 0;
+  }
+
+  const allowedStatusTransitions: Record<FinanceBillStatus, FinanceBillStatus[]> = {
+    PENDING: ["PAID", "OVERDUE", "CANCELLED"],
+    OVERDUE: ["PAID", "CANCELLED"],
+    PAID: [],
+    CANCELLED: [],
+  };
+
+  function canChangeBillStatus(current: FinanceBillStatus, next: FinanceBillStatus) {
+    return allowedStatusTransitions[current]?.includes(next);
+  }
 
   async function handleCreateRevenue(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
+    setRevenueErrors({});
+
+    if (!validateRequiredRevenue()) return;
 
     try {
+      setSavingRevenue(true);
       await createFinanceEntry({
         type: "REVENUE",
         identifier: revenueForm.identifier.trim(),
@@ -357,13 +421,20 @@ export default function FinanceiroPage() {
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar receita.");
     }
+    finally {
+      setSavingRevenue(false);
+    }
   }
 
   async function handleCreateExpense(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
+    setExpenseErrors({});
+
+    if (!validateRequiredExpense()) return;
 
     try {
+      setSavingExpense(true);
       await createFinanceEntry({
         type: "EXPENSE",
         identifier: expenseForm.identifier.trim(),
@@ -398,13 +469,20 @@ export default function FinanceiroPage() {
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar despesa.");
     }
+    finally {
+      setSavingExpense(false);
+    }
   }
 
   async function handleIssueBill(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
+    setBillErrors({});
+
+    if (!validateRequiredBill()) return;
 
     try {
+      setSavingBill(true);
       const payload: CreateFinanceBillPayload = {
         unit: billForm.unit,
         resident: billForm.resident.trim(),
@@ -425,7 +503,7 @@ export default function FinanceiroPage() {
         competenceDate: "2026-04-01",
         issueDate: "2026-04-01",
         dueDate: "2026-04-10",
-        instructions: "Nao receber apos 30 dias do vencimento.",
+        instructions: "",
       });
       setActiveModal(null);
       setActionMessage(`Boleto ${created.bill_code} emitido com sucesso.`);
@@ -434,11 +512,20 @@ export default function FinanceiroPage() {
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao emitir boleto.");
     }
+    finally {
+      setSavingBill(false);
+    }
   }
 
   async function handleBillStatusChange(bill: FinanceBill, status: FinanceBillStatus) {
     setUpdatingBillId(bill.id);
     setActionMessage("");
+
+    if (!canChangeBillStatus(bill.status, status)) {
+      setError("Transição de status inválida para este boleto.");
+      setUpdatingBillId(null);
+      return;
+    }
 
     try {
       const updated = await updateFinanceBillStatus(bill.id, status);
@@ -728,7 +815,9 @@ export default function FinanceiroPage() {
                         type="button"
                         onClick={async () => {
                           await navigator.clipboard.writeText(selectedBill.digitable_line);
+                          setCopiedBillCode(selectedBill.bill_code);
                           setActionMessage(`Linha digitavel de ${selectedBill.bill_code} copiada.`);
+                          setTimeout(() => setCopiedBillCode(""), 2500);
                         }}
                         className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                       >
@@ -743,12 +832,15 @@ export default function FinanceiroPage() {
                         <Printer size={16} />
                         Imprimir 2a via
                       </button>
+                      {copiedBillCode === selectedBill.bill_code && (
+                        <p className="sm:col-span-2 text-xs font-medium text-emerald-700">Código copiado para a área de transferência.</p>
+                      )}
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-3">
                       <button
                         type="button"
-                        disabled={updatingBillId === selectedBill.id}
+                        disabled={updatingBillId === selectedBill.id || !canChangeBillStatus(selectedBill.status, "PAID")}
                         onClick={() => void handleBillStatusChange(selectedBill, "PAID")}
                         className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                       >
@@ -756,7 +848,7 @@ export default function FinanceiroPage() {
                       </button>
                       <button
                         type="button"
-                        disabled={updatingBillId === selectedBill.id}
+                        disabled={updatingBillId === selectedBill.id || !canChangeBillStatus(selectedBill.status, "OVERDUE")}
                         onClick={() => void handleBillStatusChange(selectedBill, "OVERDUE")}
                         className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
                       >
@@ -764,7 +856,7 @@ export default function FinanceiroPage() {
                       </button>
                       <button
                         type="button"
-                        disabled={updatingBillId === selectedBill.id}
+                        disabled={updatingBillId === selectedBill.id || !canChangeBillStatus(selectedBill.status, "CANCELLED")}
                         onClick={() => void handleBillStatusChange(selectedBill, "CANCELLED")}
                         className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                       >
@@ -876,23 +968,50 @@ export default function FinanceiroPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Codigo</span>
-                      <input value={revenueForm.identifier} onChange={(e) => setRevenueForm((current) => ({ ...current, identifier: e.target.value }))} placeholder="Ex.: REC-0426-001" className={inputClass} />
+                      <input
+                        value={revenueForm.identifier}
+                        onChange={(e) => setRevenueForm((current) => ({ ...current, identifier: e.target.value }))}
+                        placeholder="Ex.: REC-0426-001"
+                        className={`${inputClass} ${revenueErrors.identifier ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
+                      />
+                      {revenueErrors.identifier && <span className="text-xs text-rose-600">{revenueErrors.identifier}</span>}
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Valor</span>
-                      <input type="number" min={0} step="0.01" value={revenueForm.amount} onChange={(e) => setRevenueForm((current) => ({ ...current, amount: e.target.value }))} placeholder="0,00" className={inputClass} />
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={revenueForm.amount}
+                        onChange={(e) => setRevenueForm((current) => ({ ...current, amount: e.target.value }))}
+                        placeholder="0,00"
+                        className={`${inputClass} ${revenueErrors.amount ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
+                      />
+                      {revenueErrors.amount && <span className="text-xs text-rose-600">{revenueErrors.amount}</span>}
                     </label>
                   </div>
 
                   <label className={fieldLabelClass}>
                     <span>Descricao</span>
-                    <input value={revenueForm.description} onChange={(e) => setRevenueForm((current) => ({ ...current, description: e.target.value }))} placeholder="Ex.: Aluguel do salao" className={inputClass} />
+                    <input
+                      value={revenueForm.description}
+                      onChange={(e) => setRevenueForm((current) => ({ ...current, description: e.target.value }))}
+                      placeholder="Ex.: Aluguel do salao"
+                      className={`${inputClass} ${revenueErrors.description ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
+                    />
+                    {revenueErrors.description && <span className="text-xs text-rose-600">{revenueErrors.description}</span>}
                   </label>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className={fieldLabelClass}>
                       <span>Data de referencia</span>
-                      <input type="date" value={revenueForm.referenceDate} onChange={(e) => setRevenueForm((current) => ({ ...current, referenceDate: e.target.value }))} className={inputClass} />
+                      <input
+                        type="date"
+                        value={revenueForm.referenceDate}
+                        onChange={(e) => setRevenueForm((current) => ({ ...current, referenceDate: e.target.value }))}
+                        className={`${inputClass} ${revenueErrors.referenceDate ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
+                      />
+                      {revenueErrors.referenceDate && <span className="text-xs text-rose-600">{revenueErrors.referenceDate}</span>}
                     </label>
                     <label className={fieldLabelClass}>
                       <span>Categoria</span>
@@ -948,9 +1067,13 @@ export default function FinanceiroPage() {
                     <button type="button" onClick={() => setActiveModal(null)} className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                       Cancelar
                     </button>
-                    <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                    <button
+                      type="submit"
+                      disabled={savingRevenue}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                    >
                       <PlusCircle size={16} />
-                      Salvar receita
+                      {savingRevenue ? "Salvando..." : "Salvar receita"}
                     </button>
                   </div>
                 </form>
@@ -1075,7 +1198,13 @@ export default function FinanceiroPage() {
 
                   <label className={fieldLabelClass}>
                     <span>Instrucoes</span>
-                    <textarea value={billForm.instructions} onChange={(e) => setBillForm((current) => ({ ...current, instructions: e.target.value }))} rows={4} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" />
+                    <textarea
+                      value={billForm.instructions}
+                      placeholder="Ex.: Não receber após 30 dias do vencimento."
+                      onChange={(e) => setBillForm((current) => ({ ...current, instructions: e.target.value }))}
+                      rows={4}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    />
                   </label>
 
                   <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">

@@ -21,8 +21,31 @@ type GarageSpot = {
   notes: string;
 };
 
+type WaitRequest = {
+  id: string;
+  apartmentId: string | null;
+  apartmentLabel: string;
+  residentName: string;
+  vehiclePlate: string;
+  vehicleModel: string;
+  priority: number;
+  createdAt: string;
+};
+
 const STORAGE_KEY = "garage:spots";
+const WAIT_KEY = "garage:waitlist";
 const inputClass = "h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100";
+
+const emptyWait: WaitRequest = {
+  id: "",
+  apartmentId: null,
+  apartmentLabel: "",
+  residentName: "",
+  vehiclePlate: "",
+  vehicleModel: "",
+  priority: 1,
+  createdAt: "",
+};
 
 const emptyForm: GarageSpot = {
   id: "",
@@ -78,6 +101,20 @@ function saveLocalSpots(spots: GarageSpot[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(spots));
 }
 
+function readWaitList() {
+  const raw = localStorage.getItem(WAIT_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as WaitRequest[];
+  } catch {
+    return [];
+  }
+}
+
+function saveWaitList(items: WaitRequest[]) {
+  localStorage.setItem(WAIT_KEY, JSON.stringify(items));
+}
+
 const mapSpotTone: Record<SpotStatus, { shell: string; badge: string; car: string; line: string }> = {
   LIVRE: {
     shell: "border-emerald-200 bg-emerald-50/90 text-emerald-900",
@@ -115,6 +152,8 @@ export default function GaragemPage() {
   const [spots, setSpots] = useState<GarageSpot[]>([]);
   const [selectedSpotId, setSelectedSpotId] = useState("");
   const [form, setForm] = useState<GarageSpot>(emptyForm);
+  const [waitForm, setWaitForm] = useState<WaitRequest>(emptyWait);
+  const [waitList, setWaitList] = useState<WaitRequest[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -123,7 +162,9 @@ export default function GaragemPage() {
         setApartmentOptions(apartments);
         const local = readLocalSpots();
         const nextSpots = local && local.length > 0 ? local : createSeedSpots(apartments);
+        const nextWait = readWaitList();
         setSpots(nextSpots);
+        setWaitList(nextWait);
         setSelectedSpotId(nextSpots[0]?.id ?? "");
       } finally {
         // no-op
@@ -195,6 +236,70 @@ export default function GaragemPage() {
     setSelectedSpotId(nextSpots[0]?.id ?? "");
   }
 
+  function handleWaitApartmentChange(apartmentId: string) {
+    const apartment = apartmentOptions.find((item) => item.id === apartmentId);
+    setWaitForm((current) => ({
+      ...current,
+      apartmentId: apartment?.id ?? null,
+      apartmentLabel: apartment ? apartmentLabel(apartment) : "",
+    }));
+  }
+
+  function addToWaitList() {
+    if (!waitForm.residentName.trim() || !waitForm.vehiclePlate.trim()) return;
+    const next: WaitRequest = {
+      ...waitForm,
+      id: `wait-${Date.now()}`,
+      vehiclePlate: waitForm.vehiclePlate.toUpperCase(),
+      vehicleModel: waitForm.vehicleModel.trim(),
+      residentName: waitForm.residentName.trim(),
+      priority: waitForm.priority || 1,
+      createdAt: new Date().toISOString(),
+    };
+    const nextList = [...waitList, next].sort((a, b) => a.priority - b.priority || a.createdAt.localeCompare(b.createdAt));
+    setWaitList(nextList);
+    saveWaitList(nextList);
+    setWaitForm(emptyWait);
+  }
+
+  function suggestSpotFor() {
+    const freeSpots = spots.filter((spot) => spot.status === "LIVRE" && spot.type !== "SERVICO");
+    if (freeSpots.length === 0) return null;
+    const preferred = freeSpots
+      .filter((spot) => spot.type === "MORADOR")
+      .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true }));
+    if (preferred.length > 0) return preferred[0];
+    return freeSpots.sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true }))[0];
+  }
+
+  function assignWait(waitId: string) {
+    const request = waitList.find((item) => item.id === waitId);
+    if (!request) return;
+    const target = suggestSpotFor();
+    if (!target) return;
+
+    const updatedSpot: GarageSpot = {
+      ...target,
+      status: "RESERVADA",
+      apartmentId: request.apartmentId,
+      apartmentLabel: request.apartmentLabel,
+      residentName: request.residentName,
+      vehiclePlate: request.vehiclePlate,
+      vehicleModel: request.vehicleModel,
+      vehicleColor: target.vehicleColor,
+      type: "MORADOR",
+      notes: request.apartmentLabel ? `Reservada para ${request.apartmentLabel}` : target.notes,
+    };
+
+    const nextSpots = spots.map((spot) => (spot.id === target.id ? updatedSpot : spot));
+    setSpots(nextSpots);
+    saveLocalSpots(nextSpots);
+
+    const nextWait = waitList.filter((item) => item.id !== waitId);
+    setWaitList(nextWait);
+    saveWaitList(nextWait);
+  }
+
   return (
     <AppLayout title="Garagem">
       <div className="space-y-5">
@@ -243,6 +348,107 @@ export default function GaragemPage() {
               </div>
             );
           })}
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="m-0 text-base font-semibold text-slate-900">Fila de alocação de vagas</h3>
+                <p className="mt-1 text-sm text-slate-500">Use a fila quando houver mais carros do que vagas disponíveis.</p>
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{waitList.length} na fila</span>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {waitList.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                  Nenhuma solicitação pendente. Cadastre abaixo quando faltar vaga.
+                </div>
+              ) : (
+                waitList.map((item) => (
+                  <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto] md:items-center">
+                    <div className="min-w-0">
+                      <p className="m-0 text-sm font-semibold text-slate-900">{item.residentName}</p>
+                      <p className="text-xs text-slate-500">{item.apartmentLabel || "Apartamento não informado"}</p>
+                      <p className="text-xs text-slate-500">Placa {item.vehiclePlate} · {item.vehicleModel || "Modelo não informado"}</p>
+                      <p className="text-[11px] text-amber-600">Prioridade {item.priority}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => assignWait(item.id)}
+                        className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                        disabled={spots.every((spot) => spot.status !== "LIVRE" || spot.type === "SERVICO")}
+                      >
+                        Alocar vaga
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="m-0 text-base font-semibold text-slate-900">Nova solicitação</h3>
+            <p className="mt-1 text-sm text-slate-500">Cadastre veículo para entrar na fila. Quando houver vaga, clique em “Alocar”.</p>
+
+            <div className="mt-4 space-y-3">
+              <select
+                value={waitForm.apartmentId ?? ""}
+                onChange={(e) => handleWaitApartmentChange(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Selecione o apartamento (opcional)</option>
+                {apartmentOptions.map((apt) => (
+                  <option key={apt.id} value={apt.id}>
+                    {apartmentLabel(apt)}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={waitForm.residentName}
+                onChange={(e) => setWaitForm((cur) => ({ ...cur, residentName: e.target.value }))}
+                placeholder="Nome do morador/solicitante"
+                className={inputClass}
+              />
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  value={waitForm.vehiclePlate}
+                  onChange={(e) => setWaitForm((cur) => ({ ...cur, vehiclePlate: e.target.value }))}
+                  placeholder="Placa"
+                  className={inputClass}
+                />
+                <input
+                  value={waitForm.vehicleModel}
+                  onChange={(e) => setWaitForm((cur) => ({ ...cur, vehicleModel: e.target.value }))}
+                  placeholder="Modelo (opcional)"
+                  className={inputClass}
+                />
+              </div>
+
+              <label className="block text-sm font-medium text-slate-700">
+                Prioridade (1 = mais alta)
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={waitForm.priority}
+                  onChange={(e) => setWaitForm((cur) => ({ ...cur, priority: Number(e.target.value) || 1 }))}
+                  className={`${inputClass} mt-2`}
+                />
+              </label>
+
+              <div className="flex justify-end">
+                <button type="button" onClick={addToWaitList} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                  Adicionar à fila
+                </button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">

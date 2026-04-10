@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -144,6 +144,14 @@ function buildMinutesDocument(poll: Poll) {
     <p><strong>Pauta:</strong> ${escapeHtml(poll.title)}</p>
     <p><strong>Descricao:</strong> ${escapeHtml(poll.description || "Sem descricao adicional.")}</p>
 
+    ${
+      poll.attachmentUrl
+        ? `<p><strong>Anexo da pauta:</strong> <a href="${poll.attachmentUrl}" target="_blank" rel="noreferrer">${escapeHtml(
+            poll.attachmentName ?? "Documento",
+          )}</a></p>`
+        : ""
+    }
+
     <div class="meta">
       <div class="card"><div class="muted">Tipo</div><div>${escapeHtml(getAssemblyTypeLabel(poll.assemblyType))}</div></div>
       <div class="card"><div class="muted">Modalidade</div><div>${escapeHtml(getModeLabel(poll.meetingMode))}</div></div>
@@ -169,11 +177,112 @@ function buildMinutesDocument(poll: Poll) {
     <p>${minutesSummary}</p>
 
     <div class="footer">
-      <div class="signature">Responsavel pela assembleia</div>
+      <div class="signature">
+        Responsavel pela assembleia
+        ${
+          poll.creatorSignatureUrl
+            ? `<div style="margin-top:12px;"><img src="${poll.creatorSignatureUrl}" alt="Assinatura" style="max-height:80px;"></div>`
+            : ""
+        }
+        <div style="margin-top:6px; color:#475569; font-size:12px;">${escapeHtml(poll.creatorSignatureName ?? poll.createdBy)}</div>
+      </div>
       <div class="signature">Representacao do condominio</div>
     </div>
   </body>
 </html>`;
+}
+
+function SignaturePad({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+  const scaleRef = useRef(1);
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!value || !canvasEl) return;
+    const ctx = canvasEl.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.drawImage(img, 0, 0, canvasEl.width, canvasEl.height);
+    };
+    img.src = value;
+  }, [value, canvasEl]);
+
+  useEffect(() => {
+    if (!canvasEl || initializedRef.current) return;
+    const dpr = window.devicePixelRatio || 1;
+    scaleRef.current = dpr;
+    const logicalWidth = canvasEl.getBoundingClientRect().width || 600;
+    canvasEl.width = logicalWidth * dpr;
+    canvasEl.height = 200 * dpr;
+    const ctx = canvasEl.getContext("2d");
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#0f172a";
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    }
+    initializedRef.current = true;
+  }, [canvasEl]);
+
+  function startDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext("2d");
+    if (!ctx) return;
+    ctx.beginPath();
+    const rect = canvasEl.getBoundingClientRect();
+    const scale = scaleRef.current;
+    ctx.moveTo((event.clientX - rect.left) * scale, (event.clientY - rect.top) * scale);
+    setIsDrawing(true);
+  }
+
+  function draw(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!isDrawing || !canvasEl) return;
+    const ctx = canvasEl.getContext("2d");
+    if (!ctx) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const scale = scaleRef.current;
+    ctx.lineTo((event.clientX - rect.left) * scale, (event.clientY - rect.top) * scale);
+    ctx.stroke();
+  }
+
+  function stopDrawing() {
+    if (!isDrawing || !canvasEl) return;
+    setIsDrawing(false);
+    onChange(canvasEl.toDataURL("image/png"));
+  }
+
+  function clearCanvas() {
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    onChange("");
+  }
+
+  return (
+    <div className="mt-2">
+      <canvas
+        ref={setCanvasEl}
+        width={600}
+        height={200}
+        className="w-full rounded-2xl border border-slate-300 bg-white"
+        onPointerDown={startDrawing}
+        onPointerMove={draw}
+        onPointerUp={stopDrawing}
+        onPointerLeave={stopDrawing}
+      />
+      <div className="mt-2 flex items-center gap-2">
+        <p className="text-[11px] text-slate-500 flex-1">Assine com mouse ou toque. A imagem é salva como PNG para a ata.</p>
+        <button type="button" onClick={clearCanvas} className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+          Limpar assinatura
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function ModalShell({
@@ -237,11 +346,15 @@ export default function EnquetesPage() {
   const [quorumMinPercent, setQuorumMinPercent] = useState("50");
   const [approvalMinPercent, setApprovalMinPercent] = useState("50");
   const [allowComments, setAllowComments] = useState(true);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string>("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyPollId, setBusyPollId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -308,6 +421,11 @@ export default function EnquetesPage() {
     setQuorumMinPercent("50");
     setApprovalMinPercent("50");
     setAllowComments(true);
+    setAttachmentFile(null);
+    setSignatureFile(null);
+    setSignatureDataUrl("");
+    setError("");
+    setInfo("");
   }
 
   async function handleCreatePoll(event: FormEvent<HTMLFormElement>) {
@@ -315,11 +433,27 @@ export default function EnquetesPage() {
     if (creating) return;
 
     const options = [optionA, optionB, optionC].map((value) => value.trim()).filter(Boolean);
-    if (!title.trim() || options.length < 2) return;
+    const missing: string[] = [];
+    if (!title.trim()) missing.push("Título");
+    if (!description.trim()) missing.push("Descrição");
+    if (options.length < 2) missing.push("Pelo menos 2 opções");
+    if (!votingStartsAt) missing.push("Início da votação");
+    if (!votingEndsAt) missing.push("Fim da votação");
+    if (missing.length > 0) {
+      setError(`Preencha: ${missing.join(", ")}.`);
+      return;
+    }
+
+    let signatureUpload: File | null = signatureFile;
+    if (!signatureUpload && signatureDataUrl) {
+      const blob = await (await fetch(signatureDataUrl)).blob();
+      signatureUpload = new File([blob], `signature-${Date.now()}.png`, { type: "image/png" });
+    }
 
     try {
       setCreating(true);
       setError("");
+      setInfo("");
       await createPoll({
         title,
         description,
@@ -334,9 +468,13 @@ export default function EnquetesPage() {
         quorumMinPercent: Number(quorumMinPercent),
         approvalMinPercent: Number(approvalMinPercent),
         allowComments,
+        attachmentFile,
+        signatureFile: signatureUpload,
       });
       resetCreateForm();
       setCreateOpen(false);
+      setInfo("Assembleia criada com sucesso.");
+      void load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel criar a assembleia.");
     } finally {
@@ -348,7 +486,24 @@ export default function EnquetesPage() {
     try {
       setBusyPollId(pollId);
       setError("");
+      setInfo("");
       await voteOnPoll(pollId, optionId);
+      setPolls((current) =>
+        current.map((poll) =>
+          poll.id !== pollId
+            ? poll
+            : {
+                ...poll,
+                options: poll.options.map((opt) =>
+                  opt.id === optionId
+                    ? { ...opt, votes: Array.from(new Set([...opt.votes, voterId])) }
+                    : { ...opt, votes: opt.votes.filter((v) => v !== voterId) },
+                ),
+              },
+        ),
+      );
+      setInfo("Voto registrado.");
+      void load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel registrar seu voto.");
     } finally {
@@ -394,6 +549,8 @@ export default function EnquetesPage() {
     const documentContent = buildMinutesDocument({
       ...poll,
       minutesSummary: poll.id === selectedPollId ? minutesDraft : poll.minutesSummary,
+      creatorSignatureUrl: poll.creatorSignatureUrl || signatureDataUrl || null,
+      creatorSignatureName: poll.creatorSignatureName || user?.name || poll.createdBy,
     });
 
     printWindow.document.open();
@@ -454,6 +611,9 @@ export default function EnquetesPage() {
             })}
           </div>
         </section>
+
+        {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
+        {info && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{info}</p>}
 
         <section className="space-y-3">
           {loading ? (
@@ -637,6 +797,29 @@ export default function EnquetesPage() {
               Permitir comentarios durante a assembleia
             </label>
 
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-600">Anexo da pauta (PDF, DOC, imagens)</span>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                  className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-2xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                />
+                {attachmentFile && <p className="mt-1 text-xs text-slate-500 truncate">Selecionado: {attachmentFile.name}</p>}
+              </label>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold text-slate-600">Ou assine aqui mesmo</p>
+              <SignaturePad value={signatureDataUrl} onChange={setSignatureDataUrl} />
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => setSignatureDataUrl("")} className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                  Limpar assinatura
+                </button>
+              </div>
+            </div>
+
             <div className="grid gap-3 md:grid-cols-3">
               {[
                 { label: "Opcao 1", value: optionA, setter: setOptionA, placeholder: "Aprovar" },
@@ -698,6 +881,26 @@ export default function EnquetesPage() {
                   <p className="mt-1 text-sm font-semibold text-slate-900">{formatDate(selectedPoll.meetingAt)}</p>
                 </div>
               </div>
+
+              {(selectedPoll.attachmentUrl || selectedPoll.creatorSignatureUrl) && (
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {selectedPoll.attachmentUrl && (
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Anexo</p>
+                      <a href={selectedPoll.attachmentUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm font-semibold text-sky-700 hover:underline">
+                        {selectedPoll.attachmentName ?? "Documento da pauta"}
+                      </a>
+                    </div>
+                  )}
+                  {selectedPoll.creatorSignatureUrl && (
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Assinatura de abertura</p>
+                      <p className="text-xs text-slate-500">{selectedPoll.creatorSignatureName ?? "Responsavel"}</p>
+                      <img src={selectedPoll.creatorSignatureUrl} alt="Assinatura" className="mt-2 h-20 max-w-full object-contain" />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <section className="rounded-[28px] border border-slate-200 bg-white p-5">

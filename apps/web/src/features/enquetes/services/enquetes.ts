@@ -25,6 +25,10 @@ export type Poll = {
   description: string;
   createdAt: string;
   createdBy: string;
+  creatorSignatureUrl?: string | null;
+  creatorSignatureName?: string | null;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
   options: PollOption[];
   comments: PollComment[];
   assemblyType: AssemblyType;
@@ -54,6 +58,8 @@ export type CreatePollInput = {
   quorumMinPercent: number;
   approvalMinPercent: number;
   allowComments: boolean;
+  attachmentFile?: File | null;
+  signatureFile?: File | null;
 };
 
 type PollRow = {
@@ -73,6 +79,10 @@ type PollRow = {
   approval_min_percent?: number | null;
   allow_comments?: boolean | null;
   minutes_summary?: string | null;
+  creator_signature_url?: string | null;
+  creator_signature_name?: string | null;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
 };
 
 type PollOptionRow = {
@@ -132,6 +142,10 @@ function mapPolls(rows: PollRow[], options: PollOptionRow[], votes: PollVoteRow[
       description: row.description ?? "",
       createdAt: row.created_at,
       createdBy: row.created_by_name,
+      creatorSignatureUrl: row.creator_signature_url ?? null,
+      creatorSignatureName: row.creator_signature_name ?? row.created_by_name ?? null,
+      attachmentUrl: row.attachment_url ?? null,
+      attachmentName: row.attachment_name ?? null,
       options: pollOptions,
       comments: pollComments,
       assemblyType: row.assembly_type ?? "ORDINARIA",
@@ -153,8 +167,8 @@ export async function listPolls(): Promise<Poll[]> {
   const [pollsResult, optionsResult, votesResult, commentsResult] = await Promise.all([
     supabase
       .from("polls")
-      .select("id, title, description, created_at, created_by_name, assembly_type, meeting_mode, scope, status, meeting_at, voting_starts_at, voting_ends_at, quorum_min_percent, approval_min_percent, allow_comments, minutes_summary")
-      .order("voting_starts_at", { ascending: false }),
+      .select("id, title, description, created_at, created_by_name, assembly_type, meeting_mode, scope, status, meeting_at, voting_starts_at, voting_ends_at, quorum_min_percent, approval_min_percent, allow_comments, minutes_summary, creator_signature_url, creator_signature_name, attachment_url, attachment_name")
+      .order("created_at", { ascending: false }),
     supabase.from("poll_options").select("id, poll_id, label, position").order("poll_id", { ascending: false }).order("position", { ascending: true }),
     supabase.from("poll_votes").select("poll_id, option_id, user_id"),
     supabase.from("poll_comments").select("id, poll_id, message, created_at, created_by_name").order("created_at", { ascending: true }),
@@ -218,6 +232,35 @@ export async function createPoll(input: CreatePollInput): Promise<void> {
 
   if (optionsInsert.error) {
     throw new Error(optionsInsert.error.message);
+  }
+
+  // Upload opcional de anexo e assinatura
+  if (input.attachmentFile || input.signatureFile) {
+    const bucket = supabase.storage.from("assembly_files");
+    const updates: Record<string, string | null> = {};
+
+    if (input.attachmentFile) {
+      const path = `polls/${pollInsert.data.id}/attachment-${Date.now()}-${input.attachmentFile.name}`;
+      const { error: uploadError } = await bucket.upload(path, input.attachmentFile, { upsert: true, cacheControl: "3600" });
+      if (uploadError) throw new Error(uploadError.message);
+      const { data } = bucket.getPublicUrl(path);
+      updates.attachment_url = data.publicUrl;
+      updates.attachment_name = input.attachmentFile.name;
+    }
+
+    if (input.signatureFile) {
+      const path = `polls/${pollInsert.data.id}/signature-${Date.now()}.png`;
+      const { error: uploadError } = await bucket.upload(path, input.signatureFile, { upsert: true, cacheControl: "3600" });
+      if (uploadError) throw new Error(uploadError.message);
+      const { data } = bucket.getPublicUrl(path);
+      updates.creator_signature_url = data.publicUrl;
+      updates.creator_signature_name = createdByName;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const updateResult = await supabase.from("polls").update(updates).eq("id", pollInsert.data.id);
+      if (updateResult.error) throw new Error(updateResult.error.message);
+    }
   }
 }
 

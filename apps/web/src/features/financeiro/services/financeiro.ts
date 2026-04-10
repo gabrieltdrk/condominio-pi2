@@ -499,6 +499,13 @@ export async function createFinanceBill(payload: CreateFinanceBillPayload) {
 }
 
 export async function updateFinanceBillStatus(id: number, status: FinanceBillStatus, paidAt?: string | null) {
+  const allowedStatusTransitions: Record<FinanceBillStatus, FinanceBillStatus[]> = {
+    PENDING: ["PAID", "OVERDUE", "CANCELLED"],
+    OVERDUE: ["PAID", "CANCELLED"],
+    PAID: [],
+    CANCELLED: [],
+  };
+
   try {
     const bill = mapBill(
       await request<FinanceBill>(`/finance/bills/${id}/status`, {
@@ -519,6 +526,11 @@ export async function updateFinanceBillStatus(id: number, status: FinanceBillSta
     const currentBills = readLocalBills();
     const target = currentBills.find((item) => item.id === id);
     if (!target) throw new Error("Boleto nao encontrado.");
+
+    const allowedNext = allowedStatusTransitions[target.status] ?? [];
+    if (!allowedNext.includes(status)) {
+      throw new Error("Transicao de status invalida.");
+    }
 
     const updated: FinanceBill = {
       ...target,
