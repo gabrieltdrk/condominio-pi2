@@ -181,11 +181,11 @@ export default function FinanceiroPage() {
   const [formError, setFormError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [revenueErrors, setRevenueErrors] = useState<Record<string, string>>({});
-  const [expenseErrors, setExpenseErrors] = useState<Record<string, string>>({});
-  const [billErrors, setBillErrors] = useState<Record<string, string>>({});
+  const [, setExpenseErrors] = useState<Record<string, string>>({});
+  const [, setBillErrors] = useState<Record<string, string>>({});
   const [savingRevenue, setSavingRevenue] = useState(false);
-  const [savingExpense, setSavingExpense] = useState(false);
-  const [savingBill, setSavingBill] = useState(false);
+  const [, setSavingExpense] = useState(false);
+  const [, setSavingBill] = useState(false);
   const [activeModal, setActiveModal] = useState<FinanceModal>(null);
   const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
   const [updatingBillId, setUpdatingBillId] = useState<number | null>(null);
