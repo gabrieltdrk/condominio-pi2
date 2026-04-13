@@ -96,6 +96,8 @@ type PollVoteRow = {
   poll_id: string;
   option_id: string;
   user_id: string;
+  signature_url?: string | null;
+  signature_name?: string | null;
 };
 
 type PollCommentRow = {
@@ -264,8 +266,14 @@ export async function createPoll(input: CreatePollInput): Promise<void> {
   }
 }
 
-export async function voteOnPoll(pollId: string, optionId: string): Promise<void> {
+export async function voteOnPoll(pollId: string, optionId: string, signatureFile: File): Promise<void> {
   const authUser = await requireSessionUser();
+  const currentUser = getUser();
+  const signerName = currentUser?.name?.trim() || authUser.email || "Morador";
+
+  if (!signatureFile) {
+    throw new Error("Assinatura obrigatoria para registrar o voto.");
+  }
 
   const { data: poll, error: pollError } = await supabase
     .from("polls")
@@ -278,11 +286,21 @@ export async function voteOnPoll(pollId: string, optionId: string): Promise<void
     throw new Error("A assembleia ja foi encerrada.");
   }
 
+  // Upload da assinatura do voto
+  const bucket = supabase.storage.from("assembly_files");
+  const path = `polls/${pollId}/votes/${authUser.id}-signature.png`;
+  const { error: uploadError } = await bucket.upload(path, signatureFile, { upsert: true, cacheControl: "3600" });
+  if (uploadError) throw new Error(uploadError.message);
+  const { data } = bucket.getPublicUrl(path);
+  const signatureUrl = data.publicUrl;
+
   const { error } = await supabase.from("poll_votes").upsert(
     {
       poll_id: pollId,
       option_id: optionId,
       user_id: authUser.id,
+      signature_url: signatureUrl,
+      signature_name: signerName,
     },
     { onConflict: "poll_id,user_id" },
   );

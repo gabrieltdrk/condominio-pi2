@@ -349,10 +349,14 @@ export default function EnquetesPage() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>("");
+  const [voteSignatureDataUrl, setVoteSignatureDataUrl] = useState<string>("");
+  const [voteSignatureOpen, setVoteSignatureOpen] = useState(false);
+  const [pendingVote, setPendingVote] = useState<{ pollId: string; optionId: string } | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyPollId, setBusyPollId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [signing, setSigning] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -386,6 +390,20 @@ export default function EnquetesPage() {
       unsubscribe();
     };
   }, [load]);
+
+  // Persiste a assinatura de voto localmente para evitar refazer a cada voto
+  useEffect(() => {
+    const stored = localStorage.getItem("condo_vote_signature");
+    if (stored) setVoteSignatureDataUrl(stored);
+  }, []);
+
+  useEffect(() => {
+    if (voteSignatureDataUrl) {
+      localStorage.setItem("condo_vote_signature", voteSignatureDataUrl);
+    } else {
+      localStorage.removeItem("condo_vote_signature");
+    }
+  }, [voteSignatureDataUrl]);
 
   const stats = useMemo(() => {
     const totalVotes = polls.reduce((sum, poll) => sum + getPollTotalVotes(poll), 0);
@@ -486,11 +504,22 @@ export default function EnquetesPage() {
   }
 
   async function handleVote(pollId: string, optionId: string) {
+    // Se nao ha assinatura armazenada, abre modal antes de prosseguir
+    if (!voteSignatureDataUrl) {
+      setPendingVote({ pollId, optionId });
+      setVoteSignatureOpen(true);
+      setError("Assine digitalmente para registrar o voto.");
+      return;
+    }
+
     try {
       setBusyPollId(pollId);
+      setSigning(true);
       setError("");
       setInfo("");
-      await voteOnPoll(pollId, optionId);
+      const signatureBlob = await (await fetch(voteSignatureDataUrl)).blob();
+      const signatureFile = new File([signatureBlob], `vote-signature-${Date.now()}.png`, { type: "image/png" });
+      await voteOnPoll(pollId, optionId, signatureFile);
       setPolls((current) =>
         current.map((poll) =>
           poll.id !== pollId
@@ -510,8 +539,19 @@ export default function EnquetesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel registrar seu voto.");
     } finally {
+      setSigning(false);
       setBusyPollId(null);
+      setPendingVote(null);
+      setVoteSignatureOpen(false);
     }
+  }
+
+  async function confirmPendingVote() {
+    if (!pendingVote || !voteSignatureDataUrl) {
+      setError("Assine para confirmar seu voto.");
+      return;
+    }
+    await handleVote(pendingVote.pollId, pendingVote.optionId);
   }
 
   async function handleCommentSubmit(pollId: string) {
@@ -694,7 +734,7 @@ export default function EnquetesPage() {
                           key={option.id}
                           type="button"
                           onClick={() => handleVote(poll.id, option.id)}
-                          disabled={busyPollId === poll.id || poll.status !== "OPEN"}
+                          disabled={busyPollId === poll.id || poll.status !== "OPEN" || signing}
                           className={`inline-flex items-center justify-center rounded-full border px-3 py-2 text-sm font-semibold transition ${
                             isSelected
                               ? "border-sky-300 bg-sky-50 text-sky-700"
@@ -816,11 +856,6 @@ export default function EnquetesPage() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs font-semibold text-slate-600">Ou assine aqui mesmo</p>
               <SignaturePad value={signatureDataUrl} onChange={setSignatureDataUrl} />
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => setSignatureDataUrl("")} className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                  Limpar assinatura
-                </button>
-              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
@@ -846,6 +881,45 @@ export default function EnquetesPage() {
               </button>
             </div>
           </form>
+        </ModalShell>
+      ) : null}
+
+      {voteSignatureOpen ? (
+        <ModalShell
+          title="Assine para registrar seu voto"
+          subtitle="Por exigencia da assembleia, cada voto precisa ser acompanhado de uma assinatura digital."
+          onClose={() => {
+            setVoteSignatureOpen(false);
+            setPendingVote(null);
+          }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Desenhe sua assinatura abaixo. Ela sera armazenada junto ao seu voto nesta assembleia para auditoria interna.
+            </p>
+            <SignaturePad value={voteSignatureDataUrl} onChange={setVoteSignatureDataUrl} />
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setVoteSignatureDataUrl("");
+                  setVoteSignatureOpen(false);
+                  setPendingVote(null);
+                }}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmPendingVote()}
+                disabled={!voteSignatureDataUrl || signing}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {signing ? "Registrando voto..." : "Assinar e votar"}
+              </button>
+            </div>
+          </div>
         </ModalShell>
       ) : null}
 
@@ -923,7 +997,7 @@ export default function EnquetesPage() {
                       key={option.id}
                       type="button"
                       onClick={() => handleVote(selectedPoll.id, option.id)}
-                      disabled={busyPollId === selectedPoll.id || selectedPoll.status !== "OPEN"}
+                      disabled={busyPollId === selectedPoll.id || selectedPoll.status !== "OPEN" || signing}
                       className={`w-full rounded-[24px] border px-4 py-4 text-left transition ${
                         isSelected
                           ? "border-sky-300 bg-sky-50"
