@@ -2,6 +2,47 @@ import type { FastifyInstance } from "fastify";
 import { db } from "../db.js";
 
 type FinanceEntryType = "REVENUE" | "EXPENSE";
+type FinanceBillStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
+
+type FinanceEntryRow = {
+  id: number;
+  type: FinanceEntryType;
+  identifier: string;
+  description: string;
+  amount: string | number;
+  reference_date: string;
+  due_date: string | null;
+  counterparty: string;
+  unit: string | null;
+  resident: string | null;
+  category: string;
+  payment_method: string;
+  status: string;
+  document_name: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+type FinanceBillRow = {
+  id: number;
+  entry_id: number;
+  bill_code: string;
+  unit: string;
+  resident: string;
+  resident_email: string | null;
+  competence_date: string;
+  issue_date: string;
+  due_date: string;
+  amount: string | number;
+  instructions: string | null;
+  status: FinanceBillStatus;
+  digitable_line: string;
+  barcode: string;
+  pdf_url: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 type CreateFinanceEntryBody = {
   type: FinanceEntryType;
@@ -20,9 +61,101 @@ type CreateFinanceEntryBody = {
   notes?: string | null;
 };
 
+type CreateFinanceBillBody = {
+  unit: string;
+  resident: string;
+  residentEmail?: string | null;
+  amount: number;
+  competenceDate: string;
+  dueDate: string;
+  issueDate?: string | null;
+  instructions?: string | null;
+};
+
+type FinanceBillsQuerystring = {
+  resident?: string;
+  residentEmail?: string;
+  unit?: string;
+  status?: FinanceBillStatus;
+  limit?: string;
+};
+
+type UpdateFinanceBillStatusBody = {
+  status: FinanceBillStatus;
+  paidAt?: string | null;
+};
+
+function mapFinanceEntry(row: FinanceEntryRow) {
+  return {
+    ...row,
+    amount: Number(row.amount),
+  };
+}
+
+function mapFinanceBill(row: FinanceBillRow) {
+  return {
+    ...row,
+    amount: Number(row.amount),
+  };
+}
+
+function pad(value: number | string, length: number) {
+  return String(value).padStart(length, "0");
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function formatCompetence(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  return `${pad(month, 2)}/${year}`;
+}
+
+function toDateOnly(value: string | null | undefined) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  return value.slice(0, 10);
+}
+
+function mapBillStatusToEntryStatus(status: FinanceBillStatus) {
+  switch (status) {
+    case "PAID":
+      return "Recebido";
+    case "OVERDUE":
+      return "Atrasado";
+    case "CANCELLED":
+      return "Cancelado";
+    default:
+      return "Em aberto";
+  }
+}
+
+function buildBarcode(seed: number, amount: number, dueDate: string) {
+  const amountDigits = pad(Math.round(amount * 100), 10);
+  const dueDigits = onlyDigits(dueDate).slice(-8);
+  const sequence = pad(seed, 14);
+  const freeField = `${sequence}${dueDigits}${amountDigits}`.slice(0, 25);
+  return `3419${dueDigits}${amountDigits}${freeField}`.slice(0, 44);
+}
+
+function buildDigitableLine(seed: number, amount: number, dueDate: string) {
+  const barcode = buildBarcode(seed, amount, dueDate);
+  return `${barcode.slice(0, 5)}.${barcode.slice(5, 10)} ${barcode.slice(10, 15)}.${barcode.slice(15, 21)} ${barcode.slice(21, 26)}.${barcode.slice(26, 32)} ${barcode.slice(32, 33)} ${barcode.slice(33, 47)}`.trim();
+}
+
+function buildBillCode(seed: number, competenceDate: string) {
+  const competence = competenceDate.slice(0, 7).replace("-", "");
+  return `BOL-${competence}-${pad(seed, 4)}`;
+}
+
+function buildEntryIdentifier(seed: number, competenceDate: string) {
+  const competence = competenceDate.slice(0, 7).replace("-", "");
+  return `REC-${competence}-${pad(seed, 4)}`;
+}
+
 export async function financeRoutes(app: FastifyInstance) {
   app.get("/finance/entries", async () => {
-    const result = await db.query(
+    const result = await db.query<FinanceEntryRow>(
       `SELECT
         id,
         type,
@@ -44,7 +177,7 @@ export async function financeRoutes(app: FastifyInstance) {
       ORDER BY reference_date DESC, created_at DESC`,
     );
 
-    return result.rows;
+    return result.rows.map(mapFinanceEntry);
   });
 
   app.post<{ Body: CreateFinanceEntryBody }>(
@@ -86,7 +219,7 @@ export async function financeRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const body = request.body;
 
-      const result = await db.query(
+      const result = await db.query<FinanceEntryRow>(
         `INSERT INTO finance_entries (
           type,
           identifier,
@@ -139,7 +272,300 @@ export async function financeRoutes(app: FastifyInstance) {
         ],
       );
 
-      return reply.status(201).send(result.rows[0]);
+      return reply.status(201).send(mapFinanceEntry(result.rows[0]));
+    },
+  );
+
+  app.get<{ Querystring: FinanceBillsQuerystring }>("/finance/bills", async (request) => {
+    const filters = request.query;
+    const conditions: string[] = [];
+    const values: Array<string | number> = [];
+
+    if (filters.resident) {
+      values.push(`%${filters.resident}%`);
+      conditions.push(`resident ILIKE $${values.length}`);
+    }
+
+    if (filters.residentEmail) {
+      values.push(filters.residentEmail);
+      conditions.push(`resident_email = $${values.length}`);
+    }
+
+    if (filters.unit) {
+      values.push(`%${filters.unit}%`);
+      conditions.push(`unit ILIKE $${values.length}`);
+    }
+
+    if (filters.status) {
+      values.push(filters.status);
+      conditions.push(`status = $${values.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const limit = Number(filters.limit ?? 50);
+    values.push(Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 50);
+
+    const result = await db.query<FinanceBillRow>(
+      `SELECT
+        id,
+        entry_id,
+        bill_code,
+        unit,
+        resident,
+        resident_email,
+        competence_date,
+        issue_date,
+        due_date,
+        amount,
+        instructions,
+        status,
+        digitable_line,
+        barcode,
+        pdf_url,
+        paid_at,
+        created_at,
+        updated_at
+      FROM finance_bills
+      ${whereClause}
+      ORDER BY due_date ASC, created_at DESC
+      LIMIT $${values.length}`,
+      values,
+    );
+
+    return result.rows.map(mapFinanceBill);
+  });
+
+  app.post<{ Body: CreateFinanceBillBody }>(
+    "/finance/bills",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["unit", "resident", "amount", "competenceDate", "dueDate"],
+          properties: {
+            unit: { type: "string", minLength: 1 },
+            resident: { type: "string", minLength: 1 },
+            residentEmail: { type: ["string", "null"], format: "email" },
+            amount: { type: "number", minimum: 0.01 },
+            competenceDate: { type: "string", format: "date" },
+            dueDate: { type: "string", format: "date" },
+            issueDate: { type: ["string", "null"], format: "date" },
+            instructions: { type: ["string", "null"] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const client = await db.connect();
+      const body = request.body;
+      const issueDate = toDateOnly(body.issueDate);
+
+      try {
+        await client.query("BEGIN");
+
+        const sequenceResult = await client.query<{ next_id: number }>(
+          "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM finance_bills",
+        );
+
+        const seed = sequenceResult.rows[0]?.next_id ?? 1;
+        const billCode = buildBillCode(seed, body.competenceDate);
+        const entryIdentifier = buildEntryIdentifier(seed, body.competenceDate);
+        const digitableLine = buildDigitableLine(seed, body.amount, body.dueDate);
+        const barcode = buildBarcode(seed, body.amount, body.dueDate);
+        const description = `Taxa condominial ${formatCompetence(body.competenceDate)} - ${body.unit}`;
+
+        const entryResult = await client.query<FinanceEntryRow>(
+          `INSERT INTO finance_entries (
+            type,
+            identifier,
+            description,
+            amount,
+            reference_date,
+            due_date,
+            counterparty,
+            unit,
+            resident,
+            category,
+            payment_method,
+            status,
+            document_name,
+            notes
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          RETURNING
+            id,
+            type,
+            identifier,
+            description,
+            amount,
+            reference_date,
+            due_date,
+            counterparty,
+            unit,
+            resident,
+            category,
+            payment_method,
+            status,
+            document_name,
+            notes,
+            created_at`,
+          [
+            "REVENUE",
+            entryIdentifier,
+            description,
+            body.amount,
+            issueDate,
+            body.dueDate,
+            body.resident,
+            body.unit,
+            body.resident,
+            "Taxa condominial",
+            "Boleto",
+            "Em aberto",
+            `${billCode}.pdf`,
+            body.instructions ?? null,
+          ],
+        );
+
+        const entry = entryResult.rows[0];
+
+        const billResult = await client.query<FinanceBillRow>(
+          `INSERT INTO finance_bills (
+            entry_id,
+            bill_code,
+            unit,
+            resident,
+            resident_email,
+            competence_date,
+            issue_date,
+            due_date,
+            amount,
+            instructions,
+            status,
+            digitable_line,
+            barcode,
+            pdf_url
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13)
+          RETURNING
+            id,
+            entry_id,
+            bill_code,
+            unit,
+            resident,
+            resident_email,
+            competence_date,
+            issue_date,
+            due_date,
+            amount,
+            instructions,
+            status,
+            digitable_line,
+            barcode,
+            pdf_url,
+            paid_at,
+            created_at,
+            updated_at`,
+          [
+            entry.id,
+            billCode,
+            body.unit,
+            body.resident,
+            body.residentEmail ?? null,
+            body.competenceDate,
+            issueDate,
+            body.dueDate,
+            body.amount,
+            body.instructions ?? null,
+            digitableLine,
+            barcode,
+            `/finance/bills/${billCode}/mock-pdf`,
+          ],
+        );
+
+        await client.query("COMMIT");
+        return reply.status(201).send(mapFinanceBill(billResult.rows[0]));
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.patch<{ Params: { id: string }; Body: UpdateFinanceBillStatusBody }>(
+    "/finance/bills/:id/status",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["status"],
+          properties: {
+            status: { type: "string", enum: ["PENDING", "PAID", "OVERDUE", "CANCELLED"] },
+            paidAt: { type: ["string", "null"], format: "date-time" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const client = await db.connect();
+      const billId = Number(request.params.id);
+      const { status, paidAt } = request.body;
+
+      try {
+        await client.query("BEGIN");
+
+        const billResult = await client.query<FinanceBillRow>(
+          `UPDATE finance_bills
+          SET
+            status = $1,
+            paid_at = CASE WHEN $1 = 'PAID' THEN COALESCE($2, NOW()::text)::timestamptz ELSE NULL END,
+            updated_at = NOW()
+          WHERE id = $3
+          RETURNING
+            id,
+            entry_id,
+            bill_code,
+            unit,
+            resident,
+            resident_email,
+            competence_date,
+            issue_date,
+            due_date,
+            amount,
+            instructions,
+            status,
+            digitable_line,
+            barcode,
+            pdf_url,
+            paid_at,
+            created_at,
+            updated_at`,
+          [status, paidAt ?? null, billId],
+        );
+
+        const bill = billResult.rows[0];
+        if (!bill) {
+          await client.query("ROLLBACK");
+          return reply.status(404).send({ message: "Boleto nao encontrado." });
+        }
+
+        await client.query(
+          `UPDATE finance_entries
+          SET status = $1, notes = COALESCE(notes, $2)
+          WHERE id = $3`,
+          [mapBillStatusToEntryStatus(status), bill.instructions ?? null, bill.entry_id],
+        );
+
+        await client.query("COMMIT");
+        return reply.send(mapFinanceBill(bill));
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   );
 }

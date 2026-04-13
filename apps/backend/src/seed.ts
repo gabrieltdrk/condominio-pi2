@@ -87,6 +87,29 @@ async function seed() {
     );
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS finance_bills (
+      id              SERIAL PRIMARY KEY,
+      entry_id        INTEGER NOT NULL REFERENCES finance_entries(id) ON DELETE CASCADE,
+      bill_code       VARCHAR(64) NOT NULL UNIQUE,
+      unit            VARCHAR(64) NOT NULL,
+      resident        VARCHAR(160) NOT NULL,
+      resident_email  VARCHAR(255),
+      competence_date DATE NOT NULL,
+      issue_date      DATE NOT NULL,
+      due_date        DATE NOT NULL,
+      amount          NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
+      instructions    TEXT,
+      status          VARCHAR(16) NOT NULL CHECK (status IN ('PENDING', 'PAID', 'OVERDUE', 'CANCELLED')),
+      digitable_line  VARCHAR(128) NOT NULL,
+      barcode         VARCHAR(64) NOT NULL,
+      pdf_url         VARCHAR(255),
+      paid_at         TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   const hash = await bcrypt.hash(PASSWORD, COST);
 
   const users = [
@@ -158,6 +181,96 @@ async function seed() {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (identifier) DO NOTHING`,
       entry,
+    );
+  }
+
+  const financeBillEntries = [
+    {
+      identifier: "REC-2026-001",
+      bill_code: "BOL-202603-0001",
+      unit: "Torre A - Ap 101",
+      resident: "Gabriel Ferreira",
+      resident_email: "gabriel.ferreira@example.com",
+      competence_date: "2026-03-01",
+      issue_date: "2026-03-01",
+      due_date: "2026-03-10",
+      amount: 780,
+      instructions: "Nao receber apos 30 dias do vencimento.",
+      status: "PAID",
+      digitable_line: "34191.09008 00001.780007 32026.030107 8 000000078000",
+      barcode: "34192026030100000007800000017800073202603",
+      pdf_url: "/finance/bills/BOL-202603-0001/mock-pdf",
+      paid_at: "2026-03-08T12:00:00.000Z",
+    },
+    {
+      identifier: "REC-2026-002",
+      bill_code: "BOL-202603-0002",
+      unit: "Torre B - Ap 101",
+      resident: "Helena Moraes",
+      resident_email: "helena.moraes@example.com",
+      competence_date: "2026-03-01",
+      issue_date: "2026-03-01",
+      due_date: "2026-03-10",
+      amount: 780,
+      instructions: "Multa de 2% apos o vencimento.",
+      status: "PAID",
+      digitable_line: "34191.09008 00002.780004 32026.030206 1 000000078000",
+      barcode: "34112026030100000007800000027800043202603",
+      pdf_url: "/finance/bills/BOL-202603-0002/mock-pdf",
+      paid_at: "2026-03-08T14:30:00.000Z",
+    },
+    {
+      identifier: "REC-2026-003",
+      bill_code: "BOL-202602-0003",
+      unit: "Torre A - Ap 203",
+      resident: "Carlos Henrique",
+      resident_email: "carlos.henrique@example.com",
+      competence_date: "2026-02-01",
+      issue_date: "2026-02-01",
+      due_date: "2026-02-10",
+      amount: 1240,
+      instructions: "Contato com a administracao em caso de duvidas.",
+      status: "OVERDUE",
+      digitable_line: "34191.09008 00003.124004 22026.020302 3 000000124000",
+      barcode: "34132026020100000012400000031240042202602",
+      pdf_url: "/finance/bills/BOL-202602-0003/mock-pdf",
+      paid_at: null,
+    },
+  ];
+
+  for (const bill of financeBillEntries) {
+    const entryResult = await db.query<{ id: number }>(
+      "SELECT id FROM finance_entries WHERE identifier = $1",
+      [bill.identifier],
+    );
+
+    const entryId = entryResult.rows[0]?.id;
+    if (!entryId) continue;
+
+    await db.query(
+      `INSERT INTO finance_bills (
+        entry_id, bill_code, unit, resident, resident_email, competence_date, issue_date, due_date,
+        amount, instructions, status, digitable_line, barcode, pdf_url, paid_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ON CONFLICT (bill_code) DO NOTHING`,
+      [
+        entryId,
+        bill.bill_code,
+        bill.unit,
+        bill.resident,
+        bill.resident_email,
+        bill.competence_date,
+        bill.issue_date,
+        bill.due_date,
+        bill.amount,
+        bill.instructions,
+        bill.status,
+        bill.digitable_line,
+        bill.barcode,
+        bill.pdf_url,
+        bill.paid_at,
+      ],
     );
   }
 
