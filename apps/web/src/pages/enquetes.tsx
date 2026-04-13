@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -356,25 +356,28 @@ export default function EnquetesPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
+  const load = useCallback(async () => {
+    try {
+      const nextPolls = await listPolls();
+      setPolls(nextPolls);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nao foi possivel carregar as assembleias.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
 
-    async function load() {
-      try {
-        const nextPolls = await listPolls();
-        if (!active) return;
-        setPolls(nextPolls);
-        setError("");
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "Nao foi possivel carregar as assembleias.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
+    void (async () => {
+      if (!active) return;
+      await load();
+    })();
 
-    void load();
     const unsubscribe = subscribeToPolls(() => {
+      if (!active) return;
       void load();
     });
 
@@ -382,7 +385,7 @@ export default function EnquetesPage() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [load]);
 
   const stats = useMemo(() => {
     const totalVotes = polls.reduce((sum, poll) => sum + getPollTotalVotes(poll), 0);
