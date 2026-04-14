@@ -17,6 +17,7 @@ import { getUser } from "../features/auth/services/auth";
 import {
   addPollComment,
   createPoll,
+  listPollSignatures,
   listPolls,
   subscribeToPolls,
   updatePollStatus,
@@ -26,6 +27,7 @@ import {
   type AssemblyStatus,
   type AssemblyType,
   type Poll,
+  type PollSignatureLog,
 } from "../features/enquetes/services/enquetes";
 
 const inputClass =
@@ -202,10 +204,12 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (val: stri
     if (!value || !canvasEl) return;
     const ctx = canvasEl.getContext("2d");
     if (!ctx) return;
+    const logicalWidth = canvasEl.width / scaleRef.current;
+    const logicalHeight = canvasEl.height / scaleRef.current;
     const img = new Image();
     img.onload = () => {
-      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-      ctx.drawImage(img, 0, 0, canvasEl.width, canvasEl.height);
+      ctx.clearRect(0, 0, logicalWidth, logicalHeight);
+      ctx.drawImage(img, 0, 0, logicalWidth, logicalHeight);
     };
     img.src = value;
   }, [value, canvasEl]);
@@ -215,42 +219,46 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (val: stri
     const dpr = window.devicePixelRatio || 1;
     scaleRef.current = dpr;
     const logicalWidth = canvasEl.getBoundingClientRect().width || 600;
+    const logicalHeight = 200;
     canvasEl.width = logicalWidth * dpr;
-    canvasEl.height = 200 * dpr;
+    canvasEl.height = logicalHeight * dpr;
     const ctx = canvasEl.getContext("2d");
     if (ctx) {
       ctx.scale(dpr, dpr);
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
       ctx.strokeStyle = "#0f172a";
-      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     }
     initializedRef.current = true;
   }, [canvasEl]);
 
   function startDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
+    event.preventDefault();
     if (!canvasEl) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
     const ctx = canvasEl.getContext("2d");
     if (!ctx) return;
     ctx.beginPath();
     const rect = canvasEl.getBoundingClientRect();
-    const scale = scaleRef.current;
-    ctx.moveTo((event.clientX - rect.left) * scale, (event.clientY - rect.top) * scale);
+    ctx.moveTo(event.clientX - rect.left, event.clientY - rect.top);
     setIsDrawing(true);
   }
 
   function draw(event: React.PointerEvent<HTMLCanvasElement>) {
+    event.preventDefault();
     if (!isDrawing || !canvasEl) return;
     const ctx = canvasEl.getContext("2d");
     if (!ctx) return;
     const rect = canvasEl.getBoundingClientRect();
-    const scale = scaleRef.current;
-    ctx.lineTo((event.clientX - rect.left) * scale, (event.clientY - rect.top) * scale);
+    ctx.lineTo(event.clientX - rect.left, event.clientY - rect.top);
     ctx.stroke();
   }
 
-  function stopDrawing() {
+  function stopDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
+    event.preventDefault();
     if (!isDrawing || !canvasEl) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
     setIsDrawing(false);
     onChange(canvasEl.toDataURL("image/png"));
   }
@@ -259,7 +267,9 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (val: stri
     if (!canvasEl) return;
     const ctx = canvasEl.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    const logicalWidth = canvasEl.width / scaleRef.current;
+    const logicalHeight = canvasEl.height / scaleRef.current;
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     onChange("");
   }
 
@@ -269,7 +279,8 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (val: stri
         ref={setCanvasEl}
         width={600}
         height={200}
-        className="w-full rounded-2xl border border-slate-300 bg-white"
+        className="w-full touch-none select-none rounded-2xl border border-slate-300 bg-white"
+        style={{ touchAction: "none" }}
         onPointerDown={startDrawing}
         onPointerMove={draw}
         onPointerUp={stopDrawing}
@@ -353,6 +364,8 @@ export default function EnquetesPage() {
   const [voteSignatureOpen, setVoteSignatureOpen] = useState(false);
   const [pendingVote, setPendingVote] = useState<{ pollId: string; optionId: string } | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [signatureLogs, setSignatureLogs] = useState<PollSignatureLog[]>([]);
+  const [loadingSignatureLogs, setLoadingSignatureLogs] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyPollId, setBusyPollId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -391,20 +404,6 @@ export default function EnquetesPage() {
     };
   }, [load]);
 
-  // Persiste a assinatura de voto localmente para evitar refazer a cada voto
-  useEffect(() => {
-    const stored = localStorage.getItem("condo_vote_signature");
-    if (stored) setVoteSignatureDataUrl(stored);
-  }, []);
-
-  useEffect(() => {
-    if (voteSignatureDataUrl) {
-      localStorage.setItem("condo_vote_signature", voteSignatureDataUrl);
-    } else {
-      localStorage.removeItem("condo_vote_signature");
-    }
-  }, [voteSignatureDataUrl]);
-
   const stats = useMemo(() => {
     const totalVotes = polls.reduce((sum, poll) => sum + getPollTotalVotes(poll), 0);
     const totalComments = polls.reduce((sum, poll) => sum + poll.comments.length, 0);
@@ -425,6 +424,36 @@ export default function EnquetesPage() {
   useEffect(() => {
     setMinutesDraft(selectedPoll?.minutesSummary ?? "");
   }, [selectedPoll?.id, selectedPoll?.minutesSummary]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!selectedPoll?.id) {
+      setSignatureLogs([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    setLoadingSignatureLogs(true);
+    void listPollSignatures(selectedPoll.id)
+      .then((logs) => {
+        if (!active) return;
+        setSignatureLogs(logs);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSignatureLogs([]);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoadingSignatureLogs(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedPoll?.id]);
 
   function resetCreateForm() {
     setTitle("");
@@ -504,30 +533,33 @@ export default function EnquetesPage() {
   }
 
   async function handleVote(pollId: string, optionId: string) {
-    // Se nao ha assinatura armazenada, abre modal antes de prosseguir
-    if (!voteSignatureDataUrl) {
-      setPendingVote({ pollId, optionId });
-      setVoteSignatureOpen(true);
-      setError("Assine digitalmente para registrar o voto.");
+    setPendingVote({ pollId, optionId });
+    setVoteSignatureDataUrl("");
+    setVoteSignatureOpen(true);
+    setError("Assinatura obrigatoria para registrar o voto.");
+  }
+
+  async function confirmPendingVote() {
+    if (!pendingVote || !voteSignatureDataUrl) {
+      setError("Assine para confirmar seu voto.");
       return;
     }
-
     try {
-      setBusyPollId(pollId);
+      setBusyPollId(pendingVote.pollId);
       setSigning(true);
       setError("");
       setInfo("");
       const signatureBlob = await (await fetch(voteSignatureDataUrl)).blob();
       const signatureFile = new File([signatureBlob], `vote-signature-${Date.now()}.png`, { type: "image/png" });
-      await voteOnPoll(pollId, optionId, signatureFile);
+      await voteOnPoll(pendingVote.pollId, pendingVote.optionId, signatureFile);
       setPolls((current) =>
         current.map((poll) =>
-          poll.id !== pollId
+          poll.id !== pendingVote.pollId
             ? poll
             : {
                 ...poll,
                 options: poll.options.map((opt) =>
-                  opt.id === optionId
+                  opt.id === pendingVote.optionId
                     ? { ...opt, votes: Array.from(new Set([...opt.votes, voterId])) }
                     : { ...opt, votes: opt.votes.filter((v) => v !== voterId) },
                 ),
@@ -543,15 +575,8 @@ export default function EnquetesPage() {
       setBusyPollId(null);
       setPendingVote(null);
       setVoteSignatureOpen(false);
+      setVoteSignatureDataUrl("");
     }
-  }
-
-  async function confirmPendingVote() {
-    if (!pendingVote || !voteSignatureDataUrl) {
-      setError("Assine para confirmar seu voto.");
-      return;
-    }
-    await handleVote(pendingVote.pollId, pendingVote.optionId);
   }
 
   async function handleCommentSubmit(pollId: string) {
@@ -1016,6 +1041,37 @@ export default function EnquetesPage() {
                     </button>
                   );
                 })}
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-slate-200 bg-white p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Users size={16} />
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]">Assinaturas registradas</span>
+                </div>
+                <span className="text-xs text-slate-400">{signatureLogs.length} assinatura(s)</span>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {loadingSignatureLogs ? (
+                  <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                    Carregando assinaturas...
+                  </div>
+                ) : signatureLogs.length === 0 ? (
+                  <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                    Nenhuma assinatura registrada ainda.
+                  </div>
+                ) : (
+                  signatureLogs.map((log) => (
+                    <div key={`${log.pollId}-${log.userId}`} className="rounded-[22px] border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="m-0 text-sm font-semibold text-slate-900">{log.signerName}</p>
+                        <span className="text-[11px] text-slate-400">{formatDate(log.signedAt)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 

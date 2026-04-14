@@ -44,6 +44,14 @@ export type Poll = {
   minutesSummary: string;
 };
 
+export type PollSignatureLog = {
+  pollId: string;
+  userId: string;
+  signerName: string;
+  signedAt: string;
+  signatureUrl: string | null;
+};
+
 export type CreatePollInput = {
   title: string;
   description: string;
@@ -96,6 +104,7 @@ type PollVoteRow = {
   poll_id: string;
   option_id: string;
   user_id: string;
+  created_at?: string;
   signature_url?: string | null;
   signature_name?: string | null;
 };
@@ -336,6 +345,24 @@ export async function addPollComment(pollId: string, message: string): Promise<v
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function listPollSignatures(pollId: string): Promise<PollSignatureLog[]> {
+  const { data, error } = await supabase
+    .from("poll_votes")
+    .select("poll_id, user_id, created_at, signature_name, signature_url")
+    .eq("poll_id", pollId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as PollVoteRow[]).map((row) => ({
+    pollId: row.poll_id,
+    userId: row.user_id,
+    signerName: row.signature_name?.trim() || "Morador",
+    signedAt: row.created_at ?? new Date().toISOString(),
+    signatureUrl: row.signature_url ?? null,
+  }));
 }
 
 export async function updatePollStatus(pollId: string, status: AssemblyStatus, minutesSummary?: string): Promise<void> {

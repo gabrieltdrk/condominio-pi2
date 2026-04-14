@@ -22,6 +22,9 @@ export type FinanceEntry = {
   document_name: string | null;
   notes: string | null;
   created_at: string;
+  updated_at?: string;
+  recurrence_rule_id?: number | null;
+  competence_month?: string | null;
 };
 
 export type FinanceBill = {
@@ -60,6 +63,57 @@ export type CreateFinanceEntryPayload = {
   status: string;
   documentName?: string | null;
   notes?: string | null;
+  recurrenceRuleId?: number | null;
+  competenceMonth?: string | null;
+};
+
+export type UpdateFinanceEntryPayload = Partial<CreateFinanceEntryPayload>;
+
+export type FinanceDashboard = {
+  month: string;
+  periodStart: string;
+  periodEnd: string;
+  balance: number;
+  monthlyRevenue: number;
+  monthlyExpense: number;
+  delinquencyAmount: number;
+  openAccountsCount: number;
+  openAccountsAmount: number;
+};
+
+export type FinanceDelinquencyItem = FinanceBill & {
+  days_overdue: number;
+};
+
+export type FinanceDelinquency = {
+  totalAmount: number;
+  totalUnits: number;
+  units: FinanceDelinquencyItem[];
+};
+
+export type FinanceCashFlowPoint = {
+  period: string;
+  revenues: number;
+  expenses: number;
+  balance: number;
+};
+
+export type FinanceCashFlow = {
+  from: string;
+  to: string;
+  points: FinanceCashFlowPoint[];
+};
+
+export type FinanceCategorySummary = {
+  category: string;
+  type: FinanceEntryType;
+  total: number;
+};
+
+export type FinanceReportSummary = {
+  from: string;
+  to: string;
+  byCategory: FinanceCategorySummary[];
 };
 
 export type CreateFinanceBillPayload = {
@@ -393,14 +447,37 @@ function buildLocalBill(seed: number, entryId: number, payload: CreateFinanceBil
   };
 }
 
-export async function listFinanceEntries() {
+export async function listFinanceEntries(filters?: {
+  type?: FinanceEntryType;
+  status?: string;
+  category?: string;
+  unit?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
   try {
-    const entries = await request<FinanceEntry[]>("/finance/entries");
+    const params = new URLSearchParams();
+    if (filters?.type) params.set("type", filters.type);
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.category) params.set("category", filters.category);
+    if (filters?.unit) params.set("unit", filters.unit);
+    if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+    if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+    const query = params.toString();
+    const entries = await request<FinanceEntry[]>(`/finance/entries${query ? `?${query}` : ""}`);
     const normalized = entries.map(mapEntry);
     writeLocalEntries(normalized);
     return normalized;
   } catch {
-    return readLocalEntries();
+    return readLocalEntries().filter((entry) => {
+      if (filters?.type && entry.type !== filters.type) return false;
+      if (filters?.status && !entry.status.toLowerCase().includes(filters.status.toLowerCase())) return false;
+      if (filters?.category && !entry.category.toLowerCase().includes(filters.category.toLowerCase())) return false;
+      if (filters?.unit && !(entry.unit ?? "").toLowerCase().includes(filters.unit.toLowerCase())) return false;
+      if (filters?.dateFrom && entry.reference_date < filters.dateFrom) return false;
+      if (filters?.dateTo && entry.reference_date > filters.dateTo) return false;
+      return true;
+    });
   }
 }
 
@@ -434,11 +511,54 @@ export async function createFinanceEntry(payload: CreateFinanceEntryPayload) {
       status: payload.status,
       document_name: payload.documentName ?? null,
       notes: payload.notes ?? null,
+      recurrence_rule_id: payload.recurrenceRuleId ?? null,
+      competence_month: payload.competenceMonth ?? null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     writeLocalEntries([entry, ...current]);
     return entry;
+  }
+}
+
+export async function updateFinanceEntry(id: number, payload: UpdateFinanceEntryPayload) {
+  try {
+    const entry = mapEntry(
+      await request<FinanceEntry>(`/finance/entries/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    );
+    const current = readLocalEntries().filter((item) => item.id !== entry.id);
+    writeLocalEntries([entry, ...current]);
+    return entry;
+  } catch {
+    const current = readLocalEntries();
+    const target = current.find((item) => item.id === id);
+    if (!target) throw new Error("Lancamento nao encontrado.");
+
+    const updated: FinanceEntry = {
+      ...target,
+      type: payload.type ?? target.type,
+      identifier: payload.identifier ?? target.identifier,
+      description: payload.description ?? target.description,
+      amount: payload.amount ?? target.amount,
+      reference_date: payload.referenceDate ?? target.reference_date,
+      due_date: payload.dueDate ?? target.due_date,
+      counterparty: payload.counterparty ?? target.counterparty,
+      unit: payload.unit ?? target.unit,
+      resident: payload.resident ?? target.resident,
+      category: payload.category ?? target.category,
+      payment_method: payload.paymentMethod ?? target.payment_method,
+      status: payload.status ?? target.status,
+      document_name: payload.documentName ?? target.document_name,
+      notes: payload.notes ?? target.notes,
+      updated_at: new Date().toISOString(),
+    };
+
+    writeLocalEntries([updated, ...current.filter((item) => item.id !== id)]);
+    return updated;
   }
 }
 
@@ -548,4 +668,135 @@ export async function updateFinanceBillStatus(id: number, status: FinanceBillSta
 
     return updated;
   }
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const start = `${month}-01`;
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return { month, start, end };
+}
+
+export async function getFinanceDashboard(month?: string) {
+  try {
+    return await request<FinanceDashboard>(`/finance/dashboard${month ? `?month=${month}` : ""}`);
+  } catch {
+    const entries = readLocalEntries();
+    const bills = readLocalBills();
+    const { month: currentMonth, start, end } = currentMonthRange();
+    const selectedMonth = month && /^\d{4}-\d{2}$/.test(month) ? month : currentMonth;
+    const isInMonth = (date: string) => date >= `${selectedMonth}-01` && date <= end;
+    const paidRevenue = entries
+      .filter((item) => item.type === "REVENUE" && ["Recebido", "Pago"].includes(item.status))
+      .reduce((sum, item) => sum + item.amount, 0);
+    const paidExpense = entries
+      .filter((item) => item.type === "EXPENSE" && item.status === "Pago")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const monthRevenue = entries.filter((item) => item.type === "REVENUE" && isInMonth(item.reference_date)).reduce((sum, item) => sum + item.amount, 0);
+    const monthExpense = entries.filter((item) => item.type === "EXPENSE" && isInMonth(item.reference_date)).reduce((sum, item) => sum + item.amount, 0);
+    const delinquencyAmount = bills
+      .filter((bill) => bill.status === "OVERDUE" || (bill.status === "PENDING" && bill.due_date < new Date().toISOString().slice(0, 10)))
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    const openEntries = entries.filter((item) => !["Recebido", "Pago", "Cancelado"].includes(item.status));
+    return {
+      month: selectedMonth,
+      periodStart: start,
+      periodEnd: end,
+      balance: paidRevenue - paidExpense,
+      monthlyRevenue: monthRevenue,
+      monthlyExpense: monthExpense,
+      delinquencyAmount,
+      openAccountsCount: openEntries.length,
+      openAccountsAmount: openEntries.reduce((sum, item) => sum + item.amount, 0),
+    };
+  }
+}
+
+export async function getFinanceDelinquency() {
+  try {
+    return await request<FinanceDelinquency>("/finance/delinquency");
+  } catch {
+    const today = new Date().toISOString().slice(0, 10);
+    const units = readLocalBills()
+      .filter((bill) => bill.status === "OVERDUE" || (bill.status === "PENDING" && bill.due_date < today))
+      .map((bill) => {
+        const days = Math.max(0, Math.ceil((new Date(`${today}T00:00:00`).getTime() - new Date(`${bill.due_date}T00:00:00`).getTime()) / 86400000));
+        return { ...bill, days_overdue: days };
+      });
+    return {
+      totalAmount: units.reduce((sum, item) => sum + item.amount, 0),
+      totalUnits: units.length,
+      units,
+    };
+  }
+}
+
+export async function getFinanceCashFlow(filters?: { from?: string; to?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  try {
+    return await request<FinanceCashFlow>(`/finance/cash-flow${params.toString() ? `?${params.toString()}` : ""}`);
+  } catch {
+    const entries = readLocalEntries();
+    const bucket = new Map<string, FinanceCashFlowPoint>();
+    for (const entry of entries) {
+      const period = entry.reference_date.slice(0, 7);
+      const current = bucket.get(period) ?? { period, revenues: 0, expenses: 0, balance: 0 };
+      if (entry.type === "REVENUE") current.revenues += entry.amount;
+      if (entry.type === "EXPENSE") current.expenses += entry.amount;
+      current.balance = current.revenues - current.expenses;
+      bucket.set(period, current);
+    }
+    const points = Array.from(bucket.values()).sort((a, b) => a.period.localeCompare(b.period));
+    return { from: filters?.from ?? "", to: filters?.to ?? "", points };
+  }
+}
+
+export async function getFinanceSummaryReport(filters?: { from?: string; to?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  try {
+    return await request<FinanceReportSummary>(`/finance/reports/summary${params.toString() ? `?${params.toString()}` : ""}`);
+  } catch {
+    const entries = readLocalEntries();
+    const byCategory = new Map<string, FinanceCategorySummary>();
+    for (const entry of entries) {
+      const key = `${entry.type}:${entry.category}`;
+      const current = byCategory.get(key) ?? { category: entry.category, type: entry.type, total: 0 };
+      current.total += entry.amount;
+      byCategory.set(key, current);
+    }
+    return { from: filters?.from ?? "", to: filters?.to ?? "", byCategory: Array.from(byCategory.values()) };
+  }
+}
+
+export async function generateRecurringEntries(month?: string) {
+  return request<{ month: string; generatedCount: number; entries: FinanceEntry[] }>("/finance/recurring-rules/generate-all", {
+    method: "POST",
+    body: JSON.stringify({ month }),
+  });
+}
+
+export async function createRecurringRule(payload: {
+  name: string;
+  type: FinanceEntryType;
+  descriptionTemplate: string;
+  amount: number;
+  category: string;
+  paymentMethod: string;
+  counterparty: string;
+  unit?: string | null;
+  resident?: string | null;
+  dayReference: number;
+  dayDue?: number | null;
+  statusOnCreate: string;
+  active?: boolean;
+}) {
+  return request("/finance/recurring-rules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
