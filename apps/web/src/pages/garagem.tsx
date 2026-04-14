@@ -29,6 +29,8 @@ import type {
 const inputClass = "h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100";
 const modalShell = "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6";
 const modalPanel = "max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl";
+const plateInputPattern = "([A-Za-z]{3}-?[0-9]{4}|[A-Za-z]{3}-?[0-9][A-Za-z][0-9]{2})";
+const plateInputTitle = "Use formato AAA1234 ou AAA1A23 (com ou sem hifen).";
 
 type Filters = { tower: string; type: GarageSpotType | "TODOS"; status: GarageSpotStatus | "TODOS"; search: string };
 
@@ -87,6 +89,17 @@ function labelToApartment(apartmentId: string | null, options: BuildingApartment
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   return new Date(aStart).getTime() < new Date(bEnd).getTime() && new Date(bStart).getTime() < new Date(aEnd).getTime();
 }
+
+function normalizePlate(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "").replace(/-/g, "");
+}
+
+function isValidBrazilianPlate(value: string) {
+  const plate = normalizePlate(value);
+  const oldPattern = /^[A-Z]{3}[0-9]{4}$/; // AAA1234
+  const mercosulPattern = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/; // AAA1A23
+  return oldPattern.test(plate) || mercosulPattern.test(plate);
+}
 export default function GaragemPage() {
   const [apartmentOptions, setApartmentOptions] = useState<BuildingApartmentOption[]>([]);
   const [state, setState] = useState<GarageState | null>(null);
@@ -98,6 +111,7 @@ export default function GaragemPage() {
   const [showSpotModal, setShowSpotModal] = useState(false);
   const [showWaitModal, setShowWaitModal] = useState(false);
   const [showReserveModal, setShowReserveModal] = useState(false);
+  const [reservationStatusFilter, setReservationStatusFilter] = useState<TemporaryReservationStatus | "TODAS">("TODAS");
   const [openZone, setOpenZone] = useState<string | null>(null);
   const [zoneInitialized, setZoneInitialized] = useState(false);
 
@@ -158,6 +172,12 @@ export default function GaragemPage() {
     });
   }, [filters, state]);
 
+  const filteredReservations = useMemo(() => {
+    if (!state) return [];
+    if (reservationStatusFilter === "TODAS") return state.reservations;
+    return state.reservations.filter((reservation) => reservation.status === reservationStatusFilter);
+  }, [state, reservationStatusFilter]);
+
   const groupedSpots = useMemo(() => {
     return filteredSpots.reduce<Record<string, GarageSpot[]>>((acc, spot) => {
       const key = `${spot.tower || "Sem torre"} · ${spot.level || "Setor"}`;
@@ -206,6 +226,7 @@ export default function GaragemPage() {
     if (!next.tower.trim()) return "Informe torre ou bloco.";
     if (!next.level.trim()) return "Informe o nivel (ex.: Subsolo 1).";
     if ((next.status === "OCUPADA" || next.status === "RESERVADA") && !next.vehiclePlate) return "Preencha a placa do veiculo.";
+    if (next.vehiclePlate && !isValidBrazilianPlate(next.vehiclePlate)) return "Placa invalida. Use formato AAA1234 ou AAA1A23.";
     const duplicatedCode = state.spots.find((spot) => spot.code === next.code && spot.id !== next.id);
     if (duplicatedCode) return "Ja existe uma vaga com esse codigo.";
     if (next.type === "FIXA" && next.apartmentId) {
@@ -248,10 +269,11 @@ export default function GaragemPage() {
   function addToWaitList() {
     if (!state) return;
     if (!waitForm.residentName.trim() || !waitForm.vehiclePlate.trim()) return alert("Informe morador e placa.");
+    if (!isValidBrazilianPlate(waitForm.vehiclePlate)) return alert("Placa invalida. Use formato AAA1234 ou AAA1A23.");
     const entry: WaitingListEntry = {
       ...waitForm,
       id: `wait-${Date.now()}`,
-      vehiclePlate: waitForm.vehiclePlate.toUpperCase(),
+      vehiclePlate: normalizePlate(waitForm.vehiclePlate),
       requestedAt: new Date().toISOString(),
       status: "PENDENTE",
     };
@@ -310,6 +332,7 @@ export default function GaragemPage() {
   function handleCreateReservation() {
     if (!state) return;
     if (!reservationForm.visitorName.trim() || !reservationForm.plate.trim() || !reservationForm.startAt || !reservationForm.endAt) return alert("Preencha nome, placa e periodo.");
+    if (!isValidBrazilianPlate(reservationForm.plate)) return alert("Placa invalida. Use formato AAA1234 ou AAA1A23.");
     const overlapping = state.reservations.find(
       (res) => res.spotId && res.spotId === reservationForm.spotId && res.status !== "CANCELADA" && overlaps(reservationForm.startAt, reservationForm.endAt, res.startAt, res.endAt)
     );
@@ -318,7 +341,7 @@ export default function GaragemPage() {
     const next: TemporaryReservation = {
       ...reservationForm,
       id: reservationForm.id || `res-${Date.now()}`,
-      plate: reservationForm.plate.toUpperCase(),
+      plate: normalizePlate(reservationForm.plate),
       status: reservationForm.requiresApproval ? "PENDENTE" : "ATIVA",
     };
 
@@ -339,6 +362,30 @@ export default function GaragemPage() {
     const spot = state?.spots.find((item) => item.id === spotId);
     if (!spot) return;
     setReservationForm((current) => ({ ...current, spotId, spotCode: spot.code }));
+  }
+
+  function approveReservation(reservationId: string) {
+    setState((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        reservations: current.reservations.map((reservation) =>
+          reservation.id === reservationId ? { ...reservation, status: "ATIVA" as TemporaryReservationStatus } : reservation,
+        ),
+      };
+    });
+  }
+
+  function cancelReservation(reservationId: string) {
+    setState((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        reservations: current.reservations.map((reservation) =>
+          reservation.id === reservationId ? { ...reservation, status: "CANCELADA" as TemporaryReservationStatus } : reservation,
+        ),
+      };
+    });
   }
 
   const waitlistBadge = state.waitlist.filter((item) => item.status === "PENDENTE").length;
@@ -450,19 +497,31 @@ export default function GaragemPage() {
             <p className="mt-1 text-sm text-slate-500">Controle sazonal, limite de tempo e liberacao automatica.</p>
             <div className="mt-3 flex items-center gap-2">
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{state.reservations.filter((res) => res.status === "ATIVA").length} ativas</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{state.reservations.filter((res) => res.status === "PENDENTE").length} pendentes</span>
+              <select
+                value={reservationStatusFilter}
+                onChange={(e) => setReservationStatusFilter(e.target.value as TemporaryReservationStatus | "TODAS")}
+                className="h-9 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              >
+                <option value="TODAS">Todas</option>
+                <option value="PENDENTE">Pendentes</option>
+                <option value="ATIVA">Ativas</option>
+                <option value="VENCIDA">Vencidas</option>
+                <option value="CANCELADA">Canceladas</option>
+              </select>
               <button type="button" onClick={() => setShowReserveModal(true)} className="rounded-2xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                 Nova reserva
               </button>
             </div>
 
             <div className="mt-4 grid gap-3">
-              {state.reservations.length === 0 ? (
+              {filteredReservations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Nenhuma reserva criada.</div>
               ) : (
-                state.reservations.map((res) => {
+                filteredReservations.map((res) => {
                   const expired = res.status === "VENCIDA";
                   return (
-                    <div key={res.id} className={`grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1fr_auto_auto] md:items-center ${expired ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
+                    <div key={res.id} className={`grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center ${expired ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
                       <div className="min-w-0">
                         <p className="m-0 text-sm font-semibold text-slate-900">{res.visitorName} · {res.plate}</p>
                         <p className="text-xs text-slate-500">{res.apartmentLabel || "Vinculo nao informado"}</p>
@@ -482,6 +541,34 @@ export default function GaragemPage() {
                       >
                         Editar
                       </button>
+                      <div className="flex items-center gap-2 md:justify-end">
+                        {res.status === "PENDENTE" ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => approveReservation(res.id)}
+                              className="rounded-2xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                            >
+                              Aprovar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => cancelReservation(res.id)}
+                              className="rounded-2xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : res.status === "ATIVA" ? (
+                          <button
+                            type="button"
+                            onClick={() => cancelReservation(res.id)}
+                            className="rounded-2xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                          >
+                            Cancelar
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })
@@ -632,7 +719,14 @@ export default function GaragemPage() {
             </select>
             <input value={waitForm.residentName} onChange={(e) => setWaitForm((cur) => ({ ...cur, residentName: e.target.value }))} placeholder="Nome do morador" className={inputClass} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <input value={waitForm.vehiclePlate} onChange={(e) => setWaitForm((cur) => ({ ...cur, vehiclePlate: e.target.value }))} placeholder="Placa" className={inputClass} />
+              <input
+                value={waitForm.vehiclePlate}
+                onChange={(e) => setWaitForm((cur) => ({ ...cur, vehiclePlate: e.target.value.toUpperCase() }))}
+                placeholder="Placa"
+                className={inputClass}
+                pattern={plateInputPattern}
+                title={plateInputTitle}
+              />
               <input value={waitForm.vehicleModel} onChange={(e) => setWaitForm((cur) => ({ ...cur, vehicleModel: e.target.value }))} placeholder="Modelo (opcional)" className={inputClass} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -667,7 +761,14 @@ export default function GaragemPage() {
         <Modal onClose={() => setShowReserveModal(false)} title="Nova reserva" icon={<CalendarClock size={16} />}>
           <div className="space-y-3">
             <input value={reservationForm.visitorName} onChange={(e) => setReservationForm((cur) => ({ ...cur, visitorName: e.target.value }))} placeholder="Visitante ou servico" className={inputClass} />
-            <input value={reservationForm.plate} onChange={(e) => setReservationForm((cur) => ({ ...cur, plate: e.target.value }))} placeholder="Placa" className={inputClass} />
+            <input
+              value={reservationForm.plate}
+              onChange={(e) => setReservationForm((cur) => ({ ...cur, plate: e.target.value.toUpperCase() }))}
+              placeholder="Placa"
+              className={inputClass}
+              pattern={plateInputPattern}
+              title={plateInputTitle}
+            />
             <select value={reservationForm.apartmentId ?? ""} onChange={(e) => handleReservationApartment(e.target.value)} className={inputClass}>
               <option value="">Vincular apartamento</option>
               {apartmentOptions.map((apt) => (
@@ -744,7 +845,14 @@ export default function GaragemPage() {
             </select>
             <div className="grid gap-3 sm:grid-cols-2">
               <input value={spotForm.residentName ?? ""} onChange={(e) => setSpotForm((c) => ({ ...c, residentName: e.target.value }))} placeholder="Morador responsavel" className={inputClass} />
-              <input value={spotForm.vehiclePlate ?? ""} onChange={(e) => setSpotForm((c) => ({ ...c, vehiclePlate: e.target.value.toUpperCase() }))} placeholder="Placa" className={inputClass} />
+              <input
+                value={spotForm.vehiclePlate ?? ""}
+                onChange={(e) => setSpotForm((c) => ({ ...c, vehiclePlate: e.target.value.toUpperCase() }))}
+                placeholder="Placa"
+                className={inputClass}
+                pattern={plateInputPattern}
+                title={plateInputTitle}
+              />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <input value={spotForm.vehicleModel ?? ""} onChange={(e) => setSpotForm((c) => ({ ...c, vehicleModel: e.target.value }))} placeholder="Modelo do veiculo" className={inputClass} />
