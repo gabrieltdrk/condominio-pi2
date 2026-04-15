@@ -332,6 +332,36 @@ function writeLocalBills(bills: FinanceBill[]) {
   window.localStorage.setItem(BILL_STORAGE_KEY, JSON.stringify(bills));
 }
 
+function mergeFinanceEntries(remote: FinanceEntry[], local: FinanceEntry[]) {
+  const merged = new Map<string, FinanceEntry>();
+
+  for (const entry of [...remote, ...local]) {
+    const key = entry.identifier || String(entry.id);
+    if (!merged.has(key)) {
+      merged.set(key, entry);
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+}
+
+function mergeFinanceBills(remote: FinanceBill[], local: FinanceBill[]) {
+  const merged = new Map<string, FinanceBill>();
+
+  for (const bill of [...remote, ...local]) {
+    const key = bill.bill_code || String(bill.id);
+    if (!merged.has(key)) {
+      merged.set(key, bill);
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const byDueDate = (a.due_date ?? "").localeCompare(b.due_date ?? "");
+    if (byDueDate !== 0) return byDueDate;
+    return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+  });
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -397,8 +427,9 @@ export async function listFinanceEntries() {
   try {
     const entries = await request<FinanceEntry[]>("/finance/entries");
     const normalized = entries.map(mapEntry);
-    writeLocalEntries(normalized);
-    return normalized;
+    const merged = mergeFinanceEntries(normalized, readLocalEntries());
+    writeLocalEntries(merged);
+    return merged;
   } catch {
     return readLocalEntries();
   }
@@ -460,8 +491,15 @@ export async function listFinanceBills(filters?: {
     const query = params.toString();
     const bills = await request<FinanceBill[]>(`/finance/bills${query ? `?${query}` : ""}`);
     const normalized = bills.map(mapBill);
-    writeLocalBills(normalized);
-    return normalized;
+    const merged = mergeFinanceBills(normalized, readLocalBills());
+    writeLocalBills(merged);
+    return merged.filter((bill) => {
+      if (filters?.resident && !bill.resident.toLowerCase().includes(filters.resident.toLowerCase())) return false;
+      if (filters?.residentEmail && bill.resident_email !== filters.residentEmail) return false;
+      if (filters?.unit && !bill.unit.toLowerCase().includes(filters.unit.toLowerCase())) return false;
+      if (filters?.status && bill.status !== filters.status) return false;
+      return true;
+    });
   } catch {
     const bills = readLocalBills();
     return bills.filter((bill) => {

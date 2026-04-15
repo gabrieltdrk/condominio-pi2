@@ -5,13 +5,20 @@ import {
   CalendarClock,
   CheckCircle2,
   Copy,
+  Download,
+  Droplets,
   FileBarChart2,
+  FileText,
   Landmark,
   PlusCircle,
   Printer,
   Receipt,
+  ShieldCheck,
+  Users,
   Wallet,
+  Wrench,
   X,
+  Zap,
 } from "lucide-react";
 import {
   Area,
@@ -26,6 +33,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { getUser } from "../features/auth/services/auth";
 import AppLayout from "../features/layout/components/app-layout";
 import {
   createFinanceBill,
@@ -38,6 +46,7 @@ import {
   type FinanceBillStatus,
   type FinanceEntry,
 } from "../features/financeiro/services/financeiro";
+import { supabase } from "../lib/supabase";
 import { fetchBuilding, getMockBuilding, type Floor } from "../features/predio/services/predio";
 
 type RevenueCategory = "Taxa condominial" | "Multa" | "Juros por atraso" | "Aluguel areas comuns";
@@ -47,6 +56,27 @@ type ExpenseStatus = "Pago" | "Pendente" | "Em negociacao";
 type FinanceModal = "revenue" | "expense" | "bill" | null;
 type MonthlyPoint = { month: string; receitas: number; despesas: number; saldo: number };
 type UnitOption = { value: string; label: string; resident: string; email: string };
+type AccountabilityReport = {
+  key: string;
+  label: string;
+  receitas: number;
+  despesas: number;
+  saldo: number;
+  highlights: FinanceEntry[];
+};
+type LocalMockAssignment = {
+  userId: string | null;
+  resident: {
+    id?: string;
+    name?: string;
+    email?: string;
+  } | null;
+};
+type ResidentUnitDescriptor = {
+  full: string;
+  tower: string;
+  apartment: string;
+};
 
 const revenueCategories: RevenueCategory[] = ["Taxa condominial", "Multa", "Juros por atraso", "Aluguel areas comuns"];
 const expenseCategories: ExpenseCategory[] = ["Funcionarios", "Energia", "Agua", "Manutencao", "Limpeza", "Seguranca", "Outros"];
@@ -56,6 +86,15 @@ const inputClass =
 const fieldLabelClass = "grid gap-2 text-sm font-medium text-slate-700";
 const panelClass =
   "rounded-[28px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] backdrop-blur";
+const expenseCategoryMeta = {
+  Funcionarios: { label: "Pessoal", color: "#7c3aed", tone: "border-violet-200 bg-violet-50 text-violet-700", icon: Users },
+  Energia: { label: "Luz", color: "#f59e0b", tone: "border-amber-200 bg-amber-50 text-amber-700", icon: Zap },
+  Agua: { label: "Agua", color: "#06b6d4", tone: "border-cyan-200 bg-cyan-50 text-cyan-700", icon: Droplets },
+  Manutencao: { label: "Manutencao", color: "#10b981", tone: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: Wrench },
+  Limpeza: { label: "Limpeza", color: "#6366f1", tone: "border-indigo-200 bg-indigo-50 text-indigo-700", icon: ShieldCheck },
+  Seguranca: { label: "Seguranca", color: "#ef4444", tone: "border-rose-200 bg-rose-50 text-rose-700", icon: ShieldCheck },
+  Outros: { label: "Outros", color: "#64748b", tone: "border-slate-200 bg-slate-100 text-slate-700", icon: Building2 },
+} as const;
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -78,6 +117,65 @@ function getMonthKey(value: string) {
 function formatMonthLabel(key: string) {
   const [year, month] = key.split("-").map(Number);
   return monthFormatter.format(new Date(year, month - 1, 1));
+}
+
+function formatMonthLongLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeUnit(value: string | null | undefined) {
+  return normalizeText(value).replace(/[^a-z0-9]/g, "");
+}
+
+function parseUnitDescriptor(value: string | null | undefined): ResidentUnitDescriptor {
+  const raw = normalizeText(value);
+  const apartmentMatch = raw.match(/ap\s*([a-z0-9-]+)/) ?? raw.match(/\b(\d{2,4}[a-z]?)\b/);
+  const apartment = apartmentMatch?.[1] ?? "";
+  const towerMatch = raw.match(/torre\s*([a-z0-9]+)/);
+  const tower = towerMatch?.[1] ?? "";
+
+  return {
+    full: normalizeUnit(value),
+    tower,
+    apartment: apartment.replace(/[^a-z0-9-]/g, ""),
+  };
+}
+
+function billMatchesResidentUnit(billUnit: string | null | undefined, residentUnits: ResidentUnitDescriptor[]) {
+  const billDescriptor = parseUnitDescriptor(billUnit);
+  if (!billDescriptor.full) return false;
+
+  return residentUnits.some((unit) => {
+    if (unit.full && unit.full === billDescriptor.full) return true;
+    if (unit.full && billDescriptor.full.includes(unit.full)) return true;
+    if (unit.full && unit.full.includes(billDescriptor.full)) return true;
+
+    const sameApartment = !!unit.apartment && unit.apartment === billDescriptor.apartment;
+    const towerCompatible = !unit.tower || !billDescriptor.tower || unit.tower === billDescriptor.tower;
+
+    return sameApartment && towerCompatible;
+  });
+}
+
+function readLocalMockAssignments(): Record<string, LocalMockAssignment> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem("predio:assignments");
+    return raw ? (JSON.parse(raw) as Record<string, LocalMockAssignment>) : {};
+  } catch {
+    return {};
+  }
 }
 
 function getUnitOptions(floors: Floor[]): UnitOption[] {
@@ -172,10 +270,142 @@ function openBillPrintView(bill: FinanceBill) {
   win.document.close();
 }
 
+function buildPixCode(bill: FinanceBill) {
+  return `PIX|OMNILAR|${bill.bill_code}|${bill.amount.toFixed(2)}|${bill.due_date}`;
+}
+
+function openReceiptPrintView(bill: FinanceBill) {
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+
+  win.document.write(`<!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Recibo ${bill.bill_code}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 32px; color: #0f172a; }
+          .card { border: 1px solid #cbd5e1; border-radius: 20px; padding: 24px; }
+          .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #ecfdf5; border: 1px solid #bbf7d0; font-size: 12px; font-weight: bold; color: #047857; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+          .label { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .value { font-size: 16px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="pill">Recibo de quitacao</div>
+          <h1>${bill.bill_code}</h1>
+          <p>Comprovante interno de pagamento da taxa condominial.</p>
+          <div class="grid">
+            <div><div class="label">Unidade</div><div class="value">${bill.unit}</div></div>
+            <div><div class="label">Morador</div><div class="value">${bill.resident}</div></div>
+            <div><div class="label">Competencia</div><div class="value">${formatDate(bill.competence_date)}</div></div>
+            <div><div class="label">Vencimento</div><div class="value">${formatDate(bill.due_date)}</div></div>
+            <div><div class="label">Valor pago</div><div class="value">${formatCurrency(bill.amount)}</div></div>
+            <div><div class="label">Baixa</div><div class="value">${bill.paid_at ? formatDate(bill.paid_at) : "Aguardando compensacao"}</div></div>
+          </div>
+        </div>
+        <script>window.print()</script>
+      </body>
+    </html>`);
+  win.document.close();
+}
+
+function openAccountabilityPrintView(report: AccountabilityReport) {
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+
+  const highlightLines = report.highlights
+    .map((item) => `<li>${item.description} - ${formatCurrency(item.amount)}</li>`)
+    .join("");
+
+  win.document.write(`<!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Balancete ${report.label}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 32px; color: #0f172a; }
+          .card { border: 1px solid #cbd5e1; border-radius: 20px; padding: 24px; }
+          .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #eef2ff; border: 1px solid #c7d2fe; font-size: 12px; font-weight: bold; color: #4338ca; }
+          .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+          .label { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .value { font-size: 16px; font-weight: bold; }
+          ul { margin-top: 20px; padding-left: 20px; }
+          li { margin-bottom: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="pill">Prestacao de contas</div>
+          <h1>${report.label}</h1>
+          <p>Resumo financeiro agregado do condominio para consulta dos moradores.</p>
+          <div class="grid">
+            <div><div class="label">Receitas</div><div class="value">${formatCurrency(report.receitas)}</div></div>
+            <div><div class="label">Despesas</div><div class="value">${formatCurrency(report.despesas)}</div></div>
+            <div><div class="label">Saldo</div><div class="value">${formatCurrency(report.saldo)}</div></div>
+          </div>
+          <h2 style="margin-top: 24px;">Principais despesas</h2>
+          <ul>${highlightLines || "<li>Sem despesas registradas no periodo.</li>"}</ul>
+        </div>
+        <script>window.print()</script>
+      </body>
+    </html>`);
+  win.document.close();
+}
+
+function openInvoicesPrintView(report: AccountabilityReport) {
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+
+  const blocks = report.highlights
+    .map(
+      (item) => `
+        <div class="invoice">
+          <div class="label">Fornecedor / descricao</div>
+          <div class="value">${item.description}</div>
+          <div class="label" style="margin-top: 12px;">Categoria</div>
+          <div class="value">${item.category}</div>
+          <div class="label" style="margin-top: 12px;">Valor</div>
+          <div class="value">${formatCurrency(item.amount)}</div>
+          <div class="label" style="margin-top: 12px;">Documento</div>
+          <div class="value">${item.document_name ?? "NF digitalizada pendente"}</div>
+        </div>`,
+    )
+    .join("");
+
+  win.document.write(`<!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Notas ${report.label}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 32px; color: #0f172a; }
+          .invoice { border: 1px solid #cbd5e1; border-radius: 20px; padding: 20px; margin-bottom: 16px; }
+          .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; font-size: 12px; font-weight: bold; color: #1d4ed8; }
+          .label { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+          .value { font-size: 16px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="pill">Notas fiscais principais</div>
+        <h1>${report.label}</h1>
+        <p>Consulta agregada das maiores despesas do periodo para transparencia do condominio.</p>
+        ${blocks || "<div class='invoice'><div class='value'>Nenhuma nota principal registrada no periodo.</div></div>"}
+        <script>window.print()</script>
+      </body>
+    </html>`);
+  win.document.close();
+}
+
 export default function FinanceiroPage() {
+  const user = getUser();
+  const isResident = user?.role === "MORADOR";
   const [building, setBuilding] = useState<Floor[]>(() => getMockBuilding());
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [bills, setBills] = useState<FinanceBill[]>([]);
+  const [residentOwnedUnits, setResidentOwnedUnits] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
@@ -254,6 +484,39 @@ export default function FinanceiroPage() {
     void loadData();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadResidentUnits() {
+      if (!isResident || !user?.id) {
+        setResidentOwnedUnits([]);
+        return;
+      }
+
+      const result = await supabase
+        .from("condo_apartments")
+        .select("tower, number")
+        .eq("resident_id", user.id);
+
+      if (!active) return;
+
+      if (result.error) {
+        setResidentOwnedUnits([]);
+        return;
+      }
+
+      setResidentOwnedUnits(
+        (result.data ?? []).map((row) => normalizeUnit(`${row.tower} - Ap ${row.number}`)),
+      );
+    }
+
+    void loadResidentUnits();
+
+    return () => {
+      active = false;
+    };
+  }, [isResident, user?.id]);
+
   const unitOptions = useMemo(() => getUnitOptions(building), [building]);
   const selectedBill = useMemo(
     () => bills.find((bill) => bill.id === selectedBillId) ?? bills[0] ?? null,
@@ -328,6 +591,145 @@ export default function FinanceiroPage() {
       .sort((a, b) => safeDate(b.created_at).localeCompare(safeDate(a.created_at)))
       .slice(0, 8);
   }, [bills]);
+  const residentUnits = useMemo(() => {
+    const email = normalizeText(user?.email);
+    const name = normalizeText(user?.name);
+    const userId = user?.id ?? "";
+    const assignments = readLocalMockAssignments();
+    const unitsFromAssignments = building
+      .flatMap((floor) =>
+        floor.apartments
+          .filter((apartment) => {
+            const assignment = assignments[apartment.id];
+            if (!assignment) return false;
+
+            const matchesId = !!userId && assignment.userId === userId;
+            const matchesEmail = !!email && normalizeText(assignment.resident?.email) === email;
+            const matchesName = !!name && normalizeText(assignment.resident?.name) === name;
+            return matchesId || matchesEmail || matchesName;
+          })
+          .map((apartment) => `${floor.tower} - Ap ${apartment.number}`),
+      )
+      .map((unit) => parseUnitDescriptor(unit));
+
+    const unitsFromBuilding = building
+      .flatMap((floor) =>
+        floor.apartments
+          .filter((apartment) => {
+            const resident = apartment.resident;
+            if (!resident) return false;
+
+            const matchesId = !!userId && resident.id === userId;
+            const matchesEmail = !!email && normalizeText(resident.email) === email;
+            const matchesName = !!name && normalizeText(resident.name) === name;
+            return matchesId || matchesEmail || matchesName;
+          })
+          .map((apartment) => `${floor.tower} - Ap ${apartment.number}`),
+      )
+      .map((unit) => parseUnitDescriptor(unit));
+
+    return [...residentOwnedUnits.map((unit) => parseUnitDescriptor(unit)), ...unitsFromAssignments, ...unitsFromBuilding].filter(
+      (unit, index, list) => unit.full && list.findIndex((item) => item.full === unit.full) === index,
+    );
+  }, [building, residentOwnedUnits, user?.email, user?.id, user?.name]);
+  const residentBills = useMemo(() => {
+    const email = normalizeText(user?.email);
+    const name = normalizeText(user?.name);
+
+    return [...bills]
+      .filter((bill) => {
+        const matchesEmail = !!email && normalizeText(bill.resident_email) === email;
+        const matchesName = !!name && normalizeText(bill.resident) === name;
+        const matchesUnit = billMatchesResidentUnit(bill.unit, residentUnits);
+        return matchesEmail || matchesName || matchesUnit;
+      })
+      .sort((a, b) => b.competence_date.localeCompare(a.competence_date));
+  }, [bills, residentUnits, user?.email, user?.name]);
+  const nextResidentBill = useMemo(() => {
+    const priority: Record<FinanceBillStatus, number> = {
+      OVERDUE: 0,
+      PENDING: 1,
+      PAID: 2,
+      CANCELLED: 3,
+    };
+
+    return [...residentBills].sort((a, b) => {
+      const priorityDiff = priority[a.status] - priority[b.status];
+      if (priorityDiff !== 0) return priorityDiff;
+      return a.due_date.localeCompare(b.due_date);
+    })[0] ?? null;
+  }, [residentBills]);
+  const referenceMonthKey = useMemo(() => {
+    if (!expenses.length) return "";
+
+    const currentKey = getMonthKey(new Date().toISOString().slice(0, 10));
+    if (expenses.some((item) => getMonthKey(item.reference_date) === currentKey)) return currentKey;
+
+    return [...expenses]
+      .map((item) => getMonthKey(item.reference_date))
+      .sort((a, b) => b.localeCompare(a))[0] ?? "";
+  }, [expenses]);
+  const referenceMonthLabel = useMemo(
+    () => (referenceMonthKey ? formatMonthLongLabel(referenceMonthKey) : "sem dados recentes"),
+    [referenceMonthKey],
+  );
+  const residentExpenseBreakdown = useMemo(() => {
+    const grouped = new Map<ExpenseCategory, number>();
+
+    for (const item of expenses) {
+      if (getMonthKey(item.reference_date) !== referenceMonthKey) continue;
+      const category = expenseCategories.includes(item.category as ExpenseCategory)
+        ? (item.category as ExpenseCategory)
+        : "Outros";
+      grouped.set(category, (grouped.get(category) ?? 0) + item.amount);
+    }
+
+    return Array.from(grouped.entries())
+      .map(([category, value]) => ({
+        category,
+        value,
+        ...expenseCategoryMeta[category],
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenses, referenceMonthKey]);
+  const residentExpenseTotal = useMemo(
+    () => residentExpenseBreakdown.reduce((sum, item) => sum + item.value, 0),
+    [residentExpenseBreakdown],
+  );
+  const reserveFundAmount = useMemo(() => Math.max(balance, 0), [balance]);
+  const accountabilityReports = useMemo<AccountabilityReport[]>(() => {
+    const reportMap = new Map<string, AccountabilityReport>();
+
+    for (const item of entries) {
+      const key = getMonthKey(item.reference_date);
+      const current =
+        reportMap.get(key) ??
+        {
+          key,
+          label: formatMonthLongLabel(key),
+          receitas: 0,
+          despesas: 0,
+          saldo: 0,
+          highlights: [],
+        };
+
+      if (item.type === "REVENUE") current.receitas += item.amount;
+      if (item.type === "EXPENSE") {
+        current.despesas += item.amount;
+        current.highlights.push(item);
+      }
+      current.saldo = current.receitas - current.despesas;
+      reportMap.set(key, current);
+    }
+
+    return Array.from(reportMap.values())
+      .sort((a, b) => b.key.localeCompare(a.key))
+      .slice(0, 6)
+      .map((report) => ({
+        ...report,
+        highlights: [...report.highlights].sort((a, b) => b.amount - a.amount).slice(0, 3),
+      }));
+  }, [entries]);
 
   function validateRequiredRevenue() {
     const errors: Record<string, string> = {};
@@ -540,22 +942,355 @@ export default function FinanceiroPage() {
     }
   }
 
+  if (isResident) {
+    const nextBillStatus = nextResidentBill ? getBillStatusMeta(nextResidentBill.status) : null;
+
+    return (
+      <AppLayout title="Financeiro">
+        <div className="relative space-y-6">
+          <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[460px] bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.14),_transparent_30%),linear-gradient(180deg,_rgba(248,250,252,0.95),_rgba(248,250,252,0))]" />
+
+          {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
+          {actionMessage && <p className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">{actionMessage}</p>}
+          {loading && <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">Carregando financeiro...</p>}
+
+          {!loading && !error && (
+            <>
+              <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_360px]">
+                <div className={`${panelClass} overflow-hidden bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(67,56,202,0.92)_55%,_rgba(30,41,59,0.95))] text-white`}>
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="max-w-2xl">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-100">
+                        <Receipt size={13} />
+                        Meu proximo vencimento
+                      </div>
+                      <h2 className="mt-4 text-[clamp(1.6rem,2.4vw,2.2rem)] font-black tracking-[-0.04em] text-white">
+                        {nextResidentBill ? formatCurrency(nextResidentBill.amount) : "Sem cobrancas abertas"}
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-indigo-100/90">
+                        {nextResidentBill
+                          ? `Competencia ${formatDate(nextResidentBill.competence_date)} com vencimento em ${formatDate(nextResidentBill.due_date)}.`
+                          : "Quando a proxima taxa condominial for emitida, ela aparecera aqui com atalhos rapidos."}
+                      </p>
+                      {nextResidentBill && (
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${nextBillStatus?.className ?? "border-white/15 bg-white/10 text-white"}`}>
+                            {nextBillStatus?.label}
+                          </span>
+                          <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-50">
+                            {nextResidentBill.unit}
+                          </span>
+                          <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-50">
+                            {nextResidentBill.bill_code}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        disabled={!nextResidentBill}
+                        onClick={async () => {
+                          if (!nextResidentBill) return;
+                          await navigator.clipboard.writeText(buildPixCode(nextResidentBill));
+                          setActionMessage(`Codigo PIX de ${nextResidentBill.bill_code} copiado.`);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Copy size={16} />
+                        Copiar Codigo PIX
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!nextResidentBill}
+                        onClick={() => nextResidentBill && openBillPrintView(nextResidentBill)}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Download size={16} />
+                        Baixar Boleto PDF
+                      </button>
+                    </div>
+                  </div>
+
+                  {nextResidentBill && (
+                    <div className="mt-5 rounded-[24px] border border-white/10 bg-white/5 px-4 py-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-100">Codigo rapido</p>
+                      <p className="mt-2 break-all font-mono text-sm text-white/90">{buildPixCode(nextResidentBill)}</p>
+                    </div>
+                  )}
+                </div>
+
+                <aside className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8faff)]`}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                      <Landmark size={20} />
+                    </div>
+                    <div>
+                      <h3 className="m-0 text-base font-semibold text-slate-900">Fundo de Reserva / Obras</h3>
+                      <p className="mt-1 text-sm text-slate-500">Saldo agregado reservado para manutencoes e contingencias.</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-950 px-5 py-5 text-white">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200">Transparencia condominial</p>
+                    <p className="mt-3 text-3xl font-black tracking-[-0.04em]">{formatCurrency(reserveFundAmount)}</p>
+                    <p className="mt-2 text-sm text-slate-300">Reserva consolidada para maresia, pintura e manutenções preventivas.</p>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600">Maresia</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(reserveFundAmount * 0.58)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-700">Pintura</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(reserveFundAmount * 0.42)}</p>
+                    </div>
+                  </div>
+                </aside>
+              </section>
+
+              <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_360px]">
+                <div className={`${panelClass} bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(245,247,255,0.98))]`}>
+                  <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+                        <FileBarChart2 size={20} />
+                      </div>
+                      <div>
+                        <h3 className="m-0 text-base font-semibold text-slate-900">Para onde vai seu dinheiro</h3>
+                        <p className="mt-1 text-sm text-slate-500">Distribuicao das despesas do condominio em {referenceMonthLabel}.</p>
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Resumo agregado
+                    </span>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-center">
+                    <div className="h-[280px] rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.08),_transparent_34%),linear-gradient(180deg,_rgba(248,250,252,0.9),_rgba(255,255,255,1))] p-4">
+                      {residentExpenseBreakdown.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={residentExpenseBreakdown} dataKey="value" nameKey="label" innerRadius={62} outerRadius={90} paddingAngle={3}>
+                              {residentExpenseBreakdown.map((item) => (
+                                <Cell key={item.category} fill={item.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
+                          Nenhuma despesa consolidada disponivel para o periodo.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {residentExpenseBreakdown.map((item) => {
+                        const Icon = item.icon;
+                        const percentage = residentExpenseTotal > 0 ? Math.round((item.value / residentExpenseTotal) * 100) : 0;
+                        return (
+                          <div key={item.category} className="flex items-center justify-between rounded-[22px] border border-slate-100 bg-white px-4 py-3 shadow-sm">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${item.tone}`}>
+                                <Icon size={18} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-900">{item.label}</p>
+                                <p className="text-xs text-slate-500">{percentage}% do total do mes</p>
+                              </div>
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900">{formatCurrency(item.value)}</span>
+                          </div>
+                        );
+                      })}
+                      {residentExpenseBreakdown.length === 0 && (
+                        <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                          O grafico sera preenchido automaticamente quando houver lancamentos do mes.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <aside className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fafc)]`}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                      <CheckCircle2 size={20} />
+                    </div>
+                    <div>
+                      <h3 className="m-0 text-base font-semibold text-slate-900">Panorama pessoal</h3>
+                      <p className="mt-1 text-sm text-slate-500">Resumo rapido das suas cobrancas e pagamentos.</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Pagos</p>
+                      <p className="mt-1 text-2xl font-black tracking-[-0.04em] text-slate-900">
+                        {formatCurrency(residentBills.filter((bill) => bill.status === "PAID").reduce((sum, bill) => sum + bill.amount, 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Em aberto</p>
+                      <p className="mt-1 text-2xl font-black tracking-[-0.04em] text-slate-900">
+                        {formatCurrency(residentBills.filter((bill) => bill.status === "PENDING").reduce((sum, bill) => sum + bill.amount, 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Atrasado</p>
+                      <p className="mt-1 text-2xl font-black tracking-[-0.04em] text-slate-900">
+                        {formatCurrency(residentBills.filter((bill) => bill.status === "OVERDUE").reduce((sum, bill) => sum + bill.amount, 0))}
+                      </p>
+                    </div>
+                  </div>
+                </aside>
+              </section>
+
+              <section className={`${panelClass} overflow-hidden bg-[linear-gradient(180deg,_#ffffff,_#fbfdff)]`}>
+                <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                      <CalendarClock size={20} />
+                    </div>
+                    <div>
+                      <h3 className="m-0 text-base font-semibold text-slate-900">Meus Pagamentos</h3>
+                      <p className="mt-1 text-sm text-slate-500">Historico pessoal de boletos sem expor informacoes de outros moradores.</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {residentBills.length} registros
+                  </span>
+                </div>
+
+                <div className="mt-5 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-100">
+                    <thead>
+                      <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <th className="px-4 py-3">Mes de referencia</th>
+                        <th className="px-4 py-3">Valor</th>
+                        <th className="px-4 py-3">Vencimento</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3 text-right">Acoes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white/90">
+                      {residentBills.map((bill) => {
+                        const statusMeta = getBillStatusMeta(bill.status);
+                        return (
+                          <tr key={bill.id} className="transition hover:bg-slate-50/80">
+                            <td className="px-4 py-4 text-sm font-semibold text-slate-900">{formatMonthLongLabel(getMonthKey(bill.competence_date))}</td>
+                            <td className="px-4 py-4 text-sm text-slate-700">{formatCurrency(bill.amount)}</td>
+                            <td className="px-4 py-4 text-sm text-slate-700">{formatDate(bill.due_date)}</td>
+                            <td className="px-4 py-4">
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusMeta.className}`}>
+                                {statusMeta.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <button
+                                type="button"
+                                disabled={bill.status !== "PAID"}
+                                onClick={() => openReceiptPrintView(bill)}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <Download size={15} />
+                                Recibo
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {residentBills.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
+                            Nenhum boleto pessoal encontrado para este usuario.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div>
+                  <h3 className="m-0 text-base font-semibold text-slate-900">Prestacao de Contas</h3>
+                  <p className="mt-1 text-sm text-slate-500">Balancetes mensais e notas fiscais principais para consulta transparente do condominio.</p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {accountabilityReports.map((report) => (
+                    <article key={report.key} className={`${panelClass} bg-[linear-gradient(180deg,_#ffffff,_#f8fafc)]`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Balancete mensal</p>
+                          <h4 className="mt-2 text-lg font-semibold text-slate-900">{report.label}</h4>
+                        </div>
+                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">
+                          {report.highlights.length} notas
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receitas</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(report.receitas)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Despesas</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(report.despesas)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Saldo</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(report.saldo)}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openAccountabilityPrintView(report)}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                        >
+                          <FileText size={16} />
+                          Baixar Balancete PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openInvoicesPrintView(report)}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          <Receipt size={16} />
+                          Ver Notas Fiscais
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout title="Financeiro">
       <div className="relative space-y-6">
         <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.10),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.08),_transparent_30%),linear-gradient(180deg,_rgba(248,250,252,0.9),_rgba(248,250,252,0))]" />
 
-        <section className="rounded-[28px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
+        <section className="py-1">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                <Landmark size={13} />
+              <div className="inline-flex items-center gap-2.5 rounded-full border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">
+                <Landmark size={16} />
                 Central financeira
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-900">Caixa, cobrancas e boletos mockados</h2>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                A aba agora concentra lancamentos, cobranca condominial e emissao de boleto mockado com linha digitavel, status e segunda via interna.
-              </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -587,7 +1322,7 @@ export default function FinanceiroPage() {
                   setFormError("");
                   setActiveModal("expense");
                 }}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-500 bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:border-amber-600 hover:bg-amber-600"
               >
                 <PlusCircle size={16} />
                 Cadastrar despesa
@@ -604,24 +1339,53 @@ export default function FinanceiroPage() {
           <>
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {[
-                { title: "Saldo liquido", value: formatCurrency(balance), sub: "Recebido menos despesas pagas", icon: Wallet, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                { title: "Carteira em aberto", value: formatCurrency(openBillsAmount), sub: `${pendingBills.length + overdueBills.length} boletos aguardando baixa`, icon: Receipt, tone: "bg-amber-50 text-amber-700 border-amber-200" },
-                { title: "Inadimplencia", value: formatCurrency(delinquencyAmount), sub: `${overdueBills.length} boletos atrasados`, icon: AlertTriangle, tone: "bg-rose-50 text-rose-700 border-rose-200" },
-                { title: "Boletos pagos", value: formatCurrency(paidBills.reduce((sum, bill) => sum + bill.amount, 0)), sub: `${paidBills.length} cobrancas compensadas`, icon: CheckCircle2, tone: "bg-sky-50 text-sky-700 border-sky-200" },
+                {
+                  title: "Saldo liquido",
+                  value: formatCurrency(balance),
+                  sub: "Recebido menos despesas pagas",
+                  icon: Wallet,
+                  cardTone: "border-emerald-200 bg-[linear-gradient(180deg,_#f7fffb,_#eefcf5)]",
+                  iconTone: "text-emerald-700",
+                  badgeTone: "border-emerald-100 bg-white/80 text-slate-500",
+                },
+                {
+                  title: "Carteira em aberto",
+                  value: formatCurrency(openBillsAmount),
+                  sub: `${pendingBills.length + overdueBills.length} boletos aguardando baixa`,
+                  icon: Receipt,
+                  cardTone: "border-amber-200 bg-[linear-gradient(180deg,_#fffaf0,_#fff4dd)]",
+                  iconTone: "text-amber-700",
+                  badgeTone: "border-amber-100 bg-white/80 text-slate-500",
+                },
+                {
+                  title: "Inadimplencia",
+                  value: formatCurrency(delinquencyAmount),
+                  sub: `${overdueBills.length} boletos atrasados`,
+                  icon: AlertTriangle,
+                  cardTone: "border-rose-200 bg-[linear-gradient(180deg,_#fff7f8,_#ffecef)]",
+                  iconTone: "text-rose-700",
+                  badgeTone: "border-rose-100 bg-white/80 text-slate-500",
+                },
+                {
+                  title: "Boletos pagos",
+                  value: formatCurrency(paidBills.reduce((sum, bill) => sum + bill.amount, 0)),
+                  sub: `${paidBills.length} cobrancas compensadas`,
+                  icon: CheckCircle2,
+                  cardTone: "border-sky-200 bg-[linear-gradient(180deg,_#f7fbff,_#eaf5ff)]",
+                  iconTone: "text-sky-700",
+                  badgeTone: "border-sky-100 bg-white/80 text-slate-500",
+                },
               ].map((card) => {
                 const Icon = card.icon;
                 return (
-                  <div key={card.title} className={`${panelClass} border ${card.tone}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${card.tone}`}>
-                        <Icon size={20} />
+                  <div key={card.title} className={`${panelClass} p-4 ${card.cardTone}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/90 bg-white shadow-[0_10px_24px_-16px_rgba(15,23,42,0.45)] ${card.iconTone}`}>
+                        <Icon size={18} />
                       </div>
-                      <span className="rounded-full border border-white/80 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Financeiro
-                      </span>
+                      <p className="text-[2rem] font-black tracking-[-0.05em] leading-none text-slate-900">{card.value}</p>
                     </div>
-                    <p className="mt-4 text-2xl font-black tracking-[-0.04em] text-slate-900">{card.value}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">{card.title}</p>
+                    <p className="mt-3 text-base font-semibold text-slate-700">{card.title}</p>
                     <p className="mt-1 text-xs text-slate-500">{card.sub}</p>
                   </div>
                 );

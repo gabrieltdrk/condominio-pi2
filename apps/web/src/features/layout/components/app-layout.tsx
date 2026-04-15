@@ -52,7 +52,8 @@ const navLinks = [
   { label: "Manutenção", path: "/manutencao", icon: Waves },
 ];
 
-const adminPaths = new Set(["/financeiro", "/predio", "/usuarios"]);
+const adminSectionPaths = new Set(["/financeiro", "/predio", "/usuarios"]);
+const adminOnlyPaths = new Set(["/predio", "/usuarios"]);
 const gatekeeperPaths = new Set(["/garagem", "/visitantes", "/encomendas"]);
 
 function timeAgo(iso: string): string {
@@ -133,8 +134,10 @@ export default function AppLayout({ title, children }: { title: string; children
   const mainLinks =
     user?.role === "PORTEIRO"
       ? navLinks.filter((link) => gatekeeperPaths.has(link.path))
-      : navLinks.filter((link) => !adminPaths.has(link.path));
-  const adminLinks = user?.role === "ADMIN" ? navLinks.filter((link) => adminPaths.has(link.path)) : [];
+      : user?.role === "ADMIN"
+        ? navLinks.filter((link) => !adminSectionPaths.has(link.path))
+        : navLinks.filter((link) => !adminOnlyPaths.has(link.path));
+  const adminLinks = user?.role === "ADMIN" ? navLinks.filter((link) => adminSectionPaths.has(link.path)) : [];
 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
     const collapsed = mobile ? false : sidebarCollapsed;
