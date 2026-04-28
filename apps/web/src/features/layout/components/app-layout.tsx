@@ -52,7 +52,7 @@ const navLinks = [
   { label: "Manutenção", path: "/manutencao", icon: Waves },
 ];
 
-const adminPaths = new Set(["/financeiro", "/predio", "/usuarios"]);
+const adminPaths = new Set(["/predio", "/usuarios"]);
 const gatekeeperPaths = new Set(["/garagem", "/visitantes", "/encomendas"]);
 
 function timeAgo(iso: string): string {

@@ -95,7 +95,7 @@ export default function AppRoutes() {
         <Route
           path="/financeiro"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute allowedRoles={["ADMIN", "MORADOR"]}>
               <FinanceiroPage />
             </ProtectedRoute>
           }
