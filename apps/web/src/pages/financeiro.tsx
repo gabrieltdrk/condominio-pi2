@@ -26,7 +26,6 @@ import {
 import { getUser } from "../features/auth/services/auth";
 import { listUsers } from "../features/dashboard/services/users";
 import { fetchBuilding, getMockBuilding, listBuildingApartmentOptions, type Floor } from "../features/predio/services/predio";
-import { supabase } from "../lib/supabase";
 
 type ModalType = "entry" | "bill" | "recurring" | null;
 type UnitChoice = { unit: string; tower: string; resident: string; email: string; residentId?: string | null; apartmentId?: string | null };
@@ -156,34 +155,6 @@ async function loadUnitChoicesFromAssignments(): Promise<UnitChoice[]> {
       };
     })
     .sort((a, b) => a.unit.localeCompare(b.unit, "pt-BR", { numeric: true }));
-}
-
-function normalizeUnitKey(value: string | null | undefined) {
-  return (value ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-async function loadResidentApartmentsFromSessionUser(userId: string) {
-  const result = await supabase.from("condo_apartments").select("id, tower, number, resident_id").eq("resident_id", userId);
-  if (result.error) return [] as Array<{ id: string; tower: string; number: string }>;
-  return (result.data ?? []) as Array<{ id: string; tower: string; number: string }>;
-}
-
-async function loadResidentBillsDirectFromSupabase() {
-  const result = await supabase
-    .from("finance_bills")
-    .select("id, entry_id, bill_code, apartment_id, unit, resident, resident_id, resident_email, competence_date, issue_date, due_date, amount, instructions, status, digitable_line, barcode, pdf_url, paid_at, created_at, updated_at")
-    .order("due_date", { ascending: true })
-    .limit(500);
-  if (result.error) return [] as FinanceBill[];
-  return (result.data ?? []).map((row) => ({
-    ...(row as Omit<FinanceBill, "amount">),
-    amount: typeof row.amount === "number" ? row.amount : Number(row.amount ?? 0),
-  })) as FinanceBill[];
 }
 
 function csvEscape(value: string | number | null | undefined) {
@@ -428,50 +399,20 @@ export default function FinanceiroPage() {
     setError("");
     try {
       if (isResident) {
-        const apartments = user?.id ? await listBuildingApartmentOptions().catch(() => []) : [];
-        const apartmentsFromSession = user?.id ? await loadResidentApartmentsFromSessionUser(user.id).catch(() => []) : [];
-        const myApartmentIds = [
-          ...apartments.filter((apartment) => apartment.residentId === user?.id).map((apartment) => apartment.id),
-          ...apartmentsFromSession.map((apartment) => apartment.id),
-        ];
-        const myUnitKeys = new Set(
-          [
-            ...apartments
-            .filter((apartment) => apartment.residentId === user?.id)
-            .map((apartment) => ({ tower: apartment.tower, number: apartment.number })),
-            ...apartmentsFromSession.map((apartment) => ({ tower: apartment.tower, number: apartment.number })),
-          ].map((apartment) => normalizeUnitKey(`${apartment.tower} - Ap ${apartment.number}`)),
-        );
-        const myBillsByIdOrEmail = await listFinanceBills({
-          residentId: user?.id,
-          residentEmail: user?.email,
-          limit: 400,
-        });
-        const allBills = await listFinanceBills({ limit: 400 });
-        const myBillsByApartmentOrUnit =
-          myApartmentIds.length > 0 || myUnitKeys.size > 0
-            ? allBills.filter(
-                (bill) =>
-                  (!!bill.apartment_id && myApartmentIds.includes(bill.apartment_id)) ||
-                  myUnitKeys.has(normalizeUnitKey(bill.unit)),
-              )
-            : [];
-        const merged = [...myBillsByIdOrEmail, ...myBillsByApartmentOrUnit].filter(
-          (bill, index, array) => array.findIndex((item) => item.id === bill.id) === index,
-        );
-        if (merged.length === 0) {
-          const directBills = await loadResidentBillsDirectFromSupabase();
-          const byDirectMatch = directBills.filter(
-            (bill) =>
-              (!!user?.id && bill.resident_id === user.id) ||
-              (!!user?.email && (bill.resident_email ?? "").toLowerCase() === user.email.toLowerCase()) ||
-              (!!bill.apartment_id && myApartmentIds.includes(bill.apartment_id)) ||
-              myUnitKeys.has(normalizeUnitKey(bill.unit)),
-          );
-          setBills(byDirectMatch);
+        if (!user?.id) {
+          setBills([]);
           setLoading(false);
           return;
         }
+        const apartments = await listBuildingApartmentOptions().catch(() => []);
+        const myApartmentIds = apartments.filter((apartment) => apartment.residentId === user.id).map((apartment) => apartment.id);
+        const [byIdentity, ...byApartment] = await Promise.all([
+          listFinanceBills({ residentId: user.id, residentEmail: user.email, limit: 400 }).catch(() => []),
+          ...myApartmentIds.map((apartmentId) => listFinanceBills({ apartmentId, limit: 400 }).catch(() => [])),
+        ]);
+        const merged = [...byIdentity, ...byApartment.flat()].filter(
+          (bill, index, array) => array.findIndex((item) => item.id === bill.id) === index,
+        );
         setBills(merged);
         setLoading(false);
         return;
