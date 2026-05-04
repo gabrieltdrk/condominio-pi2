@@ -343,7 +343,12 @@ function mapEntry(row: FinanceEntry): FinanceEntry {
 }
 
 function mapBill(row: FinanceBill): FinanceBill {
-  return { ...row, amount: ensureNumber(row.amount) };
+  return {
+    ...row,
+    apartment_id: row.apartment_id ?? null,
+    resident_id: row.resident_id ?? null,
+    amount: ensureNumber(row.amount),
+  };
 }
 
 function readLocalEntries() {
@@ -408,6 +413,32 @@ function makeDigitableLine(seed: number, amount: number, dueDate: string) {
   return `${barcode.slice(0, 5)}.${barcode.slice(5, 10)} ${barcode.slice(10, 15)}.${barcode.slice(15, 21)} ${barcode.slice(21, 26)}.${barcode.slice(26, 32)} ${barcode.slice(32, 33)} ${barcode.slice(33, 47)}`.trim();
 }
 
+async function listFinanceEntriesFromSupabase(filters?: {
+  type?: FinanceEntryType;
+  status?: string;
+  category?: string;
+  unit?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  let query = supabase
+    .from("finance_entries")
+    .select("id, type, identifier, description, amount, reference_date, due_date, counterparty, unit, resident, category, payment_method, status, document_name, notes, created_at")
+    .order("reference_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (filters?.type) query = query.eq("type", filters.type);
+  if (filters?.status) query = query.ilike("status", `%${filters.status}%`);
+  if (filters?.category) query = query.ilike("category", `%${filters.category}%`);
+  if (filters?.unit) query = query.ilike("unit", `%${filters.unit}%`);
+  if (filters?.dateFrom) query = query.gte("reference_date", filters.dateFrom);
+  if (filters?.dateTo) query = query.lte("reference_date", filters.dateTo);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as FinanceEntry[]).map(mapEntry);
+}
+
 async function listFinanceBillsFromSupabase(filters?: {
   apartmentId?: string;
   residentId?: string;
@@ -417,13 +448,12 @@ async function listFinanceBillsFromSupabase(filters?: {
   status?: FinanceBillStatus;
   limit?: number;
 }) {
+  const selectColumns = "id, entry_id, bill_code, unit, resident, resident_email, competence_date, issue_date, due_date, amount, instructions, status, digitable_line, barcode, pdf_url, paid_at, created_at, updated_at";
   let query = supabase
     .from("finance_bills")
-    .select("id, entry_id, bill_code, apartment_id, unit, resident, resident_id, resident_email, competence_date, issue_date, due_date, amount, instructions, status, digitable_line, barcode, pdf_url, paid_at, created_at, updated_at")
+    .select(selectColumns)
     .order("due_date", { ascending: true });
 
-  if (filters?.apartmentId) query = query.eq("apartment_id", filters.apartmentId);
-  if (filters?.residentId) query = query.eq("resident_id", filters.residentId);
   if (filters?.resident) query = query.ilike("resident", `%${filters.resident}%`);
   if (filters?.residentEmail) query = query.ilike("resident_email", filters.residentEmail);
   if (filters?.unit) query = query.ilike("unit", `%${filters.unit}%`);
@@ -432,7 +462,20 @@ async function listFinanceBillsFromSupabase(filters?: {
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({ ...(row as Omit<FinanceBill, "amount">), amount: ensureNumber(row.amount) })) as FinanceBill[];
+  return (data ?? [])
+    .map((row) =>
+      mapBill({
+        ...(row as Omit<FinanceBill, "amount" | "apartment_id" | "resident_id">),
+        apartment_id: null,
+        resident_id: null,
+        amount: ensureNumber(row.amount),
+      }),
+    )
+    .filter((bill) => {
+      if (filters?.apartmentId && bill.apartment_id !== filters.apartmentId) return false;
+      if (filters?.residentId && bill.resident_id !== filters.residentId) return false;
+      return true;
+    });
 }
 
 async function createFinanceBillInSupabase(payload: CreateFinanceBillPayload) {
@@ -460,7 +503,6 @@ async function createFinanceBillInSupabase(payload: CreateFinanceBillPayload) {
       status: "Em aberto",
       document_name: `${billCode}.pdf`,
       notes: payload.instructions ?? null,
-      competence_month: competenceDate.slice(0, 7),
     } as never)
     .select("id")
     .single();
@@ -472,10 +514,8 @@ async function createFinanceBillInSupabase(payload: CreateFinanceBillPayload) {
     .insert({
       entry_id: entryInsert.data.id,
       bill_code: billCode,
-      apartment_id: payload.apartmentId ?? null,
       unit: payload.unit,
       resident: payload.resident,
-      resident_id: payload.residentId ?? null,
       resident_email: payload.residentEmail ?? null,
       competence_date: competenceDate,
       issue_date: issueDate,
@@ -487,11 +527,16 @@ async function createFinanceBillInSupabase(payload: CreateFinanceBillPayload) {
       barcode: makeBarcode(seed, payload.amount, dueDate),
       pdf_url: `/finance/bills/${billCode}/mock-pdf`,
     } as never)
-    .select("id, entry_id, bill_code, apartment_id, unit, resident, resident_id, resident_email, competence_date, issue_date, due_date, amount, instructions, status, digitable_line, barcode, pdf_url, paid_at, created_at, updated_at")
+    .select("id, entry_id, bill_code, unit, resident, resident_email, competence_date, issue_date, due_date, amount, instructions, status, digitable_line, barcode, pdf_url, paid_at, created_at, updated_at")
     .single();
 
   if (billInsert.error || !billInsert.data) throw new Error(billInsert.error?.message ?? "Erro ao criar boleto.");
-  return { ...(billInsert.data as Omit<FinanceBill, "amount">), amount: ensureNumber(billInsert.data.amount) } as FinanceBill;
+  return mapBill({
+    ...(billInsert.data as Omit<FinanceBill, "amount" | "apartment_id" | "resident_id">),
+    apartment_id: payload.apartmentId ?? null,
+    resident_id: payload.residentId ?? null,
+    amount: ensureNumber(billInsert.data.amount),
+  });
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -530,15 +575,21 @@ export async function listFinanceEntries(filters?: {
     writeLocalEntries(normalized);
     return normalized;
   } catch {
-    return readLocalEntries().filter((entry) => {
-      if (filters?.type && entry.type !== filters.type) return false;
-      if (filters?.status && !entry.status.toLowerCase().includes(filters.status.toLowerCase())) return false;
-      if (filters?.category && !entry.category.toLowerCase().includes(filters.category.toLowerCase())) return false;
-      if (filters?.unit && !(entry.unit ?? "").toLowerCase().includes(filters.unit.toLowerCase())) return false;
-      if (filters?.dateFrom && entry.reference_date < filters.dateFrom) return false;
-      if (filters?.dateTo && entry.reference_date > filters.dateTo) return false;
-      return true;
-    });
+    try {
+      const entries = await listFinanceEntriesFromSupabase(filters);
+      writeLocalEntries(entries);
+      return entries;
+    } catch {
+      return readLocalEntries().filter((entry) => {
+        if (filters?.type && entry.type !== filters.type) return false;
+        if (filters?.status && !entry.status.toLowerCase().includes(filters.status.toLowerCase())) return false;
+        if (filters?.category && !entry.category.toLowerCase().includes(filters.category.toLowerCase())) return false;
+        if (filters?.unit && !(entry.unit ?? "").toLowerCase().includes(filters.unit.toLowerCase())) return false;
+        if (filters?.dateFrom && entry.reference_date < filters.dateFrom) return false;
+        if (filters?.dateTo && entry.reference_date > filters.dateTo) return false;
+        return true;
+      });
+    }
   }
 }
 

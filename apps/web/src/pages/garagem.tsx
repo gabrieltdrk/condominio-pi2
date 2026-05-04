@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BadgeInfo,
+  BellRing,
   CalendarClock,
   CarFront,
   CheckCircle2,
@@ -13,10 +14,12 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { getUser } from "../features/auth/services/auth";
 import AppLayout from "../features/layout/components/app-layout";
 import { listBuildingApartmentOptions, type BuildingApartmentOption } from "../features/predio/services/predio";
 import { buildSeedState } from "../features/garage/mock";
 import { appendHistory, readGarageState, saveGarageState } from "../features/garage/storage";
+import { getSupabaseAdmin, supabase } from "../lib/supabase";
 import type {
   GarageSpot,
   GarageSpotStatus,
@@ -33,6 +36,8 @@ const plateInputPattern = "([A-Za-z]{3}-?[0-9]{4}|[A-Za-z]{3}-?[0-9][A-Za-z][0-9
 const plateInputTitle = "Use formato AAA1234 ou AAA1A23 (com ou sem hifen).";
 
 type Filters = { tower: string; type: GarageSpotType | "TODOS"; status: GarageSpotStatus | "TODOS"; search: string };
+type GarageMapMode = "CORREDOR" | "APERTO";
+const MOVE_REQUEST_STORAGE_KEY = "garage:move-requests:v1";
 
 const emptySpot: GarageSpot = {
   id: "",
@@ -81,9 +86,13 @@ function apartmentLabel(apartment: BuildingApartmentOption) {
 }
 
 function labelToApartment(apartmentId: string | null, options: BuildingApartmentOption[]) {
-  if (!apartmentId) return { apartmentId: null, apartmentLabel: null };
+  if (!apartmentId) return { apartmentId: null, apartmentLabel: null, residentName: null };
   const found = options.find((item) => item.id === apartmentId);
-  return { apartmentId: found?.id ?? null, apartmentLabel: found ? apartmentLabel(found) : null };
+  return {
+    apartmentId: found?.id ?? null,
+    apartmentLabel: found ? apartmentLabel(found) : null,
+    residentName: found?.residentName ?? null,
+  };
 }
 
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
@@ -100,7 +109,38 @@ function isValidBrazilianPlate(value: string) {
   const mercosulPattern = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/; // AAA1A23
   return oldPattern.test(plate) || mercosulPattern.test(plate);
 }
+
+function chunkSpots(spots: GarageSpot[], size: number) {
+  const chunks: GarageSpot[][] = [];
+  for (let index = 0; index < spots.length; index += size) {
+    chunks.push(spots.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function saveLocalMoveRequest(spot: GarageSpot, residentId: string | null, reason: string) {
+  if (typeof localStorage === "undefined") return;
+  const raw = localStorage.getItem(MOVE_REQUEST_STORAGE_KEY);
+  const current = raw ? JSON.parse(raw) as unknown[] : [];
+  localStorage.setItem(
+    MOVE_REQUEST_STORAGE_KEY,
+    JSON.stringify([
+      {
+        id: `move-${Date.now()}`,
+        spotId: spot.id,
+        spotCode: spot.code,
+        residentId,
+        reason,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ].slice(0, 80)),
+  );
+}
+
 export default function GaragemPage() {
+  const currentUser = useMemo(() => getUser(), []);
+  const isAdmin = currentUser?.role === "ADMIN";
   const [apartmentOptions, setApartmentOptions] = useState<BuildingApartmentOption[]>([]);
   const [state, setState] = useState<GarageState | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState("");
@@ -114,6 +154,8 @@ export default function GaragemPage() {
   const [reservationStatusFilter, setReservationStatusFilter] = useState<TemporaryReservationStatus | "TODAS">("TODAS");
   const [openZone, setOpenZone] = useState<string | null>(null);
   const [zoneInitialized, setZoneInitialized] = useState(false);
+  const [mapMode, setMapMode] = useState<GarageMapMode>("CORREDOR");
+  const [moveRequests, setMoveRequests] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     async function load() {
@@ -146,8 +188,17 @@ export default function GaragemPage() {
   useEffect(() => {
     if (!state || !selectedSpotId) return;
     const selected = state.spots.find((spot) => spot.id === selectedSpotId);
-    setSpotForm(selected ?? { ...emptySpot, id: `spot-${Date.now()}`, code: `G-${state.spots.length + 1}` });
-  }, [selectedSpotId, state]);
+    if (!selected) {
+      setSpotForm({ ...emptySpot, id: `spot-${Date.now()}`, code: `G-${state.spots.length + 1}` });
+      return;
+    }
+
+    const apartment = selected.apartmentId ? labelToApartment(selected.apartmentId, apartmentOptions) : null;
+    setSpotForm({
+      ...selected,
+      residentName: selected.residentName || apartment?.residentName || null,
+    });
+  }, [apartmentOptions, selectedSpotId, state]);
   const metrics = useMemo(() => {
     if (!state) return { occupied: 0, available: 0, reserved: 0, blocked: 0, unitsWithoutSpot: 0, activeVisitors: 0 };
     const occupied = state.spots.filter((spot) => spot.status === "OCUPADA").length;
@@ -261,9 +312,68 @@ export default function GaragemPage() {
     setSpotForm({ ...emptySpot, id: `spot-${Date.now()}`, code: `G-${state.spots.length}` });
     setShowSpotModal(false);
   }
+
+  async function notifyMoveRequest(spot: GarageSpot, blockedSpot?: GarageSpot) {
+    const residentId = apartmentOptions.find((apt) => apt.id === spot.apartmentId)?.residentId ?? null;
+    const unit = spot.apartmentLabel ?? "sua vaga";
+    const vehicle = [spot.vehicleModel, spot.vehiclePlate].filter(Boolean).join(" - ") || "veiculo estacionado";
+    const blockedText = blockedSpot ? ` A vaga ${blockedSpot.code}, atras da sua, precisa de passagem.` : " Ha um carro bloqueado atras da sua vaga e ele precisa sair.";
+    const message = `A administracao solicita que voce mova o ${vehicle} da vaga ${spot.code}.${blockedText}`;
+
+    if (!residentId) {
+      alert("Esta vaga nao tem morador vinculado para receber a notificacao.");
+      return;
+    }
+
+    try {
+      let client = supabase;
+      try {
+        client = getSupabaseAdmin();
+      } catch {
+        client = supabase;
+      }
+
+      const notificationPayload = {
+        user_id: residentId,
+        title: `Mover veiculo da vaga ${spot.code}`,
+        message,
+        category: "GARAGEM",
+        link: "/garagem",
+      };
+
+      const metadata = {
+        spot_id: spot.id,
+        spot_code: spot.code,
+        blocked_spot_id: blockedSpot?.id ?? null,
+        blocked_spot_code: blockedSpot?.code ?? null,
+        unit,
+        requested_by: currentUser?.id ?? null,
+        request_type: "GARAGE_MOVE_REQUEST",
+      };
+
+      const insertWithMetadata = await client.from("system_notifications").insert({
+        ...notificationPayload,
+        metadata: {
+          ...metadata,
+        },
+      } as never);
+
+      const { error } = insertWithMetadata.error
+        ? await client.from("system_notifications").insert(notificationPayload as never)
+        : insertWithMetadata;
+
+      if (error) throw error;
+      setMoveRequests((current) => new Set(current).add(spot.id));
+      alert(`Notificacao enviada ao morador de ${unit}.`);
+    } catch {
+      saveLocalMoveRequest(spot, residentId, message);
+      setMoveRequests((current) => new Set(current).add(spot.id));
+      alert("A notificacao foi registrada no prototipo local, mas o Supabase bloqueou o envio direto neste ambiente.");
+    }
+  }
   function handleWaitApartment(apartmentId: string) {
     const mapped = labelToApartment(apartmentId, apartmentOptions);
-    setWaitForm((current) => ({ ...current, ...mapped }));
+    setWaitForm((current) => ({ ...current, ...mapped, residentName: mapped.residentName ?? "" }));
   }
 
   function addToWaitList() {
@@ -612,22 +722,46 @@ export default function GaragemPage() {
         </section>
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
           <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="m-0 text-base font-semibold text-slate-900">Mapa da garagem</h3>
-                <p className="mt-1 text-sm text-slate-500">Setores por torre/subsolo com status visual.</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {mapMode === "CORREDOR" ? "Setores por torre/subsolo com via central de manobra." : "Modelo compacto com vagas enfileiradas e bloqueio de saida."}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedSpotId("");
-                  setSpotForm({ ...emptySpot, id: `spot-${Date.now()}`, code: `G-${state.spots.length + 1}` });
-                  setShowSpotModal(true);
-                }}
-                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                Nova vaga
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="grid grid-cols-2 rounded-2xl border border-slate-200 bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMapMode("CORREDOR")}
+                    title="Mapa com corredor livre"
+                    className={`flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold transition ${mapMode === "CORREDOR" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  >
+                    <ParkingSquare size={15} />
+                    Corredor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapMode("APERTO")}
+                    title="Mapa com vagas bloqueadoras"
+                    className={`flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold transition ${mapMode === "APERTO" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  >
+                    <AlertTriangle size={15} />
+                    Aperto
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSpotId("");
+                    setSpotForm({ ...emptySpot, id: `spot-${Date.now()}`, code: `G-${state.spots.length + 1}` });
+                    setShowSpotModal(true);
+                  }}
+                  className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Nova vaga
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 space-y-3">
@@ -653,7 +787,7 @@ export default function GaragemPage() {
                         {isOpen ? "Fechar" : "Abrir"}
                       </span>
                     </button>
-                    {isOpen && (
+                    {isOpen && mapMode === "CORREDOR" && (
                       <div className="border-t border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-50 p-3">
                         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]">
                           <div className="grid gap-2">
@@ -696,6 +830,87 @@ export default function GaragemPage() {
                               );
                             })}
                           </div>
+                        </div>
+                      </div>
+                    )}
+                    {isOpen && mapMode === "APERTO" && (
+                      <div className="border-t border-slate-200 bg-stone-100 p-3">
+                        <div className="space-y-3">
+                          {chunkSpots(ordered, 6).map((block, blockIndex) => {
+                            const upper = block.slice(0, 3);
+                            const lower = block.slice(3, 6);
+
+                            return (
+                              <div key={`${zone}-aperto-${blockIndex}`} className="rounded-2xl border border-stone-300 bg-stone-800 p-2 shadow-inner">
+                                <div className="mb-2 flex items-center justify-between gap-3 px-2 text-[11px] font-semibold text-stone-100">
+                                  <span>Fileira {blockIndex + 1}</span>
+                                  <span className="inline-flex items-center gap-1 text-amber-200">
+                                    <AlertTriangle size={12} />
+                                    vagas bloqueadoras
+                                  </span>
+                                </div>
+                                <div className="grid gap-1">
+                                  <div className="grid grid-cols-3 gap-1">
+                                    {upper.map((spot, spotIndex) => {
+                                      const tone = mapSpotTone(spot.status);
+                                      const blockedSpot = lower[spotIndex];
+                                      const hasMovableSpotBehind = blockedSpot && ["OCUPADA", "DISPONIVEL"].includes(blockedSpot.status);
+                                      const residentId = apartmentOptions.find((apt) => apt.id === spot.apartmentId)?.residentId ?? null;
+                                      const canRequestMove = isAdmin && spot.status === "OCUPADA" && Boolean(spot.vehiclePlate) && Boolean(hasMovableSpotBehind);
+                                      return (
+                                        <div key={spot.id} className="relative">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedSpotId(spot.id);
+                                              setShowSpotModal(true);
+                                            }}
+                                            className={`min-h-[112px] w-full rounded-xl border-2 p-2 text-left transition ${tone.shell} ${selectedSpotId === spot.id ? "ring-4 ring-amber-300/50" : "hover:-translate-y-0.5 hover:shadow-sm"}`}
+                                          >
+                                            <CompactSpotCard spot={spot} tone={tone} direction="down" />
+                                          </button>
+                                          {canRequestMove && (
+                                            <button
+                                              type="button"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                void notifyMoveRequest(spot, blockedSpot);
+                                              }}
+                                              disabled={!residentId}
+                                              title={residentId ? `Enviar notificacao para liberar a vaga ${blockedSpot?.code ?? "de tras"}` : "Vaga sem morador vinculado"}
+                                              className={`absolute right-1 top-1 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-black uppercase text-white shadow-sm transition ${moveRequests.has(spot.id) ? "bg-emerald-600" : "bg-rose-600 hover:bg-rose-700"} disabled:cursor-not-allowed disabled:bg-slate-400`}
+                                            >
+                                              <BellRing size={10} />
+                                              {moveRequests.has(spot.id) ? "Enviado" : "Mover"}
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-1">
+                                    {lower.map((spot) => {
+                                      const tone = mapSpotTone(spot.status);
+                                      return (
+                                        <div key={spot.id} className="relative">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedSpotId(spot.id);
+                                              setShowSpotModal(true);
+                                            }}
+                                            className={`min-h-[112px] w-full rounded-xl border-2 p-2 text-left transition ${tone.shell} ${selectedSpotId === spot.id ? "ring-4 ring-amber-300/50" : "hover:-translate-y-0.5 hover:shadow-sm"}`}
+                                          >
+                                            <CompactSpotCard spot={spot} tone={tone} direction="up" />
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -935,6 +1150,27 @@ function SpotCard({ spot, tone, align = "left" }: { spot: GarageSpot; tone: Spot
         )}
       </div>
     </>
+  );
+}
+
+function CompactSpotCard({ spot, tone, direction }: { spot: GarageSpot; tone: SpotTone; direction: "up" | "down" }) {
+  return (
+    <div className="flex h-full flex-col justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="m-0 truncate text-xs font-black tracking-[-0.02em]">{spot.code}</p>
+          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">{spot.apartmentLabel || "Sem unidade"}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${tone.badge}`}>{spot.status}</span>
+      </div>
+      <div className={`mx-auto flex h-10 w-16 items-center justify-center rounded-xl ${tone.car}`}>
+        <CarFront size={20} className={direction === "up" ? "rotate-180" : ""} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-slate-800">{spot.vehicleModel || "Sem veiculo"}</p>
+        <p className="truncate text-[10px] text-slate-500">{spot.vehiclePlate || "Placa nao cadastrada"}</p>
+      </div>
+    </div>
   );
 }
 

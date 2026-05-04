@@ -52,6 +52,8 @@ export type BuildingApartmentOption = {
   level: number;
   number: string;
   residentId: string | null;
+  residentName: string | null;
+  residentEmail: string | null;
 };
 
 export type TowerSummary = {
@@ -262,14 +264,18 @@ function mapActiveVisitors(rows: VisitorRequestActiveRow[]) {
 }
 
 async function fetchActiveVisitorsByApartment(): Promise<Map<string, ActiveVisitor[]>> {
-  const admin = getSupabaseAdmin();
-  const result = await admin
-    .from("visitor_requests")
-    .select("id, apartment_id, checked_in_at, expected_check_out, guests:visitor_request_guests(id, full_name, email, is_primary)")
-    .eq("status", "CHECKED_IN");
+  try {
+    const admin = getSupabaseAdmin();
+    const result = await admin
+      .from("visitor_requests")
+      .select("id, apartment_id, checked_in_at, expected_check_out, guests:visitor_request_guests(id, full_name, email, is_primary)")
+      .eq("status", "CHECKED_IN");
 
-  if (result.error) return new Map<string, ActiveVisitor[]>();
-  return mapActiveVisitors((result.data ?? []) as VisitorRequestActiveRow[]);
+    if (result.error) return new Map<string, ActiveVisitor[]>();
+    return mapActiveVisitors((result.data ?? []) as VisitorRequestActiveRow[]);
+  } catch {
+    return new Map<string, ActiveVisitor[]>();
+  }
 }
 
 function attachActiveVisitors(floors: Floor[], visitorsByApartment: Map<string, ActiveVisitor[]>) {
@@ -481,6 +487,8 @@ export async function listBuildingApartmentOptions(): Promise<BuildingApartmentO
         level: floor.level,
         number: apartment.number,
         residentId: apartment.resident?.id ?? null,
+        residentName: apartment.resident?.name ?? null,
+        residentEmail: apartment.resident?.email ?? null,
       })),
     )
     .sort((a, b) => {
