@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Pencil, Plus, Search, X } from "lucide-react";
+import { Mail, MapPin, Pencil, Phone, Plus, Search, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { supabase } from "../lib/supabase";
 
@@ -345,10 +345,11 @@ export default function CondominiosPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Nome</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400 w-10"></th>
+                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 w-28">Olhe no mapa</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">CNPJ</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Síndico</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 w-24">Contato</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -367,13 +368,13 @@ export default function CondominiosPage() {
                             <p className="mt-0.5 text-[11px] text-gray-400">{subtitle}</p>
                           )}
                         </td>
-                        <td className="px-2 py-3">
+                        <td className="px-4 py-3 text-center">
                           <a
                             href={mapsUrl(c)}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Ver no Google Maps"
-                            className="flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors"
+                            className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors"
                           >
                             <MapPin size={15} />
                           </a>
@@ -391,6 +392,33 @@ export default function CondominiosPage() {
                           >
                             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${c.active ? "translate-x-5" : "translate-x-0"}`} />
                           </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            {c.manager_phone && (
+                              <a
+                                href={`https://wa.me/55${c.manager_phone.replace(/\D/g, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`WhatsApp: ${c.manager_phone}`}
+                                className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                              >
+                                <Phone size={14} />
+                              </a>
+                            )}
+                            {c.manager_email && (
+                              <a
+                                href={`mailto:${c.manager_email}`}
+                                title={`E-mail: ${c.manager_email}`}
+                                className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                              >
+                                <Mail size={14} />
+                              </a>
+                            )}
+                            {!c.manager_phone && !c.manager_email && (
+                              <span className="text-gray-300 text-[12px]">—</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
