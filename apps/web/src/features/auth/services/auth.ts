@@ -191,6 +191,7 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
         carPlate: profile?.car_plate ?? undefined,
         petsCount: profile?.pets_count ?? undefined,
         avatarUrl: profile?.avatar_url ?? undefined,
+        condominioOptions: condominios,
       }),
     );
 
@@ -238,14 +239,18 @@ export async function selectCondominio(condominioId: number, condominioOption?: 
   // Fluxo Supabase (sem backend Fastify)
   if (selectionToken === "supabase") {
     const raw = sessionStorage.getItem("pendingSupabaseUser");
-    if (!raw || !condominioOption) throw new Error("Sessão expirada. Faça login novamente.");
+    if (!raw) throw new Error("Sessão expirada. Faça login novamente.");
 
-    const pending = JSON.parse(raw) as Omit<User, "condominioUUID" | "condominioName" | "condominioId">;
+    const pending = JSON.parse(raw) as Omit<User, "condominioUUID" | "condominioName" | "condominioId"> & { condominioOptions?: CondominioOption[] };
+    const chosen = pending.condominioOptions?.find((c) => c.id === condominioId) ?? condominioOption;
+    if (!chosen?.uuid) throw new Error("Condomínio inválido. Faça login novamente.");
+
+    const { condominioOptions: _drop, ...userFields } = pending;
     const user: User = {
-      ...pending,
+      ...userFields,
       condominioId: null,
-      condominioUUID: condominioOption.uuid ?? null,
-      condominioName: condominioOption.name,
+      condominioUUID: chosen.uuid,
+      condominioName: chosen.name,
     };
 
     sessionStorage.removeItem("selectionToken");
