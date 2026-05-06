@@ -39,6 +39,15 @@ const SIDEBAR_STORAGE_KEY = "omni:sidebar-collapsed";
 type NavLink = { label: string; path: string; icon: React.ElementType };
 type NavGroup = { title: string; links: NavLink[] };
 
+const GROUP_COLORS: Record<string, string> = {
+  "Comunicação":  "bg-sky-50    text-sky-500",
+  "Comunidade":   "bg-violet-50 text-violet-500",
+  "Áreas Comuns": "bg-emerald-50 text-emerald-600",
+  "Operações":    "bg-orange-50 text-orange-500",
+  "Gestão":       "bg-indigo-50 text-indigo-600",
+  "Admin":        "bg-rose-50   text-rose-500",
+};
+
 function buildGroups(role: string | undefined): NavGroup[] {
   const groups: NavGroup[] = [
     {
@@ -203,7 +212,7 @@ export default function AppLayout({ title, children }: { title: string; children
           {groups.map((group) => (
             <div key={group.title} className={collapsed ? "space-y-2" : "space-y-1"}>
               {!collapsed && group.title && (
-                <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                <p className={`mx-1 mt-3 mb-1 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${GROUP_COLORS[group.title] ?? "bg-gray-100 text-gray-400"}`}>
                   {group.title}
                 </p>
               )}
