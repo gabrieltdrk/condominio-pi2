@@ -70,7 +70,7 @@ function mergeUser(id: string, email: string, profile: ProfileRow | null, condom
     email,
     phone: profile?.phone ?? "",
     role: (profile?.role ?? current?.role ?? "MORADOR") as User["role"],
-    condominioUUID: condominioUUID ?? current?.condominioUUID ?? null,
+    condominioUUID: condominioUUID !== undefined ? condominioUUID : (current?.condominioUUID ?? null),
     residentType: profile?.resident_type ?? current?.residentType ?? undefined,
     status: profile?.status ?? current?.status ?? undefined,
     carPlate: profile?.car_plate ?? current?.carPlate ?? undefined,

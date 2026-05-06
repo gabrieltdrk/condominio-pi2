@@ -137,11 +137,22 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw new Error(error.message);
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
-    .eq("id", data.user.id)
-    .single();
+  const [profileResult, ucResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
+      .eq("id", data.user.id)
+      .single(),
+    supabase
+      .from("usuario_condominio")
+      .select("condominio_id")
+      .eq("user_id", data.user.id)
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const profile = profileResult.data;
 
   const user: User = {
     id: data.user.id,
@@ -150,6 +161,7 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
     phone: profile?.phone ?? "",
     role: (profile?.role as UserRole) ?? "MORADOR",
     condominioId: null,
+    condominioUUID: (ucResult.data as any)?.condominio_id ?? null,
     residentType: profile?.resident_type ?? undefined,
     status: profile?.status ?? undefined,
     carPlate: profile?.car_plate ?? undefined,
