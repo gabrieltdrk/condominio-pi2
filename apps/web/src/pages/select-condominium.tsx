@@ -33,7 +33,7 @@ export default function SelectCondominium() {
     setErr("");
     setLoading(option.id);
     try {
-      await selectCondominio(option.id, option);
+      await selectCondominio(option.id);
       sessionStorage.removeItem("selectionData");
       nav("/dashboard", { replace: true });
     } catch (e: unknown) {
