@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Building2, ChevronDown, Eye, EyeOff, Lock, Mail, PhoneCall } from "lucide-react";
 import { checkOAuthSession, login, finalizeSupabaseLogin, resetPassword, type CondominioOption, type PendingUser } from "../features/auth/services/auth";
 import loginBg from "../assets/login.jpg";
 
-type View = "login" | "select" | "forgot" | "sent";
+type View = "login" | "select" | "forgot" | "sent" | "inactive";
 
 export default function Login() {
   const nav = useNavigate();
@@ -53,7 +53,12 @@ export default function Login() {
 
       nav("/dashboard", { replace: true });
     } catch (error: unknown) {
-      setErr(error instanceof Error ? error.message : "Erro no login.");
+      const msg = error instanceof Error ? error.message : "Erro no login.";
+      if (msg === "CONDOMINIO_INATIVO") {
+        setView("inactive");
+      } else {
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -121,6 +126,28 @@ finalizeSupabaseLogin(pendingUser, option);
 
         <section className="flex h-screen items-center justify-center px-5 py-5 sm:px-8 lg:px-12">
           <div className="w-full max-w-[420px] space-y-3">
+
+            {view === "inactive" ? (
+              <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-8 shadow-[0_10px_30px_rgba(15,23,42,0.06)] text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-500">
+                  <PhoneCall size={24} />
+                </div>
+                <h2 className="mt-4 text-lg font-bold text-slate-900">Acesso indisponível</h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                  O condomínio vinculado à sua conta está inativo no momento.
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  Entre em contato com o síndico responsável.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setView("login")}
+                  className="mt-6 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-500 transition hover:bg-slate-50"
+                >
+                  ← Voltar ao login
+                </button>
+              </div>
+            ) : null}
 
             {view === "select" ? (
               <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">

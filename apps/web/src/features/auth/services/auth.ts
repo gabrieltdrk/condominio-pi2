@@ -160,6 +160,22 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
 
   localStorage.setItem("token", data.session.access_token);
 
+  // Verifica se todos os condomínios vinculados estão inativos
+  if (ucRows.length > 0 && profile?.role !== "MASTER_ADMIN") {
+    const uuidsAll = ucRows.map((r) => r.condominio_id);
+    const { data: activeCheck } = await supabase
+      .from("condominios")
+      .select("id")
+      .in("id", uuidsAll)
+      .eq("active", true)
+      .limit(1);
+    if (!activeCheck || activeCheck.length === 0) {
+      await supabase.auth.signOut();
+      localStorage.removeItem("token");
+      throw new Error("CONDOMINIO_INATIVO");
+    }
+  }
+
   // Usuário vinculado a mais de um condomínio → pedir seleção
   if (ucRows.length > 1) {
     const uuids = ucRows.map((row) => row.condominio_id);

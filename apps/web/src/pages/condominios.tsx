@@ -7,7 +7,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Trash2,
   Waves,
   X,
 } from "lucide-react";
@@ -141,10 +140,10 @@ async function saveCondominio(payload: Omit<FormState, never>, id?: string): Pro
   return data as Condominio;
 }
 
-async function deactivateCondominio(id: string): Promise<void> {
+async function toggleCondominioActive(id: string, active: boolean): Promise<void> {
   const { error } = await supabase
     .from("condominios")
-    .update({ active: false })
+    .update({ active })
     .eq("id", id);
   if (error) throw new Error(error.message);
 }
@@ -306,12 +305,13 @@ export default function CondominiosPage() {
     }
   }
 
-  async function handleDeactivate(c: Condominio) {
-    if (!confirm(`Desativar "${c.name}"?`)) return;
+  async function handleToggleActive(c: Condominio) {
+    const next = !c.active;
+    if (!next && !confirm(`Desativar "${c.name}"? Usuários vinculados não conseguirão fazer login.`)) return;
     try {
-      await deactivateCondominio(c.id);
+      await toggleCondominioActive(c.id, next);
       setCondominios((prev) =>
-        prev.map((x) => (x.id === c.id ? { ...x, active: false } : x)),
+        prev.map((x) => (x.id === c.id ? { ...x, active: next } : x)),
       );
     } catch (err: any) {
       alert(err.message);
@@ -424,15 +424,20 @@ export default function CondominiosPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                            c.active
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-gray-100 text-gray-500"
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(c)}
+                          title={c.active ? "Clique para desativar" : "Clique para ativar"}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                            c.active ? "bg-emerald-500" : "bg-red-400"
                           }`}
                         >
-                          {c.active ? "Ativo" : "Inativo"}
-                        </span>
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                              c.active ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
@@ -443,15 +448,6 @@ export default function CondominiosPage() {
                           >
                             <Pencil size={14} />
                           </button>
-                          {c.active && (
-                            <button
-                              onClick={() => handleDeactivate(c)}
-                              className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                              title="Desativar"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -508,14 +504,24 @@ export default function CondominiosPage() {
                     </div>
                     <div>
                       <label className={labelCls}>Status</label>
-                      <select
-                        className={inputCls}
-                        value={form.active ? "true" : "false"}
-                        onChange={(e) => set("active", e.target.value === "true")}
-                      >
-                        <option value="true">Ativo</option>
-                        <option value="false">Inativo</option>
-                      </select>
+                      <div className="flex items-center gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => set("active", !form.active)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                            form.active ? "bg-emerald-500" : "bg-red-400"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                              form.active ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                        <span className={`text-[13px] font-medium ${form.active ? "text-emerald-600" : "text-red-500"}`}>
+                          {form.active ? "Ativo" : "Inativo"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -545,19 +551,19 @@ export default function CondominiosPage() {
                     <div>
                       <label className={labelCls}>Bairro</label>
                       <input
-                        className={inputCls}
+                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
                         value={form.neighborhood}
-                        onChange={(e) => set("neighborhood", e.target.value)}
-                        placeholder="Bairro"
+                        readOnly
+                        placeholder="Preenchido automaticamente pelo CEP"
                       />
                     </div>
                     <div className="sm:col-span-2">
                       <label className={labelCls}>Logradouro</label>
                       <input
-                        className={inputCls}
+                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
                         value={form.address}
-                        onChange={(e) => set("address", e.target.value)}
-                        placeholder="Rua, Av..."
+                        readOnly
+                        placeholder="Preenchido automaticamente pelo CEP"
                       />
                     </div>
                     <div>
@@ -581,19 +587,19 @@ export default function CondominiosPage() {
                     <div>
                       <label className={labelCls}>Cidade</label>
                       <input
-                        className={inputCls}
+                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
                         value={form.city}
-                        onChange={(e) => set("city", e.target.value)}
-                        placeholder="Cidade"
+                        readOnly
+                        placeholder="Preenchido automaticamente pelo CEP"
                       />
                     </div>
                     <div>
                       <label className={labelCls}>UF</label>
                       <input
-                        className={inputCls}
+                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
                         value={form.state}
-                        onChange={(e) => set("state", e.target.value)}
-                        placeholder="SP"
+                        readOnly
+                        placeholder="—"
                         maxLength={2}
                       />
                     </div>
