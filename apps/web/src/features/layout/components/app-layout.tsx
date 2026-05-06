@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   Home,
+  Landmark,
   LogOut,
   Megaphone,
   Menu,
@@ -23,9 +24,9 @@ import {
   User,
   UserRoundCheck,
   Users,
+  BarChart2,
   Waves,
   X,
-  Landmark,
 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
 import { refreshStoredUser } from "../../auth/services/profile";
@@ -35,30 +36,66 @@ import { useNotifications } from "../hooks/use-notifications";
 
 const SIDEBAR_STORAGE_KEY = "omni:sidebar-collapsed";
 
-// GERAL — visível para todos os roles
-const geralLinks = [
-  { label: "Dashboard", path: "/dashboard", icon: Home },
-  { label: "Avisos", path: "/avisos", icon: Megaphone },
-  { label: "Assembleia", path: "/enquetes", icon: MessageSquare },
-  { label: "Ocorrencias", path: "/ocorrencias", icon: ClipboardList },
-  { label: "Encomendas", path: "/encomendas", icon: Package },
-  { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
-  { label: "Visitantes", path: "/visitantes", icon: UserRoundCheck },
-  { label: "Garagem", path: "/garagem", icon: CarFront },
-  { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
-  { label: "Manutenção", path: "/manutencao", icon: Waves },
-  { label: "Moradores", path: "/usuarios", icon: Users },
-];
+type NavLink = { label: string; path: string; icon: React.ElementType };
+type NavGroup = { title: string; links: NavLink[] };
 
-// SÍNDICO — visível para ADMIN + MASTER_ADMIN
-const sindicoLinks = [
-  { label: "Edificio", path: "/predio", icon: Building2 },
-];
+function buildGroups(role: string | undefined): NavGroup[] {
+  const groups: NavGroup[] = [
+    {
+      title: "",
+      links: [{ label: "Dashboard", path: "/dashboard", icon: Home }],
+    },
+    {
+      title: "Comunicação",
+      links: [
+        { label: "Avisos", path: "/avisos", icon: Megaphone },
+        { label: "Assembleia", path: "/enquetes", icon: MessageSquare },
+      ],
+    },
+    {
+      title: "Comunidade",
+      links: [
+        { label: "Visitantes", path: "/visitantes", icon: UserRoundCheck },
+        { label: "Encomendas", path: "/encomendas", icon: Package },
+      ],
+    },
+    {
+      title: "Áreas Comuns",
+      links: [
+        { label: "Agendamentos", path: "/agendamentos", icon: CalendarDays },
+        { label: "Garagem", path: "/garagem", icon: CarFront },
+      ],
+    },
+    {
+      title: "Operações",
+      links: [
+        { label: "Ocorrências", path: "/ocorrencias", icon: ClipboardList },
+        { label: "Manutenção", path: "/manutencao", icon: Waves },
+      ],
+    },
+  ];
 
-// ADMIN (SaaS) — visível apenas para MASTER_ADMIN
-const masterLinks = [
-  { label: "Condomínios", path: "/condominios", icon: Landmark },
-];
+  if (role === "ADMIN" || role === "MASTER_ADMIN") {
+    groups.push({
+      title: "Gestão",
+      links: [
+        { label: "Edifício", path: "/predio", icon: Building2 },
+        { label: "Moradores", path: "/usuarios", icon: Users },
+        { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
+        { label: "Relatórios", path: "/relatorios", icon: BarChart2 },
+      ],
+    });
+  }
+
+  if (role === "MASTER_ADMIN") {
+    groups.push({
+      title: "Admin",
+      links: [{ label: "Condomínios", path: "/condominios", icon: Landmark }],
+    });
+  }
+
+  return groups;
+}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -125,11 +162,7 @@ export default function AppLayout({ title, children }: { title: string; children
     : "U";
 
   const role = user?.role;
-  const groups: { title: string; links: { label: string; path: string; icon: React.ElementType }[] }[] = [
-    { title: "Geral", links: geralLinks },
-    ...(role === "ADMIN" || role === "MASTER_ADMIN" ? [{ title: "Síndico", links: sindicoLinks }] : []),
-    ...(role === "MASTER_ADMIN" ? [{ title: "Admin", links: masterLinks }] : []),
-  ];
+  const groups = buildGroups(role);
 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
     const collapsed = mobile ? false : sidebarCollapsed;
@@ -169,7 +202,7 @@ export default function AppLayout({ title, children }: { title: string; children
         <nav className={`min-h-0 flex flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? "gap-2 p-2" : "gap-0.5 p-3"}`}>
           {groups.map((group) => (
             <div key={group.title} className={collapsed ? "space-y-2" : "space-y-1"}>
-              {!collapsed && (
+              {!collapsed && group.title && (
                 <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
                   {group.title}
                 </p>
