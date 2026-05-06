@@ -147,27 +147,32 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
       .single(),
     supabase
       .from("usuario_condominio")
-      .select("condominio_id, role, condominios(id, name)")
+      .select("condominio_id, role")
       .eq("user_id", data.user.id)
       .eq("active", true),
   ]);
 
   const profile = profileResult.data;
-  type UcRow = { condominio_id: string; role: string; condominios: { id: string; name: string } | { id: string; name: string }[] | null };
-  const ucRows = (ucResult.data ?? []) as unknown as UcRow[];
-  function resolveCondominio(c: UcRow["condominios"]): { id: string; name: string } | null {
-    if (!c) return null;
-    return Array.isArray(c) ? (c[0] ?? null) : c;
-  }
+  type UcRow = { condominio_id: string; role: string };
+  const ucRows = (ucResult.data ?? []) as UcRow[];
 
   localStorage.setItem("token", data.session.access_token);
 
   // Usuário vinculado a mais de um condomínio → pedir seleção
   if (ucRows.length > 1) {
+    const uuids = ucRows.map((row) => row.condominio_id);
+    const { data: condData } = await supabase
+      .from("condominios")
+      .select("id, name")
+      .in("id", uuids);
+    const nameMap = new Map<string, string>(
+      ((condData ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]),
+    );
+
     const condominios: CondominioOption[] = ucRows.map((row, idx) => ({
       id: idx + 1,
       uuid: row.condominio_id,
-      name: resolveCondominio(row.condominios)?.name ?? `Condomínio ${idx + 1}`,
+      name: nameMap.get(row.condominio_id) ?? `Condomínio ${idx + 1}`,
       role: (row.role as UserRole) ?? (profile?.role as UserRole) ?? "MORADOR",
     }));
 
@@ -198,6 +203,12 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
   }
 
   const ucRow = ucRows[0] ?? null;
+  let condominioName: string | undefined;
+  if (ucRow?.condominio_id) {
+    const { data: condRow } = await supabase.from("condominios").select("name").eq("id", ucRow.condominio_id).maybeSingle();
+    condominioName = (condRow as { name: string } | null)?.name ?? undefined;
+  }
+
   const user: User = {
     id: data.user.id,
     name: profile?.name ?? data.user.email ?? "",
@@ -206,7 +217,7 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
     role: (profile?.role as UserRole) ?? "MORADOR",
     condominioId: null,
     condominioUUID: ucRow?.condominio_id ?? null,
-    condominioName: resolveCondominio(ucRow?.condominios ?? null)?.name ?? undefined,
+    condominioName,
     residentType: profile?.resident_type ?? undefined,
     status: profile?.status ?? undefined,
     carPlate: profile?.car_plate ?? undefined,
