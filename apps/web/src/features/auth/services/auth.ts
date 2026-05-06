@@ -27,6 +27,8 @@ export type CondominioOption = {
   id: number;
   name: string;
   role: UserRole;
+  /** UUID do Supabase — preenchido no fluxo sem backend */
+  uuid?: string;
 };
 
 export type LoginResult =
@@ -145,15 +147,57 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
       .single(),
     supabase
       .from("usuario_condominio")
-      .select("condominio_id")
+      .select("condominio_id, role, condominios(id, name)")
       .eq("user_id", data.user.id)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle(),
+      .eq("active", true),
   ]);
 
   const profile = profileResult.data;
+  type UcRow = { condominio_id: string; role: string; condominios: { id: string; name: string } | { id: string; name: string }[] | null };
+  const ucRows = (ucResult.data ?? []) as unknown as UcRow[];
+  function resolveCondominio(c: UcRow["condominios"]): { id: string; name: string } | null {
+    if (!c) return null;
+    return Array.isArray(c) ? (c[0] ?? null) : c;
+  }
 
+  localStorage.setItem("token", data.session.access_token);
+
+  // Usuário vinculado a mais de um condomínio → pedir seleção
+  if (ucRows.length > 1) {
+    const condominios: CondominioOption[] = ucRows.map((row, idx) => ({
+      id: idx + 1,
+      uuid: row.condominio_id,
+      name: resolveCondominio(row.condominios)?.name ?? `Condomínio ${idx + 1}`,
+      role: (row.role as UserRole) ?? (profile?.role as UserRole) ?? "MORADOR",
+    }));
+
+    // Guarda dados temporários para após a seleção
+    sessionStorage.setItem("selectionToken", "supabase");
+    sessionStorage.setItem(
+      "pendingSupabaseUser",
+      JSON.stringify({
+        id: data.user.id,
+        name: profile?.name ?? data.user.email ?? "",
+        email: data.user.email ?? "",
+        phone: profile?.phone ?? "",
+        role: (profile?.role as UserRole) ?? "MORADOR",
+        residentType: profile?.resident_type ?? undefined,
+        status: profile?.status ?? undefined,
+        carPlate: profile?.car_plate ?? undefined,
+        petsCount: profile?.pets_count ?? undefined,
+        avatarUrl: profile?.avatar_url ?? undefined,
+      }),
+    );
+
+    return {
+      requiresSelection: true,
+      condominios,
+      selectionToken: "supabase",
+      userName: profile?.name ?? data.user.email ?? "",
+    };
+  }
+
+  const ucRow = ucRows[0] ?? null;
   const user: User = {
     id: data.user.id,
     name: profile?.name ?? data.user.email ?? "",
@@ -161,7 +205,8 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
     phone: profile?.phone ?? "",
     role: (profile?.role as UserRole) ?? "MORADOR",
     condominioId: null,
-    condominioUUID: (ucResult.data as any)?.condominio_id ?? null,
+    condominioUUID: ucRow?.condominio_id ?? null,
+    condominioName: resolveCondominio(ucRow?.condominios ?? null)?.name ?? undefined,
     residentType: profile?.resident_type ?? undefined,
     status: profile?.status ?? undefined,
     carPlate: profile?.car_plate ?? undefined,
@@ -169,17 +214,34 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
     avatarUrl: profile?.avatar_url ?? undefined,
   };
 
-  localStorage.setItem("token", data.session.access_token);
   setStoredUser(user);
-
   return { requiresSelection: false, user };
 }
 
 // ─── Seleção de condomínio ───────────────────────────────────────────────────
 
-export async function selectCondominio(condominioId: number): Promise<User> {
+export async function selectCondominio(condominioId: number, condominioOption?: CondominioOption): Promise<User> {
   const selectionToken = getSelectionToken();
   if (!selectionToken) throw new Error("Sessão expirada. Faça login novamente.");
+
+  // Fluxo Supabase (sem backend Fastify)
+  if (selectionToken === "supabase") {
+    const raw = sessionStorage.getItem("pendingSupabaseUser");
+    if (!raw || !condominioOption) throw new Error("Sessão expirada. Faça login novamente.");
+
+    const pending = JSON.parse(raw) as Omit<User, "condominioUUID" | "condominioName" | "condominioId">;
+    const user: User = {
+      ...pending,
+      condominioId: null,
+      condominioUUID: condominioOption.uuid ?? null,
+      condominioName: condominioOption.name,
+    };
+
+    sessionStorage.removeItem("selectionToken");
+    sessionStorage.removeItem("pendingSupabaseUser");
+    setStoredUser(user);
+    return user;
+  }
 
   const res = await fetch(`${API_URL}/auth/select-condominio`, {
     method: "POST",

@@ -29,11 +29,11 @@ export default function SelectCondominium() {
     setUserName(name);
   }, [nav]);
 
-  async function handleSelect(condominioId: number) {
+  async function handleSelect(option: CondominioOption) {
     setErr("");
-    setLoading(condominioId);
+    setLoading(option.id);
     try {
-      await selectCondominio(condominioId);
+      await selectCondominio(option.id, option);
       sessionStorage.removeItem("selectionData");
       nav("/dashboard", { replace: true });
     } catch (e: unknown) {
@@ -82,7 +82,7 @@ export default function SelectCondominium() {
           {condominios.map((c, idx) => (
             <button
               key={c.id}
-              onClick={() => handleSelect(c.id)}
+              onClick={() => handleSelect(c)}
               disabled={loading !== null}
               className={[
                 "flex w-full items-center gap-4 px-6 py-4 text-left transition hover:bg-slate-50 disabled:opacity-60",
