@@ -1,15 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Building2,
-  Dumbbell,
-  Flame,
-  PartyPopper,
-  Pencil,
-  Plus,
-  Search,
-  Waves,
-  X,
-} from "lucide-react";
+import { MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { supabase } from "../lib/supabase";
 
@@ -27,15 +17,11 @@ type Condominio = {
   reference?: string | null;
   manager_name?: string | null;
   manager_phone?: string | null;
+  manager_email?: string | null;
   management_company?: string | null;
-  has_pool?: boolean;
-  pool_count?: number;
-  has_gym?: boolean;
-  gym_count?: number;
-  has_party_room?: boolean;
-  party_room_count?: number;
-  has_bbq?: boolean;
-  bbq_count?: number;
+  management_contact_name?: string | null;
+  management_contact_phone?: string | null;
+  management_contact_email?: string | null;
 };
 
 type FormState = {
@@ -51,15 +37,11 @@ type FormState = {
   reference: string;
   manager_name: string;
   manager_phone: string;
+  manager_email: string;
   management_company: string;
-  has_pool: boolean;
-  pool_count: number;
-  has_gym: boolean;
-  gym_count: number;
-  has_party_room: boolean;
-  party_room_count: number;
-  has_bbq: boolean;
-  bbq_count: number;
+  management_contact_name: string;
+  management_contact_phone: string;
+  management_contact_email: string;
 };
 
 const emptyForm = (): FormState => ({
@@ -75,27 +57,57 @@ const emptyForm = (): FormState => ({
   reference: "",
   manager_name: "",
   manager_phone: "",
+  manager_email: "",
   management_company: "",
-  has_pool: false,
-  pool_count: 0,
-  has_gym: false,
-  gym_count: 0,
-  has_party_room: false,
-  party_room_count: 0,
-  has_bbq: false,
-  bbq_count: 0,
+  management_contact_name: "",
+  management_contact_phone: "",
+  management_contact_email: "",
 });
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
+
+function formatCnpj(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+function formatCep(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
+function mapsUrl(c: Condominio): string {
+  const parts = [c.address, c.number, c.neighborhood, c.city, c.state, c.zip_code]
+    .filter(Boolean)
+    .join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts)}`;
+}
+
+// ─── DB helpers ───────────────────────────────────────────────────────────────
 
 async function fetchCondominios(): Promise<Condominio[]> {
   const { data, error } = await supabase
     .from("condominios")
-    .select("*")
+    .select("id,name,cnpj,address,city,state,active,zip_code,neighborhood,number,reference,manager_name,manager_phone,manager_email,management_company,management_contact_name,management_contact_phone,management_contact_email")
     .order("name");
   if (error) throw new Error(error.message);
   return (data ?? []) as Condominio[];
 }
 
-async function saveCondominio(payload: Omit<FormState, never>, id?: string): Promise<Condominio> {
+async function saveCondominio(payload: FormState, id?: string): Promise<Condominio> {
   const body = {
     name: payload.name,
     cnpj: payload.cnpj || null,
@@ -109,51 +121,30 @@ async function saveCondominio(payload: Omit<FormState, never>, id?: string): Pro
     reference: payload.reference || null,
     manager_name: payload.manager_name || null,
     manager_phone: payload.manager_phone || null,
+    manager_email: payload.manager_email || null,
     management_company: payload.management_company || null,
-    has_pool: payload.has_pool,
-    pool_count: payload.pool_count,
-    has_gym: payload.has_gym,
-    gym_count: payload.gym_count,
-    has_party_room: payload.has_party_room,
-    party_room_count: payload.party_room_count,
-    has_bbq: payload.has_bbq,
-    bbq_count: payload.bbq_count,
+    management_contact_name: payload.management_contact_name || null,
+    management_contact_phone: payload.management_contact_phone || null,
+    management_contact_email: payload.management_contact_email || null,
   };
 
   if (id) {
-    const { data, error } = await supabase
-      .from("condominios")
-      .update(body)
-      .eq("id", id)
-      .select()
-      .single();
+    const { data, error } = await supabase.from("condominios").update(body).eq("id", id).select().single();
     if (error) throw new Error(error.message);
     return data as Condominio;
   }
 
-  const { data, error } = await supabase
-    .from("condominios")
-    .insert(body)
-    .select()
-    .single();
+  const { data, error } = await supabase.from("condominios").insert(body).select().single();
   if (error) throw new Error(error.message);
   return data as Condominio;
 }
 
 async function toggleCondominioActive(id: string, active: boolean): Promise<void> {
-  const { error } = await supabase
-    .from("condominios")
-    .update({ active })
-    .eq("id", id);
+  const { error } = await supabase.from("condominios").update({ active }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
-async function lookupCep(cep: string): Promise<{
-  logradouro: string;
-  bairro: string;
-  localidade: string;
-  uf: string;
-} | null> {
+async function lookupCep(cep: string): Promise<{ logradouro: string; bairro: string; localidade: string; uf: string } | null> {
   const clean = cep.replace(/\D/g, "");
   if (clean.length !== 8) return null;
   try {
@@ -167,18 +158,31 @@ async function lookupCep(cep: string): Promise<{
   }
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const inputCls =
   "px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-[13px] outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
-const labelCls =
-  "block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1";
+const readonlyCls =
+  "px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-[13px] w-full cursor-not-allowed";
 
-type AmenityKey = "pool" | "gym" | "party_room" | "bbq";
-const amenities: { key: AmenityKey; label: string; icon: React.ElementType }[] = [
-  { key: "pool", label: "Piscina", icon: Waves },
-  { key: "gym", label: "Academia", icon: Dumbbell },
-  { key: "party_room", label: "Salão de Festas", icon: PartyPopper },
-  { key: "bbq", label: "Churrasqueira", icon: Flame },
-];
+function SectionHeader({ label, color }: { label: string; color: string }) {
+  return (
+    <div className={`-mx-6 px-6 py-2.5 mb-4 ${color}`}>
+      <p className="text-[11px] font-bold uppercase tracking-widest text-current">{label}</p>
+    </div>
+  );
+}
+
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+      {children}
+      {required && <span className="ml-0.5 text-red-500">*</span>}
+    </label>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CondominiosPage() {
   const [condominios, setCondominios] = useState<Condominio[]>([]);
@@ -193,16 +197,13 @@ export default function CondominiosPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   async function load() {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchCondominios();
-      setCondominios(data);
+      setCondominios(await fetchCondominios());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -232,24 +233,17 @@ export default function CondominiosPage() {
       reference: c.reference ?? "",
       manager_name: c.manager_name ?? "",
       manager_phone: c.manager_phone ?? "",
+      manager_email: c.manager_email ?? "",
       management_company: c.management_company ?? "",
-      has_pool: c.has_pool ?? false,
-      pool_count: c.pool_count ?? 0,
-      has_gym: c.has_gym ?? false,
-      gym_count: c.gym_count ?? 0,
-      has_party_room: c.has_party_room ?? false,
-      party_room_count: c.party_room_count ?? 0,
-      has_bbq: c.has_bbq ?? false,
-      bbq_count: c.bbq_count ?? 0,
+      management_contact_name: c.management_contact_name ?? "",
+      management_contact_phone: c.management_contact_phone ?? "",
+      management_contact_email: c.management_contact_email ?? "",
     });
     setFormError(null);
     setModalOpen(true);
   }
 
-  function closeModal() {
-    setModalOpen(false);
-    setEditing(null);
-  }
+  function closeModal() { setModalOpen(false); setEditing(null); }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -271,31 +265,15 @@ export default function CondominiosPage() {
     }));
   }
 
-  function toggleAmenity(key: AmenityKey) {
-    const hasKey = `has_${key}` as keyof FormState;
-    const countKey = `${key}_count` as keyof FormState;
-    const current = form[hasKey] as boolean;
-    setForm((prev) => ({
-      ...prev,
-      [hasKey]: !current,
-      [countKey]: !current ? Math.max((prev[countKey] as number) || 0, 1) : 0,
-    }));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) {
-      setFormError("Nome é obrigatório.");
-      return;
-    }
+    if (!form.name.trim()) { setFormError("Nome é obrigatório."); return; }
     setSaving(true);
     setFormError(null);
     try {
       const saved = await saveCondominio(form, editing?.id);
       setCondominios((prev) =>
-        editing
-          ? prev.map((c) => (c.id === editing.id ? saved : c))
-          : [saved, ...prev],
+        editing ? prev.map((c) => (c.id === editing.id ? saved : c)) : [saved, ...prev],
       );
       closeModal();
     } catch (err: any) {
@@ -310,9 +288,7 @@ export default function CondominiosPage() {
     if (!next && !confirm(`Desativar "${c.name}"? Usuários vinculados não conseguirão fazer login.`)) return;
     try {
       await toggleCondominioActive(c.id, next);
-      setCondominios((prev) =>
-        prev.map((x) => (x.id === c.id ? { ...x, active: next } : x)),
-      );
+      setCondominios((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: next } : x)));
     } catch (err: any) {
       alert(err.message);
     }
@@ -331,10 +307,7 @@ export default function CondominiosPage() {
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-[13px] text-gray-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               placeholder="Buscar por nome, cidade ou CNPJ..."
@@ -352,20 +325,16 @@ export default function CondominiosPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
         {/* Table */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-gray-400">
-              Carregando...
-            </div>
+            <div className="flex items-center justify-center py-16 text-sm text-gray-400">Carregando...</div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
-              <Building2 size={32} className="text-gray-200" />
+              <MapPin size={32} className="text-gray-200" />
               <p className="text-sm text-gray-400">
                 {search ? "Nenhum resultado encontrado." : "Nenhum condomínio cadastrado."}
               </p>
@@ -376,82 +345,67 @@ export default function CondominiosPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Nome</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Cidade / UF</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400 w-10"></th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">CNPJ</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Síndico</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Amenidades</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {[c.city, c.state].filter(Boolean).join(" / ") || "—"}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-gray-500">{c.cnpj || "—"}</td>
-                      <td className="px-4 py-3 text-gray-500">{c.manager_name || "—"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1.5 flex-wrap">
-                          {c.has_pool && (
-                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                              🏊 {c.pool_count}
-                            </span>
+                  {filtered.map((c) => {
+                    const addressLine = [c.address, c.number].filter(Boolean).join(", ");
+                    const cityLine = [c.city, c.state].filter(Boolean).join(" / ");
+                    const cepLine = c.zip_code ? `CEP ${c.zip_code}` : "";
+                    const subtitle = [addressLine, cityLine, cepLine].filter(Boolean).join(" · ");
+
+                    return (
+                      <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-900">{c.name}</p>
+                          {subtitle && (
+                            <p className="mt-0.5 text-[11px] text-gray-400">{subtitle}</p>
                           )}
-                          {c.has_gym && (
-                            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
-                              🏋️ {c.gym_count}
-                            </span>
-                          )}
-                          {c.has_party_room && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                              🎉 {c.party_room_count}
-                            </span>
-                          )}
-                          {c.has_bbq && (
-                            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
-                              🔥 {c.bbq_count}
-                            </span>
-                          )}
-                          {!c.has_pool && !c.has_gym && !c.has_party_room && !c.has_bbq && (
-                            <span className="text-gray-300">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleActive(c)}
-                          title={c.active ? "Clique para desativar" : "Clique para ativar"}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                            c.active ? "bg-emerald-500" : "bg-red-400"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                              c.active ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEdit(c)}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
-                            title="Editar"
+                        </td>
+                        <td className="px-2 py-3">
+                          <a
+                            href={mapsUrl(c)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver no Google Maps"
+                            className="flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors"
                           >
-                            <Pencil size={14} />
+                            <MapPin size={15} />
+                          </a>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-gray-500">{c.cnpj || "—"}</td>
+                        <td className="px-4 py-3 text-gray-500">{c.manager_name || "—"}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActive(c)}
+                            title={c.active ? "Clique para desativar" : "Clique para ativar"}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                              c.active ? "bg-emerald-500" : "bg-red-400"
+                            }`}
+                          >
+                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${c.active ? "translate-x-5" : "translate-x-0"}`} />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => openEdit(c)}
+                              className="rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                              title="Editar"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -462,261 +416,205 @@ export default function CondominiosPage() {
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <form onSubmit={handleSubmit}>
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl flex flex-col">
+            <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
+              {/* Modal header */}
+              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
                 <h2 className="text-sm font-semibold text-gray-900">
                   {editing ? "Editar Condomínio" : "Novo Condomínio"}
                 </h2>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
-                >
+                <button type="button" onClick={closeModal} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
                   <X size={16} />
                 </button>
               </div>
 
-              <div className="space-y-6 px-6 py-5">
-                {/* Identificação */}
-                <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
-                    Identificação
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                      <label className={labelCls}>Nome *</label>
-                      <input
-                        className={inputCls}
-                        value={form.name}
-                        onChange={(e) => set("name", e.target.value)}
-                        placeholder="Nome do condomínio"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>CNPJ</label>
-                      <input
-                        className={inputCls}
-                        value={form.cnpj}
-                        onChange={(e) => set("cnpj", e.target.value)}
-                        placeholder="00.000.000/0000-00"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Status</label>
-                      <div className="flex items-center gap-3 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => set("active", !form.active)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                            form.active ? "bg-emerald-500" : "bg-red-400"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                              form.active ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                        <span className={`text-[13px] font-medium ${form.active ? "text-emerald-600" : "text-red-500"}`}>
-                          {form.active ? "Ativo" : "Inativo"}
-                        </span>
+              <div className="overflow-y-auto flex-1">
+                <div className="space-y-0">
+
+                  {/* ── Identificação ── */}
+                  <section className="px-6 pt-5 pb-4">
+                    <SectionHeader label="Identificação" color="bg-indigo-50 text-indigo-600" />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <FieldLabel required>Nome do condomínio</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.name}
+                          onChange={(e) => set("name", e.target.value)}
+                          placeholder="Ex.: Residencial Blainville"
+                        />
                       </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Endereço */}
-                <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
-                    Endereço
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={labelCls}>
-                        CEP{" "}
-                        {cepLoading && (
-                          <span className="text-indigo-400">(buscando...)</span>
-                        )}
-                      </label>
-                      <input
-                        className={inputCls}
-                        value={form.zip_code}
-                        onChange={(e) => set("zip_code", e.target.value)}
-                        onBlur={handleCepBlur}
-                        placeholder="00000-000"
-                        maxLength={9}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Bairro</label>
-                      <input
-                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
-                        value={form.neighborhood}
-                        readOnly
-                        placeholder="Preenchido automaticamente pelo CEP"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={labelCls}>Logradouro</label>
-                      <input
-                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
-                        value={form.address}
-                        readOnly
-                        placeholder="Preenchido automaticamente pelo CEP"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Número</label>
-                      <input
-                        className={inputCls}
-                        value={form.number}
-                        onChange={(e) => set("number", e.target.value)}
-                        placeholder="123"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Referência</label>
-                      <input
-                        className={inputCls}
-                        value={form.reference}
-                        onChange={(e) => set("reference", e.target.value)}
-                        placeholder="Próximo a..."
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Cidade</label>
-                      <input
-                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
-                        value={form.city}
-                        readOnly
-                        placeholder="Preenchido automaticamente pelo CEP"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>UF</label>
-                      <input
-                        className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
-                        value={form.state}
-                        readOnly
-                        placeholder="—"
-                        maxLength={2}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Gestão Administrativa */}
-                <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
-                    Gestão Administrativa
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={labelCls}>Nome do Síndico</label>
-                      <input
-                        className={inputCls}
-                        value={form.manager_name}
-                        onChange={(e) => set("manager_name", e.target.value)}
-                        placeholder="Nome completo"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Contato do Síndico</label>
-                      <input
-                        className={inputCls}
-                        value={form.manager_phone}
-                        onChange={(e) => set("manager_phone", e.target.value)}
-                        placeholder="(00) 00000-0000"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={labelCls}>Contato da Administradora</label>
-                      <input
-                        className={inputCls}
-                        value={form.management_company}
-                        onChange={(e) => set("management_company", e.target.value)}
-                        placeholder="Nome / telefone da administradora"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Amenidades */}
-                <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
-                    Amenidades
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {amenities.map(({ key, label, icon: Icon }) => {
-                      const hasKey = `has_${key}` as keyof FormState;
-                      const countKey = `${key}_count` as keyof FormState;
-                      const enabled = form[hasKey] as boolean;
-                      return (
-                        <div
-                          key={key}
-                          className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
-                            enabled
-                              ? "border-indigo-200 bg-indigo-50"
-                              : "border-gray-200 bg-white"
-                          }`}
-                        >
+                      <div>
+                        <FieldLabel>CNPJ</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.cnpj}
+                          onChange={(e) => set("cnpj", formatCnpj(e.target.value))}
+                          placeholder="00.000.000/0000-00"
+                          maxLength={18}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Status</FieldLabel>
+                        <div className="flex items-center gap-3 pt-1.5">
                           <button
                             type="button"
-                            onClick={() => toggleAmenity(key)}
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                              enabled
-                                ? "bg-indigo-600 text-white"
-                                : "bg-gray-100 text-gray-400"
+                            onClick={() => set("active", !form.active)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                              form.active ? "bg-emerald-500" : "bg-red-400"
                             }`}
                           >
-                            <Icon size={15} />
+                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${form.active ? "translate-x-5" : "translate-x-0"}`} />
                           </button>
-                          <span className="flex-1 text-[13px] font-medium text-gray-700">
-                            {label}
+                          <span className={`text-[13px] font-medium ${form.active ? "text-emerald-600" : "text-red-500"}`}>
+                            {form.active ? "Ativo" : "Inativo"}
                           </span>
-                          {enabled && (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  set(
-                                    countKey as any,
-                                    Math.max(0, (form[countKey] as number) - 1),
-                                  )
-                                }
-                                className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
-                              >
-                                −
-                              </button>
-                              <span className="w-5 text-center text-[13px] font-semibold text-gray-800">
-                                {form[countKey] as number}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  set(countKey as any, (form[countKey] as number) + 1)
-                                }
-                                className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
-                              >
-                                +
-                              </button>
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </section>
+                      </div>
+                    </div>
+                  </section>
 
-                {formError && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-                    {formError}
-                  </div>
-                )}
+                  <div className="border-t border-gray-100" />
+
+                  {/* ── Endereço ── */}
+                  <section className="px-6 pt-5 pb-4">
+                    <SectionHeader label="Endereço" color="bg-sky-50 text-sky-600" />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel required>
+                          CEP{cepLoading && <span className="ml-1 text-indigo-400 normal-case font-normal">(buscando...)</span>}
+                        </FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.zip_code}
+                          onChange={(e) => set("zip_code", formatCep(e.target.value))}
+                          onBlur={handleCepBlur}
+                          placeholder="00000-000"
+                          maxLength={9}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Bairro</FieldLabel>
+                        <input className={readonlyCls} value={form.neighborhood} readOnly placeholder="Preenchido pelo CEP" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <FieldLabel>Logradouro</FieldLabel>
+                        <input className={readonlyCls} value={form.address} readOnly placeholder="Preenchido pelo CEP" />
+                      </div>
+                      <div>
+                        <FieldLabel required>Número</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.number}
+                          onChange={(e) => set("number", e.target.value)}
+                          placeholder="123"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Referência</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.reference}
+                          onChange={(e) => set("reference", e.target.value)}
+                          placeholder="Próximo a..."
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Cidade</FieldLabel>
+                        <input className={readonlyCls} value={form.city} readOnly placeholder="Preenchido pelo CEP" />
+                      </div>
+                      <div>
+                        <FieldLabel>UF</FieldLabel>
+                        <input className={readonlyCls} value={form.state} readOnly placeholder="—" />
+                      </div>
+                    </div>
+                  </section>
+
+                  <div className="border-t border-gray-100" />
+
+                  {/* ── Gestão Administrativa ── */}
+                  <section className="px-6 pt-5 pb-4">
+                    <SectionHeader label="Gestão Administrativa" color="bg-violet-50 text-violet-600" />
+
+                    {/* Síndico */}
+                    <p className="mb-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Síndico</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
+                      <div>
+                        <FieldLabel>Nome</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.manager_name}
+                          onChange={(e) => set("manager_name", e.target.value)}
+                          placeholder="Nome completo"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Telefone de contato</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.manager_phone}
+                          onChange={(e) => set("manager_phone", formatPhone(e.target.value))}
+                          placeholder="(00) 00000-0000"
+                          maxLength={15}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <FieldLabel>E-mail</FieldLabel>
+                        <input
+                          type="email"
+                          className={inputCls}
+                          value={form.manager_email}
+                          onChange={(e) => set("manager_email", e.target.value)}
+                          placeholder="sindico@email.com"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Administradora */}
+                    <p className="mb-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Administradora</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel>Nome da administradora</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.management_company}
+                          onChange={(e) => set("management_company", e.target.value)}
+                          placeholder="Nome da empresa"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Telefone de contato</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={form.management_contact_phone}
+                          onChange={(e) => set("management_contact_phone", formatPhone(e.target.value))}
+                          placeholder="(00) 00000-0000"
+                          maxLength={15}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <FieldLabel>E-mail de contato</FieldLabel>
+                        <input
+                          type="email"
+                          className={inputCls}
+                          value={form.management_contact_email}
+                          onChange={(e) => set("management_contact_email", e.target.value)}
+                          placeholder="contato@administradora.com"
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  {formError && (
+                    <div className="mx-6 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                      {formError}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
+              {/* Modal footer */}
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4 shrink-0">
                 <button
                   type="button"
                   onClick={closeModal}
