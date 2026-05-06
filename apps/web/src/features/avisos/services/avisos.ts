@@ -65,7 +65,7 @@ export async function listAvisos(): Promise<Aviso[]> {
     .order("created_at", { ascending: false });
 
   if (condominioUUID) {
-    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+    query = query.eq("condominio_id", condominioUUID);
   }
 
   const { data, error } = await query;
