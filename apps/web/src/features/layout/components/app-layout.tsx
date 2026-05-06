@@ -6,8 +6,6 @@ import {
   CalendarDays,
   CarFront,
   CheckCheck,
-  ChevronDown,
-  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   CircleDollarSign,
