@@ -125,6 +125,8 @@ async function requireSessionUser() {
 }
 
 async function getCondominioUUID(): Promise<string | null> {
+  const stored = getUser()?.condominioUUID;
+  if (stored) return stored;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data } = await supabase

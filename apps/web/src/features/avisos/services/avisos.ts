@@ -69,7 +69,7 @@ export async function listAvisos(): Promise<Aviso[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
 
-  const condominioUUID = await getCondominioUUIDFromDB(uid);
+  const condominioUUID = getUser()?.condominioUUID ?? await getCondominioUUIDFromDB(uid);
 
   let query = supabase
     .from("avisos")
