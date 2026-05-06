@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { checkOAuthSession, login, selectCondominio, resetPassword, type CondominioOption } from "../features/auth/services/auth";
+import { checkOAuthSession, login, finalizeSupabaseLogin, selectCondominio, resetPassword, type CondominioOption, type PendingUser } from "../features/auth/services/auth";
 import loginBg from "../assets/login.jpg";
 
 type View = "login" | "select" | "forgot" | "sent";
@@ -20,6 +20,7 @@ export default function Login() {
   const [condominios, setCondominios] = useState<CondominioOption[]>([]);
   const [selectedCondominioUuid, setSelectedCondominioUuid] = useState<string>("");
   const [userName, setUserName] = useState("");
+  const [pendingUser, setPendingUser] = useState<PendingUser | null>(null);
 
   useEffect(() => {
     checkOAuthSession().then((user) => {
@@ -45,6 +46,7 @@ export default function Login() {
         setCondominios(result.condominios);
         setSelectedCondominioUuid(result.condominios[0]?.uuid ?? "");
         setUserName(result.userName);
+        setPendingUser(result.pendingUser);
         setView("select");
         return;
       }
@@ -59,13 +61,13 @@ export default function Login() {
 
   async function onSelectCondominio(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selectedCondominioUuid) return;
+    if (!selectedCondominioUuid || !pendingUser) return;
     setErr("");
     setLoading(true);
 
     try {
       const option = condominios.find((c) => c.uuid === selectedCondominioUuid)!;
-      await selectCondominio(option.id, option);
+      finalizeSupabaseLogin(pendingUser, option);
       nav("/dashboard", { replace: true });
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : "Erro ao selecionar condomínio.");

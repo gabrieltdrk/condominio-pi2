@@ -31,12 +31,14 @@ export type CondominioOption = {
   uuid?: string;
 };
 
+export type PendingUser = Omit<User, "condominioUUID" | "condominioName" | "condominioId">;
+
 export type LoginResult =
   | { requiresSelection: false; user: User }
   | {
       requiresSelection: true;
       condominios: CondominioOption[];
-      selectionToken: string;
+      pendingUser: PendingUser;
       userName: string;
     };
 
@@ -114,7 +116,7 @@ async function loginViaFastify(email: string, password: string): Promise<LoginRe
     return {
       requiresSelection: true,
       condominios: data.condominios as CondominioOption[],
-      selectionToken: data.selectionToken,
+      pendingUser: null as unknown as PendingUser,
       userName: data.user?.name ?? "",
     };
   }
@@ -176,30 +178,24 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
       role: (row.role as UserRole) ?? (profile?.role as UserRole) ?? "MORADOR",
     }));
 
-    // Guarda dados temporários para após a seleção
-    sessionStorage.setItem("selectionToken", "supabase");
-    sessionStorage.setItem(
-      "pendingSupabaseUser",
-      JSON.stringify({
-        id: data.user.id,
-        name: profile?.name ?? data.user.email ?? "",
-        email: data.user.email ?? "",
-        phone: profile?.phone ?? "",
-        role: (profile?.role as UserRole) ?? "MORADOR",
-        residentType: profile?.resident_type ?? undefined,
-        status: profile?.status ?? undefined,
-        carPlate: profile?.car_plate ?? undefined,
-        petsCount: profile?.pets_count ?? undefined,
-        avatarUrl: profile?.avatar_url ?? undefined,
-        condominioOptions: condominios,
-      }),
-    );
+    const pendingUser: PendingUser = {
+      id: data.user.id,
+      name: profile?.name ?? data.user.email ?? "",
+      email: data.user.email ?? "",
+      phone: profile?.phone ?? "",
+      role: (profile?.role as UserRole) ?? "MORADOR",
+      residentType: profile?.resident_type ?? undefined,
+      status: profile?.status ?? undefined,
+      carPlate: profile?.car_plate ?? undefined,
+      petsCount: profile?.pets_count ?? undefined,
+      avatarUrl: profile?.avatar_url ?? undefined,
+    };
 
     return {
       requiresSelection: true,
       condominios,
-      selectionToken: "supabase",
-      userName: profile?.name ?? data.user.email ?? "",
+      pendingUser,
+      userName: pendingUser.name,
     };
   }
 
@@ -230,34 +226,24 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
   return { requiresSelection: false, user };
 }
 
-// ─── Seleção de condomínio ───────────────────────────────────────────────────
+// ─── Seleção de condomínio (fluxo Supabase direto) ──────────────────────────
 
-export async function selectCondominio(condominioId: number, condominioOption?: CondominioOption): Promise<User> {
+export function finalizeSupabaseLogin(pendingUser: PendingUser, option: CondominioOption): User {
+  const user: User = {
+    ...pendingUser,
+    condominioId: null,
+    condominioUUID: option.uuid ?? null,
+    condominioName: option.name,
+  };
+  setStoredUser(user);
+  return user;
+}
+
+// ─── Seleção de condomínio (fluxo Fastify) ───────────────────────────────────
+
+export async function selectCondominio(condominioId: number): Promise<User> {
   const selectionToken = getSelectionToken();
   if (!selectionToken) throw new Error("Sessão expirada. Faça login novamente.");
-
-  // Fluxo Supabase (sem backend Fastify)
-  if (selectionToken === "supabase") {
-    const raw = sessionStorage.getItem("pendingSupabaseUser");
-    if (!raw) throw new Error("Sessão expirada. Faça login novamente.");
-
-    const pending = JSON.parse(raw) as Omit<User, "condominioUUID" | "condominioName" | "condominioId"> & { condominioOptions?: CondominioOption[] };
-    const chosen = pending.condominioOptions?.find((c) => c.id === condominioId) ?? condominioOption;
-    if (!chosen?.uuid) throw new Error("Condomínio inválido. Faça login novamente.");
-
-    const { condominioOptions: _drop, ...userFields } = pending;
-    const user: User = {
-      ...userFields,
-      condominioId: null,
-      condominioUUID: chosen.uuid,
-      condominioName: chosen.name,
-    };
-
-    sessionStorage.removeItem("selectionToken");
-    sessionStorage.removeItem("pendingSupabaseUser");
-    setStoredUser(user);
-    return user;
-  }
 
   const res = await fetch(`${API_URL}/auth/select-condominio`, {
     method: "POST",
