@@ -124,8 +124,21 @@ async function requireSessionUser() {
   return data.user;
 }
 
+async function getCondominioUUID(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("usuario_condominio")
+    .select("condominio_id")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.condominio_id ?? null;
+}
+
 export async function listDeliveryApartmentOptions(): Promise<DeliveryApartmentOption[]> {
-  const condominioUUID = getUser()?.condominioUUID ?? null;
+  const condominioUUID = await getCondominioUUID();
 
   let query = supabase
     .from("condo_apartments")
@@ -162,7 +175,7 @@ export async function listDeliveryApartmentOptions(): Promise<DeliveryApartmentO
 export async function listDeliveries(): Promise<Delivery[]> {
   const authUser = await requireSessionUser();
   const currentUser = getUser();
-  const condominioUUID = currentUser?.condominioUUID ?? null;
+  const condominioUUID = await getCondominioUUID();
 
   let query = supabase
     .from("deliveries")

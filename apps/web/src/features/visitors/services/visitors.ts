@@ -179,7 +179,14 @@ export async function listVisitorRequests(): Promise<VisitorRequest[]> {
   const authResult = await supabase.auth.getUser();
   const currentUserId = authResult.data.user?.id ?? null;
 
-  const condominioUUID = storedUser?.condominioUUID ?? null;
+  const { data: ucData } = await supabase
+    .from("usuario_condominio")
+    .select("condominio_id")
+    .eq("user_id", currentUserId ?? "")
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
+  const condominioUUID: string | null = (ucData as any)?.condominio_id ?? null;
 
   let query = supabase
     .from("visitor_requests")

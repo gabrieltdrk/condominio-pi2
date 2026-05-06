@@ -174,8 +174,21 @@ function mapPolls(rows: PollRow[], options: PollOptionRow[], votes: PollVoteRow[
   });
 }
 
+async function getCondominioUUID(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("usuario_condominio")
+    .select("condominio_id")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.condominio_id ?? null;
+}
+
 export async function listPolls(): Promise<Poll[]> {
-  const condominioUUID = getUser()?.condominioUUID ?? null;
+  const condominioUUID = await getCondominioUUID();
 
   let pollsQuery = supabase
     .from("polls")
