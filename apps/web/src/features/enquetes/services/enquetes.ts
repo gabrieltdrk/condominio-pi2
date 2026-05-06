@@ -175,11 +175,19 @@ function mapPolls(rows: PollRow[], options: PollOptionRow[], votes: PollVoteRow[
 }
 
 export async function listPolls(): Promise<Poll[]> {
+  const condominioUUID = getUser()?.condominioUUID ?? null;
+
+  let pollsQuery = supabase
+    .from("polls")
+    .select("id, title, description, created_at, created_by_name, assembly_type, meeting_mode, scope, status, meeting_at, voting_starts_at, voting_ends_at, quorum_min_percent, approval_min_percent, allow_comments, minutes_summary, creator_signature_url, creator_signature_name, attachment_url, attachment_name")
+    .order("created_at", { ascending: false });
+
+  if (condominioUUID) {
+    pollsQuery = pollsQuery.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
+
   const [pollsResult, optionsResult, votesResult, commentsResult] = await Promise.all([
-    supabase
-      .from("polls")
-      .select("id, title, description, created_at, created_by_name, assembly_type, meeting_mode, scope, status, meeting_at, voting_starts_at, voting_ends_at, quorum_min_percent, approval_min_percent, allow_comments, minutes_summary, creator_signature_url, creator_signature_name, attachment_url, attachment_name")
-      .order("created_at", { ascending: false }),
+    pollsQuery,
     supabase.from("poll_options").select("id, poll_id, label, position").order("poll_id", { ascending: false }).order("position", { ascending: true }),
     supabase.from("poll_votes").select("poll_id, option_id, user_id"),
     supabase.from("poll_comments").select("id, poll_id, message, created_at, created_by_name").order("created_at", { ascending: true }),
@@ -225,6 +233,7 @@ export async function createPoll(input: CreatePollInput): Promise<void> {
       quorum_min_percent: input.quorumMinPercent,
       approval_min_percent: input.approvalMinPercent,
       allow_comments: input.allowComments,
+      condominio_id: currentUser?.condominioUUID ?? null,
     })
     .select("id")
     .single();

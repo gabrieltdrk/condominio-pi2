@@ -14,6 +14,8 @@ export type User = {
   phone?: string;
   condominioId?: number | null;
   condominioName?: string;
+  /** UUID do condomínio no Supabase — usado para filtrar queries Supabase */
+  condominioUUID?: string | null;
   residentType?: ResidentType;
   status?: UserStatus;
   carPlate?: string;

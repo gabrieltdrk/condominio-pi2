@@ -1,36 +1,58 @@
 import { useEffect, useState } from "react";
 import {
   Building2,
+  Dumbbell,
+  Flame,
+  PartyPopper,
   Pencil,
   Plus,
   Search,
   Trash2,
-  X,
-  Dumbbell,
-  Flame,
-  PartyPopper,
   Waves,
+  X,
 } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
-import { getToken } from "../features/auth/services/auth";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
+import { supabase } from "../lib/supabase";
 
 type Condominio = {
-  id: number;
+  id: string;
   name: string;
   cnpj: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
   active: boolean;
-  zip_code: string | null;
-  neighborhood: string | null;
-  number: string | null;
-  reference: string | null;
-  manager_name: string | null;
-  manager_phone: string | null;
-  management_company: string | null;
+  zip_code?: string | null;
+  neighborhood?: string | null;
+  number?: string | null;
+  reference?: string | null;
+  manager_name?: string | null;
+  manager_phone?: string | null;
+  management_company?: string | null;
+  has_pool?: boolean;
+  pool_count?: number;
+  has_gym?: boolean;
+  gym_count?: number;
+  has_party_room?: boolean;
+  party_room_count?: number;
+  has_bbq?: boolean;
+  bbq_count?: number;
+};
+
+type FormState = {
+  name: string;
+  cnpj: string;
+  address: string;
+  city: string;
+  state: string;
+  active: boolean;
+  zip_code: string;
+  neighborhood: string;
+  number: string;
+  reference: string;
+  manager_name: string;
+  manager_phone: string;
+  management_company: string;
   has_pool: boolean;
   pool_count: number;
   has_gym: boolean;
@@ -41,7 +63,7 @@ type Condominio = {
   bbq_count: number;
 };
 
-const emptyForm = (): Omit<Condominio, "id"> => ({
+const emptyForm = (): FormState => ({
   name: "",
   cnpj: "",
   address: "",
@@ -65,55 +87,91 @@ const emptyForm = (): Omit<Condominio, "id"> => ({
   bbq_count: 0,
 });
 
-function authHeaders() {
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getToken()}`,
-  };
-}
-
 async function fetchCondominios(): Promise<Condominio[]> {
-  const res = await fetch(`${API_URL}/condominios`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Erro ao carregar condomínios.");
-  return res.json();
+  const { data, error } = await supabase
+    .from("condominios")
+    .select("*")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Condominio[];
 }
 
-async function saveCondominio(data: Omit<Condominio, "id">, id?: number): Promise<Condominio> {
-  const url = id ? `${API_URL}/condominios/${id}` : `${API_URL}/condominios`;
-  const method = id ? "PATCH" : "POST";
-  const res = await fetch(url, {
-    method,
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as any).message ?? "Erro ao salvar condomínio.");
+async function saveCondominio(payload: Omit<FormState, never>, id?: string): Promise<Condominio> {
+  const body = {
+    name: payload.name,
+    cnpj: payload.cnpj || null,
+    address: payload.address || null,
+    city: payload.city || null,
+    state: payload.state || null,
+    active: payload.active,
+    zip_code: payload.zip_code || null,
+    neighborhood: payload.neighborhood || null,
+    number: payload.number || null,
+    reference: payload.reference || null,
+    manager_name: payload.manager_name || null,
+    manager_phone: payload.manager_phone || null,
+    management_company: payload.management_company || null,
+    has_pool: payload.has_pool,
+    pool_count: payload.pool_count,
+    has_gym: payload.has_gym,
+    gym_count: payload.gym_count,
+    has_party_room: payload.has_party_room,
+    party_room_count: payload.party_room_count,
+    has_bbq: payload.has_bbq,
+    bbq_count: payload.bbq_count,
+  };
+
+  if (id) {
+    const { data, error } = await supabase
+      .from("condominios")
+      .update(body)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data as Condominio;
   }
-  return res.json();
+
+  const { data, error } = await supabase
+    .from("condominios")
+    .insert(body)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Condominio;
 }
 
-async function deactivateCondominio(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/condominios/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error("Erro ao desativar condomínio.");
+async function deactivateCondominio(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("condominios")
+    .update({ active: false })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
-async function lookupCep(cep: string): Promise<{ logradouro: string; bairro: string; localidade: string; uf: string } | null> {
+async function lookupCep(cep: string): Promise<{
+  logradouro: string;
+  bairro: string;
+  localidade: string;
+  uf: string;
+} | null> {
   const clean = cep.replace(/\D/g, "");
   if (clean.length !== 8) return null;
-  const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (data.erro) return null;
-  return data;
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.erro) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 const inputCls =
   "px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-[13px] outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
-const labelCls = "block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1";
+const labelCls =
+  "block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1";
 
 type AmenityKey = "pool" | "gym" | "party_room" | "bbq";
 const amenities: { key: AmenityKey; label: string; icon: React.ElementType }[] = [
@@ -131,7 +189,7 @@ export default function CondominiosPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Condominio | null>(null);
-  const [form, setForm] = useState(emptyForm());
+  const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
@@ -176,14 +234,14 @@ export default function CondominiosPage() {
       manager_name: c.manager_name ?? "",
       manager_phone: c.manager_phone ?? "",
       management_company: c.management_company ?? "",
-      has_pool: c.has_pool,
-      pool_count: c.pool_count,
-      has_gym: c.has_gym,
-      gym_count: c.gym_count,
-      has_party_room: c.has_party_room,
-      party_room_count: c.party_room_count,
-      has_bbq: c.has_bbq,
-      bbq_count: c.bbq_count,
+      has_pool: c.has_pool ?? false,
+      pool_count: c.pool_count ?? 0,
+      has_gym: c.has_gym ?? false,
+      gym_count: c.gym_count ?? 0,
+      has_party_room: c.has_party_room ?? false,
+      party_room_count: c.party_room_count ?? 0,
+      has_bbq: c.has_bbq ?? false,
+      bbq_count: c.bbq_count ?? 0,
     });
     setFormError(null);
     setModalOpen(true);
@@ -194,12 +252,12 @@ export default function CondominiosPage() {
     setEditing(null);
   }
 
-  function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   async function handleCepBlur() {
-    const cep = (form.zip_code ?? "").replace(/\D/g, "");
+    const cep = form.zip_code.replace(/\D/g, "");
     if (cep.length !== 8) return;
     setCepLoading(true);
     const data = await lookupCep(cep);
@@ -215,13 +273,13 @@ export default function CondominiosPage() {
   }
 
   function toggleAmenity(key: AmenityKey) {
-    const hasKey = `has_${key}` as keyof typeof form;
-    const countKey = `${key}_count` as keyof typeof form;
+    const hasKey = `has_${key}` as keyof FormState;
+    const countKey = `${key}_count` as keyof FormState;
     const current = form[hasKey] as boolean;
     setForm((prev) => ({
       ...prev,
       [hasKey]: !current,
-      [countKey]: !current ? (prev[countKey] as number) || 1 : 0,
+      [countKey]: !current ? Math.max((prev[countKey] as number) || 0, 1) : 0,
     }));
   }
 
@@ -234,21 +292,7 @@ export default function CondominiosPage() {
     setSaving(true);
     setFormError(null);
     try {
-      const payload = {
-        ...form,
-        cnpj: form.cnpj || null,
-        address: form.address || null,
-        city: form.city || null,
-        state: form.state || null,
-        zip_code: form.zip_code || null,
-        neighborhood: form.neighborhood || null,
-        number: form.number || null,
-        reference: form.reference || null,
-        manager_name: form.manager_name || null,
-        manager_phone: form.manager_phone || null,
-        management_company: form.management_company || null,
-      };
-      const saved = await saveCondominio(payload, editing?.id);
+      const saved = await saveCondominio(form, editing?.id);
       setCondominios((prev) =>
         editing
           ? prev.map((c) => (c.id === editing.id ? saved : c))
@@ -266,7 +310,9 @@ export default function CondominiosPage() {
     if (!confirm(`Desativar "${c.name}"?`)) return;
     try {
       await deactivateCondominio(c.id);
-      setCondominios((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: false } : x)));
+      setCondominios((prev) =>
+        prev.map((x) => (x.id === c.id ? { ...x, active: false } : x)),
+      );
     } catch (err: any) {
       alert(err.message);
     }
@@ -285,7 +331,10 @@ export default function CondominiosPage() {
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
             <input
               className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-[13px] text-gray-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               placeholder="Buscar por nome, cidade ou CNPJ..."
@@ -302,19 +351,24 @@ export default function CondominiosPage() {
           </button>
         </div>
 
-        {/* Error */}
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
         )}
 
         {/* Table */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-gray-400">Carregando...</div>
+            <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+              Carregando...
+            </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
               <Building2 size={32} className="text-gray-200" />
-              <p className="text-sm text-gray-400">Nenhum condomínio encontrado.</p>
+              <p className="text-sm text-gray-400">
+                {search ? "Nenhum resultado encontrado." : "Nenhum condomínio cadastrado."}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -332,7 +386,10 @@ export default function CondominiosPage() {
                 </thead>
                 <tbody>
                   {filtered.map((c) => (
-                    <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                    <tr
+                      key={c.id}
+                      className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
+                    >
                       <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
                       <td className="px-4 py-3 text-gray-500">
                         {[c.city, c.state].filter(Boolean).join(" / ") || "—"}
@@ -340,16 +397,40 @@ export default function CondominiosPage() {
                       <td className="px-4 py-3 font-mono text-gray-500">{c.cnpj || "—"}</td>
                       <td className="px-4 py-3 text-gray-500">{c.manager_name || "—"}</td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1.5">
-                          {c.has_pool && <span title="Piscina" className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">🏊 {c.pool_count}</span>}
-                          {c.has_gym && <span title="Academia" className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">🏋️ {c.gym_count}</span>}
-                          {c.has_party_room && <span title="Salão de Festas" className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">🎉 {c.party_room_count}</span>}
-                          {c.has_bbq && <span title="Churrasqueira" className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">🔥 {c.bbq_count}</span>}
-                          {!c.has_pool && !c.has_gym && !c.has_party_room && !c.has_bbq && <span className="text-gray-300">—</span>}
+                        <div className="flex gap-1.5 flex-wrap">
+                          {c.has_pool && (
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                              🏊 {c.pool_count}
+                            </span>
+                          )}
+                          {c.has_gym && (
+                            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                              🏋️ {c.gym_count}
+                            </span>
+                          )}
+                          {c.has_party_room && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              🎉 {c.party_room_count}
+                            </span>
+                          )}
+                          {c.has_bbq && (
+                            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                              🔥 {c.bbq_count}
+                            </span>
+                          )}
+                          {!c.has_pool && !c.has_gym && !c.has_party_room && !c.has_bbq && (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${c.active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                            c.active
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
                           {c.active ? "Ativo" : "Inativo"}
                         </span>
                       </td>
@@ -387,12 +468,15 @@ export default function CondominiosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <form onSubmit={handleSubmit}>
-              {/* Modal header */}
               <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                 <h2 className="text-sm font-semibold text-gray-900">
                   {editing ? "Editar Condomínio" : "Novo Condomínio"}
                 </h2>
-                <button type="button" onClick={closeModal} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                >
                   <X size={16} />
                 </button>
               </div>
@@ -400,19 +484,35 @@ export default function CondominiosPage() {
               <div className="space-y-6 px-6 py-5">
                 {/* Identificação */}
                 <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">Identificação</p>
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                    Identificação
+                  </p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="sm:col-span-2">
                       <label className={labelCls}>Nome *</label>
-                      <input className={inputCls} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Nome do condomínio" />
+                      <input
+                        className={inputCls}
+                        value={form.name}
+                        onChange={(e) => set("name", e.target.value)}
+                        placeholder="Nome do condomínio"
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>CNPJ</label>
-                      <input className={inputCls} value={form.cnpj ?? ""} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" />
+                      <input
+                        className={inputCls}
+                        value={form.cnpj}
+                        onChange={(e) => set("cnpj", e.target.value)}
+                        placeholder="00.000.000/0000-00"
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Status</label>
-                      <select className={inputCls} value={form.active ? "true" : "false"} onChange={(e) => set("active", e.target.value === "true")}>
+                      <select
+                        className={inputCls}
+                        value={form.active ? "true" : "false"}
+                        onChange={(e) => set("active", e.target.value === "true")}
+                      >
                         <option value="true">Ativo</option>
                         <option value="false">Inativo</option>
                       </select>
@@ -422,13 +522,20 @@ export default function CondominiosPage() {
 
                 {/* Endereço */}
                 <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">Endereço</p>
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                    Endereço
+                  </p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className={labelCls}>CEP {cepLoading && <span className="text-indigo-400">(buscando...)</span>}</label>
+                      <label className={labelCls}>
+                        CEP{" "}
+                        {cepLoading && (
+                          <span className="text-indigo-400">(buscando...)</span>
+                        )}
+                      </label>
                       <input
                         className={inputCls}
-                        value={form.zip_code ?? ""}
+                        value={form.zip_code}
                         onChange={(e) => set("zip_code", e.target.value)}
                         onBlur={handleCepBlur}
                         placeholder="00000-000"
@@ -437,81 +544,153 @@ export default function CondominiosPage() {
                     </div>
                     <div>
                       <label className={labelCls}>Bairro</label>
-                      <input className={inputCls} value={form.neighborhood ?? ""} onChange={(e) => set("neighborhood", e.target.value)} placeholder="Bairro" />
+                      <input
+                        className={inputCls}
+                        value={form.neighborhood}
+                        onChange={(e) => set("neighborhood", e.target.value)}
+                        placeholder="Bairro"
+                      />
                     </div>
                     <div className="sm:col-span-2">
                       <label className={labelCls}>Logradouro</label>
-                      <input className={inputCls} value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} placeholder="Rua, Av..." />
+                      <input
+                        className={inputCls}
+                        value={form.address}
+                        onChange={(e) => set("address", e.target.value)}
+                        placeholder="Rua, Av..."
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Número</label>
-                      <input className={inputCls} value={form.number ?? ""} onChange={(e) => set("number", e.target.value)} placeholder="123" />
+                      <input
+                        className={inputCls}
+                        value={form.number}
+                        onChange={(e) => set("number", e.target.value)}
+                        placeholder="123"
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Referência</label>
-                      <input className={inputCls} value={form.reference ?? ""} onChange={(e) => set("reference", e.target.value)} placeholder="Próximo a..." />
+                      <input
+                        className={inputCls}
+                        value={form.reference}
+                        onChange={(e) => set("reference", e.target.value)}
+                        placeholder="Próximo a..."
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Cidade</label>
-                      <input className={inputCls} value={form.city ?? ""} onChange={(e) => set("city", e.target.value)} placeholder="Cidade" />
+                      <input
+                        className={inputCls}
+                        value={form.city}
+                        onChange={(e) => set("city", e.target.value)}
+                        placeholder="Cidade"
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>UF</label>
-                      <input className={inputCls} value={form.state ?? ""} onChange={(e) => set("state", e.target.value)} placeholder="SP" maxLength={2} />
+                      <input
+                        className={inputCls}
+                        value={form.state}
+                        onChange={(e) => set("state", e.target.value)}
+                        placeholder="SP"
+                        maxLength={2}
+                      />
                     </div>
                   </div>
                 </section>
 
-                {/* Gestão administrativa */}
+                {/* Gestão Administrativa */}
                 <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">Gestão Administrativa</p>
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                    Gestão Administrativa
+                  </p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={labelCls}>Nome do Síndico</label>
-                      <input className={inputCls} value={form.manager_name ?? ""} onChange={(e) => set("manager_name", e.target.value)} placeholder="Nome completo" />
+                      <input
+                        className={inputCls}
+                        value={form.manager_name}
+                        onChange={(e) => set("manager_name", e.target.value)}
+                        placeholder="Nome completo"
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Contato do Síndico</label>
-                      <input className={inputCls} value={form.manager_phone ?? ""} onChange={(e) => set("manager_phone", e.target.value)} placeholder="(00) 00000-0000" />
+                      <input
+                        className={inputCls}
+                        value={form.manager_phone}
+                        onChange={(e) => set("manager_phone", e.target.value)}
+                        placeholder="(00) 00000-0000"
+                      />
                     </div>
                     <div className="sm:col-span-2">
                       <label className={labelCls}>Contato da Administradora</label>
-                      <input className={inputCls} value={form.management_company ?? ""} onChange={(e) => set("management_company", e.target.value)} placeholder="Nome / telefone da administradora" />
+                      <input
+                        className={inputCls}
+                        value={form.management_company}
+                        onChange={(e) => set("management_company", e.target.value)}
+                        placeholder="Nome / telefone da administradora"
+                      />
                     </div>
                   </div>
                 </section>
 
                 {/* Amenidades */}
                 <section>
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">Amenidades</p>
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                    Amenidades
+                  </p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {amenities.map(({ key, label, icon: Icon }) => {
-                      const hasKey = `has_${key}` as keyof typeof form;
-                      const countKey = `${key}_count` as keyof typeof form;
+                      const hasKey = `has_${key}` as keyof FormState;
+                      const countKey = `${key}_count` as keyof FormState;
                       const enabled = form[hasKey] as boolean;
                       return (
-                        <div key={key} className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${enabled ? "border-indigo-200 bg-indigo-50" : "border-gray-200 bg-white"}`}>
+                        <div
+                          key={key}
+                          className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                            enabled
+                              ? "border-indigo-200 bg-indigo-50"
+                              : "border-gray-200 bg-white"
+                          }`}
+                        >
                           <button
                             type="button"
                             onClick={() => toggleAmenity(key)}
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${enabled ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-400"}`}
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                              enabled
+                                ? "bg-indigo-600 text-white"
+                                : "bg-gray-100 text-gray-400"
+                            }`}
                           >
                             <Icon size={15} />
                           </button>
-                          <span className="flex-1 text-[13px] font-medium text-gray-700">{label}</span>
+                          <span className="flex-1 text-[13px] font-medium text-gray-700">
+                            {label}
+                          </span>
                           {enabled && (
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => set(countKey as any, Math.max(0, (form[countKey] as number) - 1))}
+                                onClick={() =>
+                                  set(
+                                    countKey as any,
+                                    Math.max(0, (form[countKey] as number) - 1),
+                                  )
+                                }
                                 className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
                               >
                                 −
                               </button>
-                              <span className="w-5 text-center text-[13px] font-semibold text-gray-800">{form[countKey] as number}</span>
+                              <span className="w-5 text-center text-[13px] font-semibold text-gray-800">
+                                {form[countKey] as number}
+                              </span>
                               <button
                                 type="button"
-                                onClick={() => set(countKey as any, (form[countKey] as number) + 1)}
+                                onClick={() =>
+                                  set(countKey as any, (form[countKey] as number) + 1)
+                                }
                                 className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
                               >
                                 +
@@ -525,11 +704,12 @@ export default function CondominiosPage() {
                 </section>
 
                 {formError && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{formError}</div>
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                    {formError}
+                  </div>
                 )}
               </div>
 
-              {/* Modal footer */}
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
                 <button
                   type="button"

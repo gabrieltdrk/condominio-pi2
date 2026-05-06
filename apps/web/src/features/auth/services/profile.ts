@@ -51,7 +51,18 @@ async function fetchProfile(id: string): Promise<ProfileRow | null> {
   return fallback.data as ProfileRow;
 }
 
-function mergeUser(id: string, email: string, profile: ProfileRow | null) {
+async function fetchCondominioUUID(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("usuario_condominio")
+    .select("condominio_id")
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.condominio_id ?? null;
+}
+
+function mergeUser(id: string, email: string, profile: ProfileRow | null, condominioUUID?: string | null) {
   const current = getUser();
   const next: User = {
     id,
@@ -59,6 +70,7 @@ function mergeUser(id: string, email: string, profile: ProfileRow | null) {
     email,
     phone: profile?.phone ?? "",
     role: (profile?.role ?? current?.role ?? "MORADOR") as User["role"],
+    condominioUUID: condominioUUID ?? current?.condominioUUID ?? null,
     residentType: profile?.resident_type ?? current?.residentType ?? undefined,
     status: profile?.status ?? current?.status ?? undefined,
     carPlate: profile?.car_plate ?? current?.carPlate ?? undefined,
@@ -74,9 +86,15 @@ export async function refreshStoredUser(): Promise<User | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) return null;
 
+  const uid = data.session.user.id;
   const email = data.session.user.email ?? "";
-  const profile = await fetchProfile(data.session.user.id);
-  return mergeUser(data.session.user.id, email, profile);
+
+  const [profile, condominioUUID] = await Promise.all([
+    fetchProfile(uid),
+    fetchCondominioUUID(uid),
+  ]);
+
+  return mergeUser(uid, email, profile, condominioUUID);
 }
 
 export async function saveOwnProfile(input: SaveProfileInput): Promise<User> {

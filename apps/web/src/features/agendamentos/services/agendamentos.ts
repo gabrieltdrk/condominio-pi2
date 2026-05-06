@@ -39,11 +39,19 @@ function mapRow(row: BookingRow, profileMap: Map<string, string>): ResourceBooki
 }
 
 export async function listResourceBookings(): Promise<ResourceBooking[]> {
-  const { data, error } = await supabase
+  const condominioUUID = getUser()?.condominioUUID ?? null;
+
+  let query = supabase
     .from("resource_bookings")
     .select("id, resource_id, booking_date, booking_time, duration, note, created_at, user_id")
     .order("booking_date", { ascending: true })
     .order("booking_time", { ascending: true });
+
+  if (condominioUUID) {
+    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -97,6 +105,7 @@ export async function createResourceBooking(input: {
     duration: input.duration,
     note: input.note.trim() || null,
     user_id: user.id,
+    condominio_id: getUser()?.condominioUUID ?? null,
   });
 
   if (error) {

@@ -1,4 +1,5 @@
 import { supabase } from "../../../lib/supabase";
+import { getUser } from "../../auth/services/auth";
 
 export type AvisoTipo = "Manutenção" | "Assembleia" | "Segurança" | "Informativo" | "Eventos";
 
@@ -55,12 +56,19 @@ export const AVISO_TIPO_COLORS: Record<AvisoTipo, string> = {
 export async function listAvisos(): Promise<Aviso[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
+  const condominioUUID = getUser()?.condominioUUID ?? null;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("avisos")
     .select("*, profiles!created_by(name)")
     .order("fixado", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (condominioUUID) {
+    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error("Erro ao carregar avisos.");
 
@@ -107,6 +115,7 @@ export async function createAviso(payload: CreateAvisoPayload): Promise<void> {
     ...payload,
     created_by: user.id,
     data_expiracao: payload.data_expiracao || null,
+    condominio_id: getUser()?.condominioUUID ?? null,
   });
 
   if (error) throw new Error(error.message);
