@@ -407,7 +407,7 @@ export default function FinanceiroPage() {
         const apartments = await listBuildingApartmentOptions().catch(() => []);
         const myApartmentIds = apartments.filter((apartment) => apartment.residentId === user.id).map((apartment) => apartment.id);
         const [byIdentity, ...byApartment] = await Promise.all([
-          listFinanceBills({ residentId: user.id, residentEmail: user.email, limit: 400 }).catch(() => []),
+          listFinanceBills({ residentId: String(user.id), residentEmail: user.email, limit: 400 }).catch(() => []),
           ...myApartmentIds.map((apartmentId) => listFinanceBills({ apartmentId, limit: 400 }).catch(() => [])),
         ]);
         const merged = [...byIdentity, ...byApartment.flat()].filter(
