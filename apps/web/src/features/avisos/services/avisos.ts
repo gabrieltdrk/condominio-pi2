@@ -71,9 +71,7 @@ export async function listAvisos(): Promise<Aviso[]> {
 
   const condominioUUID = getUser()?.condominioUUID ?? await getCondominioUUIDFromDB(uid);
 
-  console.log("[listAvisos] uid:", uid, "condominioUUID:", condominioUUID, "storedUser:", getUser());
-
-  let query = supabase
+let query = supabase
     .from("avisos")
     .select("*, profiles!created_by(name)")
     .order("fixado", { ascending: false })

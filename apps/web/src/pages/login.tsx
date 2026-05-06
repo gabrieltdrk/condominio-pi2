@@ -18,7 +18,7 @@ export default function Login() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotErr, setForgotErr] = useState("");
   const [condominios, setCondominios] = useState<CondominioOption[]>([]);
-  const [selectedCondominioId, setSelectedCondominioId] = useState<number | null>(null);
+  const [selectedCondominioUuid, setSelectedCondominioUuid] = useState<string>("");
   const [userName, setUserName] = useState("");
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function Login() {
 
       if (result.requiresSelection) {
         setCondominios(result.condominios);
-        setSelectedCondominioId(result.condominios[0]?.id ?? null);
+        setSelectedCondominioUuid(result.condominios[0]?.uuid ?? "");
         setUserName(result.userName);
         setView("select");
         return;
@@ -59,13 +59,13 @@ export default function Login() {
 
   async function onSelectCondominio(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selectedCondominioId) return;
+    if (!selectedCondominioUuid) return;
     setErr("");
     setLoading(true);
 
     try {
-      const option = condominios.find((c) => c.id === selectedCondominioId)!;
-      await selectCondominio(selectedCondominioId, option);
+      const option = condominios.find((c) => c.uuid === selectedCondominioUuid)!;
+      await selectCondominio(option.id, option);
       nav("/dashboard", { replace: true });
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : "Erro ao selecionar condomínio.");
@@ -138,13 +138,13 @@ export default function Login() {
                     <div className="relative">
                       <Building2 size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                       <select
-                        value={selectedCondominioId ?? ""}
-                        onChange={(e) => setSelectedCondominioId(Number(e.target.value))}
+                        value={selectedCondominioUuid}
+                        onChange={(e) => setSelectedCondominioUuid(e.target.value)}
                         required
                         className="h-11 w-full appearance-none rounded-2xl border border-slate-200 bg-[#f8fafc] pl-11 pr-10 text-sm text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                       >
                         {condominios.map((c) => (
-                          <option key={c.id} value={c.id}>
+                          <option key={c.uuid} value={c.uuid}>
                             {c.name}
                           </option>
                         ))}
