@@ -69,13 +69,31 @@ export function getCondominioId(): number | null {
 
 // ─── Login (dual-auth: Fastify JWT + Supabase session) ───────────────────────
 
+// Tenta login via Fastify (multi-tenant JWT).
+// Se o backend não estiver acessível (sem VITE_API_URL em produção),
+// cai no Supabase direto (modo legado, sem condominioId).
 export async function login(email: string, password: string): Promise<LoginResult> {
-  // Fastify: valida credenciais e resolve condomínio(s)
-  const res = await fetch(`${API_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
+  const backendAvailable = !!import.meta.env.VITE_API_URL;
+
+  if (backendAvailable) {
+    return loginViaFastify(email, password);
+  }
+
+  return loginViaSupabase(email, password);
+}
+
+async function loginViaFastify(email: string, password: string): Promise<LoginResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    // Rede indisponível — cai no Supabase
+    return loginViaSupabase(email, password);
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -84,7 +102,7 @@ export async function login(email: string, password: string): Promise<LoginResul
 
   const data = await res.json();
 
-  // Supabase: mantém sessão paralela para RLS (não-bloqueante)
+  // Supabase: sessão paralela para RLS (não-bloqueante)
   supabase.auth.signInWithPassword({ email, password }).catch(() => undefined);
 
   if (data.requiresSelection) {
@@ -108,6 +126,36 @@ export async function login(email: string, password: string): Promise<LoginResul
   };
 
   localStorage.setItem("token", data.token);
+  setStoredUser(user);
+
+  return { requiresSelection: false, user };
+}
+
+async function loginViaSupabase(email: string, password: string): Promise<LoginResult> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
+    .eq("id", data.user.id)
+    .single();
+
+  const user: User = {
+    id: data.user.id,
+    name: profile?.name ?? data.user.email ?? "",
+    email: data.user.email ?? "",
+    phone: profile?.phone ?? "",
+    role: (profile?.role as UserRole) ?? "MORADOR",
+    condominioId: null,
+    residentType: profile?.resident_type ?? undefined,
+    status: profile?.status ?? undefined,
+    carPlate: profile?.car_plate ?? undefined,
+    petsCount: profile?.pets_count ?? undefined,
+    avatarUrl: profile?.avatar_url ?? undefined,
+  };
+
+  localStorage.setItem("token", data.session.access_token);
   setStoredUser(user);
 
   return { requiresSelection: false, user };
