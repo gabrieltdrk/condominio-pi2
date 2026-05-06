@@ -89,10 +89,11 @@ export async function refreshStoredUser(): Promise<User | null> {
   const uid = data.session.user.id;
   const email = data.session.user.email ?? "";
 
-  const [profile, condominioUUID] = await Promise.all([
-    fetchProfile(uid),
-    fetchCondominioUUID(uid),
-  ]);
+  // Preserva o condominioUUID já escolhido pelo usuário (seleção de condomínio no login).
+  // Só busca do banco se não houver nenhum salvo ainda.
+  const existingUUID = getUser()?.condominioUUID ?? null;
+  const profile = await fetchProfile(uid);
+  const condominioUUID = existingUUID ?? await fetchCondominioUUID(uid);
 
   return mergeUser(uid, email, profile, condominioUUID);
 }
