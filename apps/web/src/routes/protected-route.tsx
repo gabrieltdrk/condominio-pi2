@@ -16,15 +16,9 @@ export default function ProtectedRoute({ children, adminOnly = false, allowedRol
     return <Navigate to="/login" replace />;
   }
 
-  // MASTER_ADMIN não precisa de condominioId — tem acesso irrestrito
+  // MASTER_ADMIN tem acesso irrestrito a todas as rotas
   if (user?.role === "MASTER_ADMIN") {
     return children;
-  }
-
-  // Usuário autenticado via JWT do Fastify deve ter condominioId resolvido
-  // (exceto usuários OAuth do Supabase que entram com condominioId null)
-  if (user?.condominioId === undefined) {
-    return <Navigate to="/login" replace />;
   }
 
   if (adminOnly && user?.role !== "ADMIN") {
