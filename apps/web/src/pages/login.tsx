@@ -67,6 +67,7 @@ export default function Login() {
 
     try {
       const option = condominios.find((c) => c.uuid === selectedCondominioUuid)!;
+      console.log("[select] selectedUuid:", selectedCondominioUuid, "option:", option, "all:", condominios);
       finalizeSupabaseLogin(pendingUser, option);
       nav("/dashboard", { replace: true });
     } catch (error: unknown) {

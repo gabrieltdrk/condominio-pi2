@@ -171,12 +171,15 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
       ((condData ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]),
     );
 
-    const condominios: CondominioOption[] = ucRows.map((row, idx) => ({
-      id: idx + 1,
-      uuid: row.condominio_id,
-      name: nameMap.get(row.condominio_id) ?? `Condomínio ${idx + 1}`,
-      role: (row.role as UserRole) ?? (profile?.role as UserRole) ?? "MORADOR",
-    }));
+    const condominios: CondominioOption[] = ucRows
+      .map((row, idx) => ({
+        id: idx + 1,
+        uuid: row.condominio_id,
+        name: nameMap.get(row.condominio_id) ?? `Condomínio ${idx + 1}`,
+        role: (row.role as UserRole) ?? (profile?.role as UserRole) ?? "MORADOR",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+      .map((c, idx) => ({ ...c, id: idx + 1 }));
 
     const pendingUser: PendingUser = {
       id: data.user.id,
