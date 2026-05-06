@@ -335,7 +335,7 @@ function ModalShell({
 
 export default function EnquetesPage() {
   const user = getUser();
-  const voterId = user?.id ?? user?.email?.trim().toLowerCase() ?? "anonimo";
+  const voterId = String(user?.id ?? user?.email?.trim().toLowerCase() ?? "anonimo");
   const canManage = user?.role === "ADMIN";
 
   const [polls, setPolls] = useState<Poll[]>([]);

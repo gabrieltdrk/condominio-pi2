@@ -536,7 +536,7 @@ export default function Agendamentos() {
         date={selectedDate}
         resource={selectedResource}
         booking={selectedBooking}
-        currentUserId={currentUser?.id}
+        currentUserId={currentUser?.id != null ? String(currentUser.id) : undefined}
         time={time}
         setTime={setTime}
         duration={duration}
