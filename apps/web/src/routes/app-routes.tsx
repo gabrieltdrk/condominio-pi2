@@ -18,6 +18,7 @@ import UsuariosPage from "../pages/usuarios";
 import VisitantesPage from "../pages/visitantes";
 import VisitorApprovalPage from "../pages/visitantes-aprovacao";
 import VisitorAccessCardPage from "../pages/visitantes-cartao";
+import CondominiosPage from "../pages/condominios";
 import ProtectedRoute from "./protected-route";
 
 export default function AppRoutes() {
@@ -145,6 +146,14 @@ export default function AppRoutes() {
           }
         />
         <Route path="/maresia" element={<Navigate to="/manutencao" replace />} />
+        <Route
+          path="/condominios"
+          element={
+            <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
+              <CondominiosPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

@@ -27,6 +27,7 @@ import {
   Users,
   Waves,
   X,
+  Landmark,
 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
 import { refreshStoredUser } from "../../auth/services/profile";
@@ -35,9 +36,9 @@ import { useDarkMode } from "../hooks/use-dark-mode";
 import { useNotifications } from "../hooks/use-notifications";
 
 const SIDEBAR_STORAGE_KEY = "omni:sidebar-collapsed";
-const ADMIN_SECTION_STORAGE_KEY = "omni:admin-section-open";
 
-const navLinks = [
+// GERAL — visível para todos os roles
+const geralLinks = [
   { label: "Dashboard", path: "/dashboard", icon: Home },
   { label: "Avisos", path: "/avisos", icon: Megaphone },
   { label: "Assembleia", path: "/enquetes", icon: MessageSquare },
@@ -47,13 +48,19 @@ const navLinks = [
   { label: "Visitantes", path: "/visitantes", icon: UserRoundCheck },
   { label: "Garagem", path: "/garagem", icon: CarFront },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
-  { label: "Edificio", path: "/predio", icon: Building2 },
-  { label: "Usuarios", path: "/usuarios", icon: Users },
   { label: "Manutenção", path: "/manutencao", icon: Waves },
 ];
 
-const adminPaths = new Set(["/predio", "/usuarios"]);
-const gatekeeperPaths = new Set(["/garagem", "/visitantes", "/encomendas"]);
+// SÍNDICO — visível para ADMIN + MASTER_ADMIN
+const sindicoLinks = [
+  { label: "Edificio", path: "/predio", icon: Building2 },
+  { label: "Usuarios", path: "/usuarios", icon: Users },
+];
+
+// ADMIN (SaaS) — visível apenas para MASTER_ADMIN
+const masterLinks = [
+  { label: "Condomínios", path: "/condominios", icon: Landmark },
+];
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -70,11 +77,6 @@ function getInitialCollapsedState() {
   return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
 }
 
-function getInitialAdminSectionState() {
-  if (typeof window === "undefined") return true;
-  const stored = window.localStorage.getItem(ADMIN_SECTION_STORAGE_KEY);
-  return stored === null ? true : stored === "true";
-}
 
 export default function AppLayout({ title, children }: { title: string; children: ReactNode }) {
   const nav = useNavigate();
@@ -82,7 +84,6 @@ export default function AppLayout({ title, children }: { title: string; children
   const [user, setUser] = useState(getUser());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsedState);
-  const [adminSectionOpen, setAdminSectionOpen] = useState(getInitialAdminSectionState);
   const { notifs, bellOpen, setBellOpen, bellPos, bellRef, unread, openBell, handleMarcarLida, handleMarcarTodas } = useNotifications();
   const { dark, toggleDark } = useDarkMode();
   const [gearOpen, setGearOpen] = useState(false);
@@ -91,11 +92,6 @@ export default function AppLayout({ title, children }: { title: string; children
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
   }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(ADMIN_SECTION_STORAGE_KEY, String(adminSectionOpen));
-  }, [adminSectionOpen]);
 
   useEffect(() => {
     let active = true;
@@ -130,11 +126,12 @@ export default function AppLayout({ title, children }: { title: string; children
         .toUpperCase()
     : "U";
 
-  const mainLinks =
-    user?.role === "PORTEIRO"
-      ? navLinks.filter((link) => gatekeeperPaths.has(link.path))
-      : navLinks.filter((link) => !adminPaths.has(link.path));
-  const adminLinks = user?.role === "ADMIN" ? navLinks.filter((link) => adminPaths.has(link.path)) : [];
+  const role = user?.role;
+  const groups: { title: string; links: { label: string; path: string; icon: React.ElementType }[] }[] = [
+    { title: "Geral", links: geralLinks },
+    ...(role === "ADMIN" || role === "MASTER_ADMIN" ? [{ title: "Síndico", links: sindicoLinks }] : []),
+    ...(role === "MASTER_ADMIN" ? [{ title: "Admin", links: masterLinks }] : []),
+  ];
 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
     const collapsed = mobile ? false : sidebarCollapsed;
@@ -172,48 +169,40 @@ export default function AppLayout({ title, children }: { title: string; children
         </div>
 
         <nav className={`min-h-0 flex flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? "gap-2 p-2" : "gap-0.5 p-3"}`}>
-          {[{ title: undefined, links: mainLinks }, { title: "Administrativo", links: adminLinks }].map((group) =>
-            group.links.length > 0 ? (
-              <div key={group.title ?? "principal"} className={collapsed ? "space-y-2" : "space-y-1"}>
-                {!collapsed && group.title && (
+          {groups.map((group) => (
+            <div key={group.title} className={collapsed ? "space-y-2" : "space-y-1"}>
+              {!collapsed && (
+                <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                  {group.title}
+                </p>
+              )}
+              {group.links.map(({ label, path, icon: Icon }) => {
+                const active = location.pathname === path;
+                return (
                   <button
-                    type="button"
-                    onClick={() => setAdminSectionOpen((value) => !value)}
-                    className="flex w-full items-center justify-between rounded-xl bg-transparent px-3 pb-1 pt-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-gray-600"
+                    key={path}
+                    onClick={() => {
+                      nav(path);
+                      setSidebarOpen(false);
+                    }}
+                    title={collapsed ? label : undefined}
+                    className={`w-full rounded-xl border-none text-sm font-medium transition-colors ${
+                      collapsed
+                        ? `flex h-11 items-center justify-center px-0 ${
+                            active ? "bg-indigo-50 text-indigo-700" : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                          }`
+                        : `flex items-center gap-3 px-3 py-2.5 text-left ${
+                            active ? "bg-indigo-50 text-indigo-700" : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                          }`
+                    }`}
                   >
-                    <span>{group.title}</span>
-                    {adminSectionOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <Icon size={17} className={active ? "text-indigo-600" : "text-gray-400"} />
+                    {!collapsed && label}
                   </button>
-                )}
-
-                {(group.title && !adminSectionOpen ? [] : group.links).map(({ label, path, icon: Icon }) => {
-                  const active = location.pathname === path;
-                  return (
-                    <button
-                      key={path}
-                      onClick={() => {
-                        nav(path);
-                        setSidebarOpen(false);
-                      }}
-                      title={collapsed ? label : undefined}
-                      className={`w-full rounded-xl border-none text-sm font-medium transition-colors ${
-                        collapsed
-                          ? `flex h-11 items-center justify-center px-0 ${
-                              active ? "bg-indigo-50 text-indigo-700" : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                            }`
-                          : `flex items-center gap-3 px-3 py-2.5 text-left ${
-                              active ? "bg-indigo-50 text-indigo-700" : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                            }`
-                      }`}
-                    >
-                      <Icon size={17} className={active ? "text-indigo-600" : "text-gray-400"} />
-                      {!collapsed && label}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null,
-          )}
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="shrink-0 border-t border-gray-100 p-3">
@@ -230,7 +219,7 @@ export default function AppLayout({ title, children }: { title: string; children
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold leading-tight text-gray-900">{user?.name ?? "Usuario"}</p>
                 <p className="mt-0.5 text-[11px] leading-tight text-gray-400">
-                  {user?.role === "ADMIN" ? "Administrador" : user?.role === "PORTEIRO" ? "Portaria" : "Morador"}
+                  {user?.role === "MASTER_ADMIN" ? "Master Admin" : user?.role === "ADMIN" ? "Administrador" : user?.role === "PORTEIRO" ? "Portaria" : "Morador"}
                 </p>
               </div>
             )}
