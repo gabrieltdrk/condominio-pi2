@@ -69,7 +69,8 @@ export default function UsuariosPage() {
     setLoading(true);
     setError("");
 
-    Promise.all([listUsers(), listBuildingApartmentOptions()])
+    const condominioUUID = currentUser?.role === "ADMIN" ? (currentUser.condominioUUID ?? undefined) : undefined;
+    Promise.all([listUsers(condominioUUID), listBuildingApartmentOptions()])
       .then(([loadedUsers, loadedApartments]) => {
         setUsers(loadedUsers);
         setApartmentOptions(loadedApartments);
@@ -223,18 +224,20 @@ export default function UsuariosPage() {
     });
   }, [users, search, roleFilter, typeFilter, statusFilter]);
 
+  const isReadOnly = currentUser?.role === "MORADOR";
+
   return (
-    <AppLayout title="Usuários">
+    <AppLayout title="Moradores">
       <div className="space-y-5">
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="m-0 text-lg font-semibold text-slate-900">Gestão de usuários</h2>
-              <p className="mt-1 text-sm text-slate-500">Visualize, filtre, edite e vincule moradores aos apartamentos.</p>
+              <h2 className="m-0 text-lg font-semibold text-slate-900">Moradores</h2>
+              <p className="mt-1 text-sm text-slate-500">Visualize e filtre os moradores do condomínio.</p>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <div className="relative min-w-[260px]">
+              <div className="relative min-w-65">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={search}
@@ -243,14 +246,16 @@ export default function UsuariosPage() {
                   className={`${inputCls} pl-9`}
                 />
               </div>
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
-              >
-                <Plus size={15} />
-                Novo usuário
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                >
+                  <Plus size={15} />
+                  Novo usuário
+                </button>
+              )}
             </div>
           </div>
 
@@ -278,7 +283,7 @@ export default function UsuariosPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="m-0 text-sm font-semibold text-slate-900">Usuários cadastrados</h3>
+              <h3 className="m-0 text-sm font-semibold text-slate-900">Moradores cadastrados</h3>
               <p className="mt-0.5 text-xs text-slate-400">{filteredUsers.length} resultado(s)</p>
             </div>
           </div>
@@ -348,24 +353,26 @@ export default function UsuariosPage() {
                           .join(" · ") || "-"}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-3">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(user)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
-                          >
-                            <Pencil size={14} />
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteUser(user)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50"
-                          >
-                            <Trash2 size={14} />
-                            Excluir
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(user)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                            >
+                              <Pencil size={14} />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(user)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50"
+                            >
+                              <Trash2 size={14} />
+                              Excluir
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

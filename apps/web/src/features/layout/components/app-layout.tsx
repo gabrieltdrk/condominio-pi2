@@ -47,12 +47,12 @@ const geralLinks = [
   { label: "Garagem", path: "/garagem", icon: CarFront },
   { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
   { label: "Manutenção", path: "/manutencao", icon: Waves },
+  { label: "Moradores", path: "/usuarios", icon: Users },
 ];
 
 // SÍNDICO — visível para ADMIN + MASTER_ADMIN
 const sindicoLinks = [
   { label: "Edificio", path: "/predio", icon: Building2 },
-  { label: "Usuarios", path: "/usuarios", icon: Users },
 ];
 
 // ADMIN (SaaS) — visível apenas para MASTER_ADMIN
