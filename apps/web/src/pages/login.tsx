@@ -119,15 +119,6 @@ export default function Login() {
 
         <section className="flex h-screen items-center justify-center px-5 py-5 sm:px-8 lg:px-12">
           <div className="w-full max-w-[420px] space-y-3">
-            {view !== "login" ? (
-              <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-6 text-center shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#223555] text-white shadow-lg shadow-slate-200">
-                  <Building2 size={26} />
-                </div>
-                <h2 className="mt-4 text-xl font-bold text-slate-900">OmniLar</h2>
-                <p className="mt-1.5 text-sm text-slate-400">Bem-vindo ao seu Lar digital.</p>
-              </div>
-            ) : null}
 
             {view === "select" ? (
               <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
