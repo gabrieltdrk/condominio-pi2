@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { checkOAuthSession, login, resetPassword, type CondominioOption } from "../features/auth/services/auth";
+import { Building2, ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { checkOAuthSession, login, selectCondominio, resetPassword, type CondominioOption } from "../features/auth/services/auth";
 import loginBg from "../assets/login.jpg";
 
-type View = "login" | "forgot" | "sent";
+type View = "login" | "select" | "forgot" | "sent";
 
 export default function Login() {
   const nav = useNavigate();
@@ -17,6 +17,9 @@ export default function Login() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotErr, setForgotErr] = useState("");
+  const [condominios, setCondominios] = useState<CondominioOption[]>([]);
+  const [selectedCondominioId, setSelectedCondominioId] = useState<number | null>(null);
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
     checkOAuthSession().then((user) => {
@@ -39,20 +42,33 @@ export default function Login() {
       const result = await login(email, password);
 
       if (result.requiresSelection) {
-        sessionStorage.setItem(
-          "selectionData",
-          JSON.stringify({
-            condominios: result.condominios as CondominioOption[],
-            userName: result.userName,
-          }),
-        );
-        nav("/select-condominium", { replace: true });
+        setCondominios(result.condominios);
+        setSelectedCondominioId(result.condominios[0]?.id ?? null);
+        setUserName(result.userName);
+        setView("select");
         return;
       }
 
       nav("/dashboard", { replace: true });
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : "Erro no login.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onSelectCondominio(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedCondominioId) return;
+    setErr("");
+    setLoading(true);
+
+    try {
+      const option = condominios.find((c) => c.id === selectedCondominioId)!;
+      await selectCondominio(selectedCondominioId, option);
+      nav("/dashboard", { replace: true });
+    } catch (error: unknown) {
+      setErr(error instanceof Error ? error.message : "Erro ao selecionar condomínio.");
     } finally {
       setLoading(false);
     }
@@ -110,6 +126,60 @@ export default function Login() {
                 </div>
                 <h2 className="mt-4 text-xl font-bold text-slate-900">OmniLar</h2>
                 <p className="mt-1.5 text-sm text-slate-400">Bem-vindo ao seu Lar digital.</p>
+              </div>
+            ) : null}
+
+            {view === "select" ? (
+              <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                <div className="mb-5 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#223555] text-white shadow-lg shadow-slate-200">
+                    <Building2 size={24} />
+                  </div>
+                  <h2 className="mt-4 text-xl font-bold text-slate-900">Selecione o condomínio</h2>
+                  <p className="mt-1.5 text-sm text-slate-400">
+                    Olá, <span className="font-medium text-slate-600">{userName}</span>. Escolha em qual deseja entrar.
+                  </p>
+                </div>
+
+                <form onSubmit={onSelectCondominio} className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-800">Condomínio</label>
+                    <div className="relative">
+                      <Building2 size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <select
+                        value={selectedCondominioId ?? ""}
+                        onChange={(e) => setSelectedCondominioId(Number(e.target.value))}
+                        required
+                        className="h-11 w-full appearance-none rounded-2xl border border-slate-200 bg-[#f8fafc] pl-11 pr-10 text-sm text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                      >
+                        {condominios.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    </div>
+                  </div>
+
+                  {err ? <p className="-mt-2 text-sm text-rose-600">{err}</p> : null}
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full rounded-2xl bg-[#223555] px-4 py-3 text-base font-semibold text-white shadow-[0_8px_18px_rgba(34,53,85,0.2)] transition hover:bg-[#1c2d49] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loading ? "Entrando..." : "Entrar"}
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  onClick={() => setView("login")}
+                  className="mt-5 w-full text-center text-sm text-slate-400 transition hover:text-slate-600"
+                >
+                  ← Voltar ao login
+                </button>
               </div>
             ) : null}
 
@@ -181,16 +251,6 @@ export default function Login() {
                   </form>
                 </div>
 
-                <div className="-mt-1 rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-                  <div className="space-y-2.5">
-                    <button
-                      type="button"
-                      className="w-full rounded-2xl border border-slate-900 bg-white px-4 py-2.5 text-base font-medium text-slate-800 transition hover:bg-slate-50"
-                    >
-                      Acesso Administrativo (Síndico)
-                    </button>
-                  </div>
-                </div>
               </>
             ) : null}
 
