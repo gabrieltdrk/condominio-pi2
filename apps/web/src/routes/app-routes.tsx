@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "../pages/login.tsx";
+import SelectCondominium from "../pages/select-condominium.tsx";
 import ChatPage from "../pages/chat";
 import Dashboard from "../pages/dashboard.tsx";
 import ResetPassword from "../pages/reset-password.tsx";
@@ -25,6 +26,7 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/select-condominium" element={<SelectCondominium />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/visitantes/aprovacao" element={<VisitorApprovalPage />} />
         <Route path="/visitantes/cartao" element={<VisitorAccessCardPage />} />

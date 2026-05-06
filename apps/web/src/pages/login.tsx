@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { checkOAuthSession, login, resetPassword } from "../features/auth/services/auth";
+import { checkOAuthSession, login, resetPassword, type CondominioOption } from "../features/auth/services/auth";
 import loginBg from "../assets/login.jpg";
 
 type View = "login" | "forgot" | "sent";
@@ -36,8 +36,21 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      nav("/dashboard");
+      const result = await login(email, password);
+
+      if (result.requiresSelection) {
+        sessionStorage.setItem(
+          "selectionData",
+          JSON.stringify({
+            condominios: result.condominios as CondominioOption[],
+            userName: result.userName,
+          }),
+        );
+        nav("/select-condominium", { replace: true });
+        return;
+      }
+
+      nav("/dashboard", { replace: true });
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : "Erro no login.");
     } finally {
