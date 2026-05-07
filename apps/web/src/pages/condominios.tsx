@@ -344,13 +344,13 @@ export default function CondominiosPage() {
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Mapa</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Nome</th>
-                    <th className="px-16 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 w-36">Olhe no mapa</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">CNPJ</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Síndico</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Administradora</th>
-                    <th className="px-4 py-3" />
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Alterar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -358,57 +358,57 @@ export default function CondominiosPage() {
                     const addressLine = [c.address, c.number].filter(Boolean).join(", ");
                     const cityLine = [c.city, c.state].filter(Boolean).join(" / ");
                     const cepLine = c.zip_code ? `CEP ${c.zip_code}` : "";
-                    const subtitle = [addressLine, cityLine, cepLine].filter(Boolean).join(" · ");
+                    const subtitle = [addressLine, cityLine, cepLine].filter(Boolean).join(" — ");
 
                     return (
                       <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                        <td className="px-4 py-3">
+                          <a
+                            href={mapsUrl(c)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver no Google Maps"
+                            className="inline-flex items-center justify-center rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          >
+                            <MapPin size={20} />
+                          </a>
+                        </td>
                         <td className="px-4 py-3">
                           <p className="font-semibold text-gray-900">{c.name}</p>
                           {subtitle && (
                             <p className="mt-0.5 text-[11px] text-gray-400">{subtitle}</p>
                           )}
                         </td>
-                        <td className="px-16 py-3 text-center">
-                          <a
-                            href={mapsUrl(c)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Ver no Google Maps"
-                            className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-500 transition-colors"
-                          >
-                            <MapPin size={15} />
-                          </a>
-                        </td>
                         <td className="px-4 py-3 font-mono text-gray-500">{c.cnpj || "—"}</td>
                         {/* Síndico */}
                         <td className="px-4 py-3">
-                          {c.manager_name ? (
-                            <div>
-                              <p className="font-medium text-gray-700">{c.manager_name}</p>
-                              <div className="mt-0.5 flex items-center gap-2">
-                                {c.manager_phone && (
-                                  <a
-                                    href={`https://wa.me/55${c.manager_phone.replace(/\D/g, "")}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={`WhatsApp: ${c.manager_phone}`}
-                                    className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline"
-                                  >
-                                    <Phone size={11} />
-                                    {c.manager_phone}
-                                  </a>
-                                )}
-                                {c.manager_email && (
-                                  <a
-                                    href={`mailto:${c.manager_email}`}
-                                    title={c.manager_email}
-                                    className="inline-flex items-center gap-1 text-[11px] text-indigo-500 hover:underline"
-                                  >
-                                    <Mail size={11} />
-                                    {c.manager_email}
-                                  </a>
-                                )}
-                              </div>
+                          {c.manager_name || c.manager_phone || c.manager_email ? (
+                            <div className="flex flex-col gap-0.5">
+                              {c.manager_name && (
+                                <p className="font-medium text-gray-700">{c.manager_name}</p>
+                              )}
+                              {c.manager_phone && (
+                                <a
+                                  href={`https://wa.me/55${c.manager_phone.replace(/\D/g, "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`WhatsApp: ${c.manager_phone}`}
+                                  className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline"
+                                >
+                                  <Phone size={11} />
+                                  {c.manager_phone}
+                                </a>
+                              )}
+                              {c.manager_email && (
+                                <a
+                                  href={`mailto:${c.manager_email}`}
+                                  title={c.manager_email}
+                                  className="inline-flex items-center gap-1 text-[11px] text-indigo-500 hover:underline"
+                                >
+                                  <Mail size={11} />
+                                  {c.manager_email}
+                                </a>
+                              )}
                             </div>
                           ) : (
                             <span className="text-gray-300">—</span>
@@ -429,40 +429,40 @@ export default function CondominiosPage() {
                         </td>
                         {/* Administradora */}
                         <td className="px-4 py-3">
-                          {c.management_company ? (
-                            <div>
-                              <p className="font-medium text-gray-700">{c.management_company}</p>
-                              <div className="mt-0.5 flex items-center gap-2">
-                                {c.management_contact_phone && (
-                                  <a
-                                    href={`https://wa.me/55${c.management_contact_phone.replace(/\D/g, "")}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={`WhatsApp: ${c.management_contact_phone}`}
-                                    className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline"
-                                  >
-                                    <Phone size={11} />
-                                    {c.management_contact_phone}
-                                  </a>
-                                )}
-                                {c.management_contact_email && (
-                                  <a
-                                    href={`mailto:${c.management_contact_email}`}
-                                    title={c.management_contact_email}
-                                    className="inline-flex items-center gap-1 text-[11px] text-indigo-500 hover:underline"
-                                  >
-                                    <Mail size={11} />
-                                    {c.management_contact_email}
-                                  </a>
-                                )}
-                              </div>
+                          {c.management_company || c.management_contact_phone || c.management_contact_email ? (
+                            <div className="flex flex-col gap-0.5">
+                              {c.management_company && (
+                                <p className="font-medium text-gray-700">{c.management_company}</p>
+                              )}
+                              {c.management_contact_phone && (
+                                <a
+                                  href={`https://wa.me/55${c.management_contact_phone.replace(/\D/g, "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`WhatsApp: ${c.management_contact_phone}`}
+                                  className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline"
+                                >
+                                  <Phone size={11} />
+                                  {c.management_contact_phone}
+                                </a>
+                              )}
+                              {c.management_contact_email && (
+                                <a
+                                  href={`mailto:${c.management_contact_email}`}
+                                  title={c.management_contact_email}
+                                  className="inline-flex items-center gap-1 text-[11px] text-indigo-500 hover:underline"
+                                >
+                                  <Mail size={11} />
+                                  {c.management_contact_email}
+                                </a>
+                              )}
                             </div>
                           ) : (
                             <span className="text-gray-300">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-start gap-1">
                             <button
                               onClick={() => openEdit(c)}
                               className="rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
