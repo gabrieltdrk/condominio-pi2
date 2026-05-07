@@ -238,9 +238,8 @@ const plans: Plan[] = [
   {
     id: "plus",
     name: "Omni+",
-    price: "R$ --",
-    priceAnnual: "R$ --",
-    annualNote: "20% de desconto no anual",
+    price: "R$ 169,99",
+    priceAnnual: "R$ 135,99",
     highlight: true,
     badge: "Mais popular",
     features: [
@@ -256,8 +255,8 @@ const plans: Plan[] = [
   {
     id: "ultra",
     name: "OmniUltra",
-    price: "R$ 169,99",
-    priceAnnual: "R$ 135,99",
+    price: "Sob consulta",
+    priceAnnual: "Sob consulta",
     highlight: false,
     features: [
       "Moradores ilimitados",
@@ -393,28 +392,37 @@ function PlanCards({ annual }: { annual: boolean }) {
 
             {/* Price */}
             <div className="mb-6">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-[#223555]"}`}>
-                  {annual && plan.priceAnnual ? plan.priceAnnual : plan.price}
-                </span>
-                <span className={`text-sm ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
-                  /mês
-                </span>
-                {annual && plan.priceAnnual && plan.priceAnnual !== plan.price && (
-                  <span className={`text-sm line-through ${plan.highlight ? "text-blue-300" : "text-gray-300"}`}>
-                    {plan.price}
+              {plan.price === "Sob consulta" ? (
+                <div>
+                  <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-[#223555]"}`}>
+                    Sob consulta
                   </span>
-                )}
-              </div>
-              {annual && plan.priceAnnual && plan.priceAnnual !== plan.price && (
-                <p className={`text-xs mt-1 font-medium ${plan.highlight ? "text-blue-200" : "text-indigo-500"}`}>
-                  20% de desconto · cobrado anualmente
-                </p>
-              )}
-              {!annual && (
-                <p className={`text-xs mt-1 ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
-                  cobrado mensalmente
-                </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-[#223555]"}`}>
+                      {annual ? plan.priceAnnual : plan.price}
+                    </span>
+                    <span className={`text-sm ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
+                      /mês
+                    </span>
+                    {annual && plan.priceAnnual !== plan.price && (
+                      <span className={`text-sm line-through ${plan.highlight ? "text-blue-300" : "text-gray-300"}`}>
+                        {plan.price}
+                      </span>
+                    )}
+                  </div>
+                  {annual ? (
+                    <p className={`text-xs mt-1 font-medium ${plan.highlight ? "text-blue-200" : "text-indigo-500"}`}>
+                      20% de desconto · cobrado anualmente
+                    </p>
+                  ) : (
+                    <p className={`text-xs mt-1 ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
+                      cobrado mensalmente
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
