@@ -29,6 +29,8 @@ import {
   X,
 } from "lucide-react";
 import { logout, getUser } from "../../auth/services/auth";
+import { hasFeature, type PlanId } from "../../../config/plans";
+import { supabase } from "../../../lib/supabase";
 import { refreshStoredUser } from "../../auth/services/profile";
 import { AVISO_TIPO_COLORS, type AvisoTipo } from "../../avisos/services/avisos";
 import { useDarkMode } from "../hooks/use-dark-mode";
@@ -48,7 +50,7 @@ const GROUP_COLORS: Record<string, string> = {
   "Admin":        "bg-rose-50   text-rose-500",
 };
 
-function buildGroups(role: string | undefined): NavGroup[] {
+function buildGroups(role: string | undefined, plan: PlanId): NavGroup[] {
   const groups: NavGroup[] = [
     {
       title: "",
@@ -75,25 +77,27 @@ function buildGroups(role: string | undefined): NavGroup[] {
         { label: "Garagem", path: "/garagem", icon: CarFront },
       ],
     },
-    {
-      title: "Operações",
-      links: [
-        { label: "Ocorrências", path: "/ocorrencias", icon: ClipboardList },
-        { label: "Manutenção", path: "/manutencao", icon: Waves },
-      ],
-    },
   ];
 
+  const operacoesLinks: NavLink[] = [];
+  if (hasFeature(plan, "ocorrencias")) {
+    operacoesLinks.push({ label: "Ocorrências", path: "/ocorrencias", icon: ClipboardList });
+  }
+  operacoesLinks.push({ label: "Manutenção", path: "/manutencao", icon: Waves });
+  groups.push({ title: "Operações", links: operacoesLinks });
+
   if (role === "ADMIN" || role === "MASTER_ADMIN") {
-    groups.push({
-      title: "Gestão",
-      links: [
-        { label: "Edifício", path: "/predio", icon: Building2 },
-        { label: "Moradores", path: "/usuarios", icon: Users },
-        { label: "Financeiro", path: "/financeiro", icon: CircleDollarSign },
-        { label: "Relatórios", path: "/relatorios", icon: BarChart2 },
-      ],
-    });
+    const gestaoLinks: NavLink[] = [
+      { label: "Edifício", path: "/predio", icon: Building2 },
+      { label: "Moradores", path: "/usuarios", icon: Users },
+    ];
+    if (hasFeature(plan, "financeiro")) {
+      gestaoLinks.push({ label: "Financeiro", path: "/financeiro", icon: CircleDollarSign });
+    }
+    if (hasFeature(plan, "relatoriosFinanceiros")) {
+      gestaoLinks.push({ label: "Relatórios", path: "/relatorios", icon: BarChart2 });
+    }
+    groups.push({ title: "Gestão", links: gestaoLinks });
   }
 
   if (role === "MASTER_ADMIN") {
@@ -126,6 +130,7 @@ export default function AppLayout({ title, children }: { title: string; children
   const nav = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState(getUser());
+  const [condPlan, setCondPlan] = useState<PlanId>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsedState);
   const { notifs, bellOpen, setBellOpen, bellPos, bellRef, unread, openBell, handleMarcarLida, handleMarcarTodas } = useNotifications();
@@ -136,6 +141,14 @@ export default function AppLayout({ title, children }: { title: string; children
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const u = getUser();
+    if (u?.condominioUUID) {
+      supabase.from("condominios").select("plan").eq("id", u.condominioUUID).single()
+        .then(({ data }) => setCondPlan((data?.plan ?? null) as PlanId));
+    }
+  }, [user?.condominioUUID]);
 
   useEffect(() => {
     let active = true;
@@ -171,7 +184,7 @@ export default function AppLayout({ title, children }: { title: string; children
     : "U";
 
   const role = user?.role;
-  const groups = buildGroups(role);
+  const groups = buildGroups(role, condPlan);
 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
     const collapsed = mobile ? false : sidebarCollapsed;

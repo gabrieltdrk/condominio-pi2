@@ -22,7 +22,16 @@ type Condominio = {
   management_contact_name?: string | null;
   management_contact_phone?: string | null;
   management_contact_email?: string | null;
+  plan?: string | null;
 };
+
+type PlanOption = { id: string; name: string; price: string };
+
+const PLANS: PlanOption[] = [
+  { id: "go",    name: "OmniGO",    price: "R$ 109,99/mês" },
+  { id: "plus",  name: "Omni+",     price: "R$ 169,99/mês" },
+  { id: "ultra", name: "OmniUltra", price: "Sob consulta"  },
+];
 
 type FormState = {
   name: string;
@@ -42,6 +51,7 @@ type FormState = {
   management_contact_name: string;
   management_contact_phone: string;
   management_contact_email: string;
+  plan: string;
 };
 
 const emptyForm = (): FormState => ({
@@ -62,6 +72,7 @@ const emptyForm = (): FormState => ({
   management_contact_name: "",
   management_contact_phone: "",
   management_contact_email: "",
+  plan: "",
 });
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -101,7 +112,7 @@ function mapsUrl(c: Condominio): string {
 async function fetchCondominios(): Promise<Condominio[]> {
   const { data, error } = await supabase
     .from("condominios")
-    .select("id,name,cnpj,address,city,state,active,zip_code,neighborhood,number,reference,manager_name,manager_phone,manager_email,management_company,management_contact_name,management_contact_phone,management_contact_email")
+    .select("id,name,cnpj,address,city,state,active,zip_code,neighborhood,number,reference,manager_name,manager_phone,manager_email,management_company,management_contact_name,management_contact_phone,management_contact_email,plan")
     .order("name");
   if (error) throw new Error(error.message);
   return (data ?? []) as Condominio[];
@@ -126,6 +137,7 @@ async function saveCondominio(payload: FormState, id?: string): Promise<Condomin
     management_contact_name: payload.management_contact_name || null,
     management_contact_phone: payload.management_contact_phone || null,
     management_contact_email: payload.management_contact_email || null,
+    plan: payload.plan || null,
   };
 
   if (id) {
@@ -238,6 +250,7 @@ export default function CondominiosPage() {
       management_contact_name: c.management_contact_name ?? "",
       management_contact_phone: c.management_contact_phone ?? "",
       management_contact_email: c.management_contact_email ?? "",
+      plan: c.plan ?? "",
     });
     setFormError(null);
     setModalOpen(true);
@@ -524,7 +537,23 @@ export default function CondominiosPage() {
                             maxLength={18}
                           />
                         </div>
-                        <div className="shrink-0 pb-1.5">
+                        <div className="shrink-0 w-48">
+                        <FieldLabel required>Plano</FieldLabel>
+                        <select
+                          value={form.plan}
+                          onChange={(e) => set("plan", e.target.value)}
+                          required
+                          className={inputCls}
+                        >
+                          <option value="" disabled>Selecione...</option>
+                          {PLANS.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — {p.price}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="shrink-0 pb-1.5">
                           <FieldLabel>Status</FieldLabel>
                           <div className="flex items-center gap-2.5 pt-1.5">
                             <button

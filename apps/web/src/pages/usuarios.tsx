@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import AppLayout from "../features/layout/components/app-layout";
 import { getUser } from "../features/auth/services/auth";
+import { canAddResident, getPlanLimits, PLAN_LABELS, type PlanId } from "../config/plans";
+import { supabase } from "../lib/supabase";
 import {
   createUser,
   deleteUserRecord,
@@ -64,12 +66,20 @@ export default function UsuariosPage() {
   const [selectedTower, setSelectedTower] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [condPlan, setCondPlan] = useState<PlanId>(null);
 
   function loadPageData() {
     setLoading(true);
     setError("");
 
     const condominioUUID = currentUser?.role === "ADMIN" ? (currentUser.condominioUUID ?? undefined) : undefined;
+
+    // Busca o plano do condomínio para validar limites
+    if (condominioUUID) {
+      supabase.from("condominios").select("plan").eq("id", condominioUUID).single()
+        .then(({ data }) => setCondPlan((data?.plan ?? null) as PlanId));
+    }
+
     Promise.all([listUsers(condominioUUID), listBuildingApartmentOptions()])
       .then(([loadedUsers, loadedApartments]) => {
         setUsers(loadedUsers);
@@ -137,6 +147,18 @@ export default function UsuariosPage() {
     }
 
     try {
+      if (!editingUser) {
+        const residentCount = users.filter((u) => u.role === "MORADOR").length;
+        if (!canAddResident(condPlan, residentCount)) {
+          const limits = getPlanLimits(condPlan);
+          setFormError(
+            `Limite de ${limits.maxResidents} moradores do plano ${PLAN_LABELS[condPlan ?? "go"] ?? condPlan} atingido. Faça upgrade para continuar.`
+          );
+          setSubmitting(false);
+          return;
+        }
+      }
+
       if (editingUser) {
         await updateUserRecord({
           id: editingUser.id,
