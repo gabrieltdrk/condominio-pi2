@@ -29,14 +29,6 @@ function useInView(threshold = 0.15) {
 }
 
 // ---------------------------------------------------------------------------
-// Smooth scroll helper
-// ---------------------------------------------------------------------------
-function scrollTo(id: string) {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: "smooth" });
-}
-
-// ---------------------------------------------------------------------------
 // Navbar (duplicated for independence)
 // ---------------------------------------------------------------------------
 function Navbar() {
