@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, ChevronDown, Eye, EyeOff, Lock, Mail, PhoneCall } from "lucide-react";
+import { Building2, ChevronDown, Eye, EyeOff, Lock, Mail, PhoneCall, ShieldCheck } from "lucide-react";
 import { checkOAuthSession, login, finalizeSupabaseLogin, resetPassword, type CondominioOption, type PendingUser } from "../features/auth/services/auth";
 import loginBg from "../assets/login.jpg";
 
@@ -181,6 +181,31 @@ finalizeSupabaseLogin(pendingUser, option);
                       <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     </div>
                   </div>
+
+                  {(() => {
+                    const roleLabels: Record<string, string> = {
+                      MASTER_ADMIN: "Master Admin",
+                      ADMIN: "Administrador",
+                      MORADOR: "Morador",
+                      PORTEIRO: "Porteiro",
+                    };
+                    const selectedRole = condominios.find((c) => c.uuid === selectedCondominioUuid)?.role;
+                    const roleLabel = selectedRole ? (roleLabels[selectedRole] ?? selectedRole) : "";
+                    return roleLabel ? (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-slate-800">Seu perfil neste condomínio</label>
+                        <div className="relative">
+                          <ShieldCheck size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={roleLabel}
+                            readOnly
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-100 pl-11 pr-4 text-sm font-medium text-slate-500 outline-none cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
 
                   {err ? <p className="-mt-2 text-sm text-rose-600">{err}</p> : null}
 
