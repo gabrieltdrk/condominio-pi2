@@ -233,7 +233,7 @@ const plans: Plan[] = [
       "Avisos e comunicados",
       "Agendamento de áreas",
     ],
-    ctaLabel: "Começar grátis",
+    ctaLabel: "Assinar agora",
   },
   {
     id: "plus",
@@ -262,7 +262,6 @@ const plans: Plan[] = [
       "Moradores ilimitados",
       "Admins ilimitados",
       "Suporte dedicado",
-      "Multi-condomínio",
       "Relatórios avançados",
       "SLA garantido",
     ],
@@ -281,8 +280,7 @@ const comparisonFeatures = [
   { label: "Gestão de ocorrências", go: false, plus: true, ultra: true },
   { label: "Relatórios financeiros", go: false, plus: true, ultra: true },
   { label: "Suporte prioritário", go: false, plus: true, ultra: true },
-  { label: "Multi-condomínio", go: false, plus: false, ultra: true },
-  { label: "Relatórios avançados", go: false, plus: false, ultra: true },
+{ label: "Relatórios avançados", go: false, plus: false, ultra: true },
   { label: "Suporte dedicado (SLA)", go: false, plus: false, ultra: true },
 ];
 
