@@ -167,7 +167,7 @@ const readonlyCls =
 
 function SectionHeader({ label, color }: { label: string; color: string }) {
   return (
-    <div className={`-mx-6 px-6 py-2.5 mb-4 ${color}`}>
+    <div className={`-mx-4 px-4 sm:-mx-6 sm:px-6 py-2.5 mb-4 ${color}`}>
       <p className="text-[11px] font-bold uppercase tracking-widest text-current">{label}</p>
     </div>
   );
@@ -484,11 +484,11 @@ export default function CondominiosPage() {
 
       {/* Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+          <div className="w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl flex flex-col">
             <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
               {/* Modal header */}
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
+              <div className="flex items-center justify-between border-b border-gray-100 px-4 sm:px-6 py-4 shrink-0">
                 <h2 className="text-sm font-semibold text-gray-900">
                   {editing ? "Editar Condomínio" : "Novo Condomínio"}
                 </h2>
@@ -501,10 +501,10 @@ export default function CondominiosPage() {
                 <div className="space-y-0">
 
                   {/* ── Identificação ── */}
-                  <section className="px-6 pt-5 pb-4">
+                  <section className="px-4 sm:px-6 pt-5 pb-4">
                     <SectionHeader label="Identificação" color="bg-indigo-50 text-indigo-600" />
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="sm:col-span-2">
+                    <div className="flex flex-col gap-3">
+                      <div>
                         <FieldLabel required>Nome do condomínio</FieldLabel>
                         <input
                           className={inputCls}
@@ -513,31 +513,33 @@ export default function CondominiosPage() {
                           placeholder="Ex.: Residencial Blainville"
                         />
                       </div>
-                      <div>
-                        <FieldLabel>CNPJ</FieldLabel>
-                        <input
-                          className={inputCls}
-                          value={form.cnpj}
-                          onChange={(e) => set("cnpj", formatCnpj(e.target.value))}
-                          placeholder="00.000.000/0000-00"
-                          maxLength={18}
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>Status</FieldLabel>
-                        <div className="flex items-center gap-3 pt-1.5">
-                          <button
-                            type="button"
-                            onClick={() => set("active", !form.active)}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                              form.active ? "bg-emerald-500" : "bg-red-400"
-                            }`}
-                          >
-                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${form.active ? "translate-x-5" : "translate-x-0"}`} />
-                          </button>
-                          <span className={`text-[13px] font-medium ${form.active ? "text-emerald-600" : "text-red-500"}`}>
-                            {form.active ? "Ativo" : "Inativo"}
-                          </span>
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1 min-w-0">
+                          <FieldLabel>CNPJ</FieldLabel>
+                          <input
+                            className={inputCls}
+                            value={form.cnpj}
+                            onChange={(e) => set("cnpj", formatCnpj(e.target.value))}
+                            placeholder="00.000.000/0000-00"
+                            maxLength={18}
+                          />
+                        </div>
+                        <div className="shrink-0 pb-1.5">
+                          <FieldLabel>Status</FieldLabel>
+                          <div className="flex items-center gap-2.5 pt-1.5">
+                            <button
+                              type="button"
+                              onClick={() => set("active", !form.active)}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                                form.active ? "bg-emerald-500" : "bg-red-400"
+                              }`}
+                            >
+                              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${form.active ? "translate-x-5" : "translate-x-0"}`} />
+                            </button>
+                            <span className={`text-[13px] font-medium ${form.active ? "text-emerald-600" : "text-red-500"}`}>
+                              {form.active ? "Ativo" : "Inativo"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -546,7 +548,7 @@ export default function CondominiosPage() {
                   <div className="border-t border-gray-100" />
 
                   {/* ── Endereço ── */}
-                  <section className="px-6 pt-5 pb-4">
+                  <section className="px-4 sm:px-6 pt-5 pb-4">
                     <SectionHeader label="Endereço" color="bg-sky-50 text-sky-600" />
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
@@ -602,7 +604,7 @@ export default function CondominiosPage() {
                   <div className="border-t border-gray-100" />
 
                   {/* ── Gestão Administrativa ── */}
-                  <section className="px-6 pt-5 pb-4">
+                  <section className="px-4 sm:px-6 pt-5 pb-4">
                     <SectionHeader label="Gestão Administrativa" color="bg-violet-50 text-violet-600" />
 
                     {/* Síndico */}
@@ -675,7 +677,7 @@ export default function CondominiosPage() {
                   </section>
 
                   {formError && (
-                    <div className="mx-6 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                    <div className="mx-4 sm:mx-6 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
                       {formError}
                     </div>
                   )}
@@ -683,7 +685,7 @@ export default function CondominiosPage() {
               </div>
 
               {/* Modal footer */}
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4 shrink-0">
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 sm:px-6 py-4 shrink-0">
                 <button
                   type="button"
                   onClick={closeModal}
