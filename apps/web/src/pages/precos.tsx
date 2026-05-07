@@ -222,8 +222,8 @@ const plans: Plan[] = [
   {
     id: "go",
     name: "OmniGO",
-    price: "R$ --",
-    priceAnnual: "R$ --",
+    price: "R$ 109,99",
+    priceAnnual: "R$ 87,99",
     highlight: false,
     features: [
       "Até 20 moradores",
@@ -240,6 +240,7 @@ const plans: Plan[] = [
     name: "Omni+",
     price: "R$ --",
     priceAnnual: "R$ --",
+    annualNote: "20% de desconto no anual",
     highlight: true,
     badge: "Mais popular",
     features: [
@@ -255,8 +256,8 @@ const plans: Plan[] = [
   {
     id: "ultra",
     name: "OmniUltra",
-    price: "Sob consulta",
-    priceAnnual: "Sob consulta",
+    price: "R$ 169,99",
+    priceAnnual: "R$ 135,99",
     highlight: false,
     features: [
       "Moradores ilimitados",
@@ -392,17 +393,27 @@ function PlanCards({ annual }: { annual: boolean }) {
 
             {/* Price */}
             <div className="mb-6">
-              <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-[#223555]"}`}>
-                {annual ? plan.priceAnnual : plan.price}
-              </span>
-              {plan.price !== "Sob consulta" && (
-                <span className={`text-sm ml-1 ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-[#223555]"}`}>
+                  {annual && plan.priceAnnual ? plan.priceAnnual : plan.price}
+                </span>
+                <span className={`text-sm ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
                   /mês
                 </span>
+                {annual && plan.priceAnnual && plan.priceAnnual !== plan.price && (
+                  <span className={`text-sm line-through ${plan.highlight ? "text-blue-300" : "text-gray-300"}`}>
+                    {plan.price}
+                  </span>
+                )}
+              </div>
+              {annual && plan.priceAnnual && plan.priceAnnual !== plan.price && (
+                <p className={`text-xs mt-1 font-medium ${plan.highlight ? "text-blue-200" : "text-indigo-500"}`}>
+                  20% de desconto · cobrado anualmente
+                </p>
               )}
-              {annual && plan.price !== "Sob consulta" && (
+              {!annual && (
                 <p className={`text-xs mt-1 ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
-                  cobrado anualmente
+                  cobrado mensalmente
                 </p>
               )}
             </div>
