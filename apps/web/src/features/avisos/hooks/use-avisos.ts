@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getUser } from "../../auth/services/auth";
 import {
   createAviso, deleteAviso, listAvisos, toggleCurtidaAviso,
@@ -8,39 +9,62 @@ import {
 import { CURTIDAS_DESTAQUE, type AvisoSortKey } from "../constants/avisos.constants";
 
 const EMPTY_FORM: CreateAvisoPayload = {
-  titulo: "",
-  descricao: "",
-  tipo: "Informativo",
-  data_expiracao: "",
-  arquivo_url: "",
+  titulo: "", descricao: "", tipo: "Informativo", data_expiracao: "", arquivo_url: "",
 };
+
+function parseDate(d: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, m - 1, day);
+  }
+  return new Date(d);
+}
+
+export function isExpiredDate(d: string | null) {
+  if (!d) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parseDate(d) < today;
+}
+
+const VALID_PAGE_SIZES = [10, 20, 50];
 
 export function useAvisos() {
   const user = getUser();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.role === "ADMIN" || user?.role === "MASTER_ADMIN";
 
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [filterTipo, setFilterTipo] = useState<AvisoTipo | "">("");
-  const [sortKey, setSortKey] = useState<AvisoSortKey>("created_at");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  // URL-derived state
+  const searchText = searchParams.get("q") ?? "";
+  const filterTipo = (searchParams.get("tipo") ?? "").split(",").filter(Boolean) as AvisoTipo[];
+  const sortKey = (searchParams.get("sort") ?? "created_at") as AvisoSortKey;
+  const sortDir = (searchParams.get("dir") ?? "desc") as "asc" | "desc";
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const rawSize = parseInt(searchParams.get("size") ?? "10", 10);
+  const pageSize = VALID_PAGE_SIZES.includes(rawSize) ? rawSize : 10;
+  const filterExpirado = (searchParams.get("expirado") ?? "") as "" | "sim" | "nao";
+  const filterFixado = (searchParams.get("fixado") ?? "") as "" | "sim" | "nao";
+
+  // UI-only state
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
+  const [formCondominioUUID, setFormCondominioUUID] = useState<string | null>(null);
   const [anexoFile, setAnexoFile] = useState<File | null>(null);
   const [editAnexoFile, setEditAnexoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-
   const [editando, setEditando] = useState<Aviso | null>(null);
   const [editForm, setEditForm] = useState<CreateAvisoPayload>(EMPTY_FORM);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState("");
-
   const [detalhe, setDetalhe] = useState<Aviso | null>(null);
 
   const load = useCallback(() => {
@@ -54,13 +78,84 @@ export function useAvisos() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Filters + Sort ──────────────────────────────────────────────────────
+  // ── URL param setters ───────────────────────────────────────────────────
+  function setSearchText(v: string) {
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      if (v) next.set("q", v); else next.delete("q");
+      next.delete("page");
+      return next;
+    });
+  }
+
+  function setPage(p: number) {
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      if (p > 1) next.set("page", String(p)); else next.delete("page");
+      return next;
+    });
+  }
+
+  function setPageSize(s: number) {
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      if (s !== 10) next.set("size", String(s)); else next.delete("size");
+      next.delete("page");
+      return next;
+    });
+  }
+
+  function handleSort(key: AvisoSortKey) {
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      const currentKey = prev.get("sort") ?? "created_at";
+      const currentDir = prev.get("dir") ?? "desc";
+      if (currentKey === key) {
+        const newDir = currentDir === "asc" ? "desc" : "asc";
+        if (newDir === "desc") next.delete("dir"); else next.set("dir", newDir);
+      } else {
+        if (key !== "created_at") next.set("sort", key); else next.delete("sort");
+        next.delete("dir");
+      }
+      next.delete("page");
+      return next;
+    });
+  }
+
+  function applyFilters(filters: {
+    filterTipo: AvisoTipo[];
+    filterExpirado: "" | "sim" | "nao";
+    filterFixado: "" | "sim" | "nao";
+    sortKey: AvisoSortKey;
+    sortDir: "asc" | "desc";
+  }) {
+    setSearchParams((prev: URLSearchParams) => {
+      const next = new URLSearchParams(prev);
+      if (filters.filterTipo.length > 0) next.set("tipo", filters.filterTipo.join(",")); else next.delete("tipo");
+      if (filters.filterExpirado) next.set("expirado", filters.filterExpirado); else next.delete("expirado");
+      if (filters.filterFixado) next.set("fixado", filters.filterFixado); else next.delete("fixado");
+      if (filters.sortKey !== "created_at") next.set("sort", filters.sortKey); else next.delete("sort");
+      if (filters.sortDir !== "desc") next.set("dir", filters.sortDir); else next.delete("dir");
+      next.delete("page");
+      return next;
+    });
+  }
+
+  // ── Filters + Sort + Pagination ─────────────────────────────────────────
   const filtered = avisos.filter((a) => {
-    if (filterTipo && a.tipo !== filterTipo) return false;
+    if (filterTipo.length > 0 && !filterTipo.includes(a.tipo)) return false;
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      if (!a.titulo.toLowerCase().includes(q) && !a.descricao.toLowerCase().includes(q)) return false;
+    }
+    if (filterExpirado === "sim" && !isExpiredDate(a.data_expiracao)) return false;
+    if (filterExpirado === "nao" && isExpiredDate(a.data_expiracao)) return false;
+    if (filterFixado === "sim" && !a.fixado) return false;
+    if (filterFixado === "nao" && a.fixado) return false;
     return true;
   });
 
-  const displayed = [...filtered].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
     if (a.fixado !== b.fixado) return a.fixado ? -1 : 1;
     let cmp = 0;
     if (sortKey === "titulo") cmp = a.titulo.localeCompare(b.titulo);
@@ -71,10 +166,14 @@ export function useAvisos() {
     return sortDir === "asc" ? cmp : -cmp;
   });
 
-  function handleSort(key: AvisoSortKey) {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("desc"); }
-  }
+  const totalFiltered = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const activeFilterCount = (filterTipo.length > 0 ? 1 : 0)
+    + [filterExpirado, filterFixado].filter(Boolean).length
+    + (sortKey !== "created_at" || sortDir !== "desc" ? 1 : 0);
 
   // ── Handlers ────────────────────────────────────────────────────────────
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
@@ -84,9 +183,13 @@ export function useAvisos() {
     try {
       let arquivo_url = form.arquivo_url || undefined;
       if (anexoFile) arquivo_url = await uploadAvisoAnexo(anexoFile);
-      await createAviso({ ...form, data_expiracao: form.data_expiracao || undefined, arquivo_url });
+      await createAviso(
+        { ...form, data_expiracao: form.data_expiracao || undefined, arquivo_url },
+        formCondominioUUID,
+      );
       setNovoOpen(false);
       setForm(EMPTY_FORM);
+      setFormCondominioUUID(null);
       setAnexoFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       load();
@@ -163,12 +266,18 @@ export function useAvisos() {
   }
 
   return {
-    // state
     avisos, loading, error,
-    filterTipo, setFilterTipo,
+    searchText, setSearchText,
+    filterTipo, filterExpirado, filterFixado,
     sortKey, sortDir,
+    page, setPage,
+    pageSize, setPageSize,
+    totalFiltered, totalPages, safePage,
+    filterPanelOpen, setFilterPanelOpen,
+    activeFilterCount,
     novoOpen, setNovoOpen,
     form, setForm,
+    formCondominioUUID, setFormCondominioUUID,
     anexoFile, setAnexoFile,
     editAnexoFile, setEditAnexoFile,
     fileInputRef, editFileInputRef,
@@ -177,11 +286,10 @@ export function useAvisos() {
     editForm, setEditForm,
     editSubmitting, editError,
     detalhe, setDetalhe,
-    // derived
-    filtered, displayed,
+    pageItems,
     CURTIDAS_DESTAQUE,
     isAdmin,
-    // handlers
     load, handleSort, handleCreate, openEditar, handleEdit, handleDelete, handleFixar, handleCurtir,
+    applyFilters,
   };
 }

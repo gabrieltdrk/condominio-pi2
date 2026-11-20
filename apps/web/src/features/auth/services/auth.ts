@@ -1,16 +1,22 @@
 import { supabase } from "../../../lib/supabase";
 
-export type UserRole = "ADMIN" | "MORADOR" | "PORTEIRO";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
+
+export type UserRole = "MASTER_ADMIN" | "ADMIN" | "MORADOR" | "PORTEIRO";
 export type ResidentType = "PROPRIETARIO" | "INQUILINO" | "VISITANTE";
 export type UserStatus = "ATIVO" | "INATIVO";
-const DEFAULT_ADMIN_EMAIL = "admin@condominio.com";
 
 export type User = {
-  id?: string;
+  id?: string | number;
   name: string;
   role: UserRole;
   email: string;
   phone?: string;
+  condominioId?: number | null;
+  condominioName?: string;
+  /** UUID do condomínio no Supabase — usado para filtrar queries Supabase */
+  condominioUUID?: string | null;
+  plan?: string | null;
   residentType?: ResidentType;
   status?: UserStatus;
   carPlate?: string;
@@ -18,47 +24,310 @@ export type User = {
   avatarUrl?: string;
 };
 
-type ProfileData = {
-  name?: string | null;
-  role?: string | null;
-  phone?: string | null;
-  car_plate?: string | null;
-  pets_count?: number | null;
-  resident_type?: ResidentType | null;
-  status?: UserStatus | null;
-  avatar_url?: string | null;
+export type CondominioOption = {
+  id: number;
+  name: string;
+  role: UserRole;
+  /** UUID do Supabase — preenchido no fluxo sem backend */
+  uuid?: string;
+  plan?: string | null;
 };
 
-function resolveUserRole(email: string, role?: string | null): UserRole {
-  if (email.trim().toLowerCase() === DEFAULT_ADMIN_EMAIL) {
-    return "ADMIN";
-  }
+export type PendingUser = Omit<User, "condominioUUID" | "condominioName" | "condominioId">;
 
-  return (role ?? "MORADOR") as UserRole;
+export type LoginResult =
+  | { requiresSelection: false; user: User }
+  | {
+      requiresSelection: true;
+      condominios: CondominioOption[];
+      pendingUser: PendingUser;
+      userName: string;
+    };
+
+// ─── Storage helpers ─────────────────────────────────────────────────────────
+
+export function getToken(): string | null {
+  return localStorage.getItem("token");
 }
 
-async function getProfile(id: string): Promise<ProfileData | null> {
-  const extended = await supabase
-    .from("profiles")
-    .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
-    .eq("id", id)
-    .single();
-
-  if (!extended.error) {
-    return extended.data as ProfileData;
-  }
-
-  const fallback = await supabase
-    .from("profiles")
-    .select("name, role")
-    .eq("id", id)
-    .single();
-
-  if (fallback.error) return null;
-  return fallback.data as ProfileData;
+export function getSelectionToken(): string | null {
+  return sessionStorage.getItem("selectionToken");
 }
 
-/** Inicia login via Google OAuth - redireciona para Google e volta para /login */
+export function getUser(): User | null {
+  const raw = localStorage.getItem("user");
+  if (!raw) return null;
+  return JSON.parse(raw) as User;
+}
+
+export function setStoredUser(user: User): User {
+  localStorage.setItem("user", JSON.stringify(user));
+  return user;
+}
+
+export function updateUser(updated: Partial<User>): User | null {
+  const current = getUser();
+  if (!current) return null;
+  return setStoredUser({ ...current, ...updated });
+}
+
+export function getCondominioId(): number | null {
+  return getUser()?.condominioId ?? null;
+}
+
+// ─── Login (dual-auth: Fastify JWT + Supabase session) ───────────────────────
+
+// Tenta login via Fastify (multi-tenant JWT).
+// Se o backend não estiver acessível (sem VITE_API_URL em produção),
+// cai no Supabase direto (modo legado, sem condominioId).
+export async function login(email: string, password: string): Promise<LoginResult> {
+  const backendAvailable = !!import.meta.env.VITE_API_URL;
+
+  if (backendAvailable) {
+    return loginViaFastify(email, password);
+  }
+
+  return loginViaSupabase(email, password);
+}
+
+async function loginViaFastify(email: string, password: string): Promise<LoginResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    // Rede indisponível — cai no Supabase
+    return loginViaSupabase(email, password);
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).message ?? "Email ou senha inválidos.");
+  }
+
+  const data = await res.json();
+
+  // Supabase: sessão paralela para RLS (não-bloqueante)
+  supabase.auth.signInWithPassword({ email, password }).catch(() => undefined);
+
+  if (data.requiresSelection) {
+    sessionStorage.setItem("selectionToken", data.selectionToken);
+    return {
+      requiresSelection: true,
+      condominios: data.condominios as CondominioOption[],
+      pendingUser: null as unknown as PendingUser,
+      userName: data.user?.name ?? "",
+    };
+  }
+
+  const user: User = {
+    id: data.user.id,
+    name: data.user.name,
+    email: data.user.email,
+    phone: data.user.phone ?? "",
+    role: data.user.role as UserRole,
+    condominioId: data.user.condominioId ?? null,
+    condominioName: data.user.condominioName ?? "",
+  };
+
+  localStorage.setItem("token", data.token);
+  setStoredUser(user);
+
+  return { requiresSelection: false, user };
+}
+
+async function loginViaSupabase(email: string, password: string): Promise<LoginResult> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+
+  // Seta a sessão no client antes de qualquer query com RLS
+  await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+  localStorage.setItem("token", data.session.access_token);
+
+  const [profileResult, ucResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
+      .eq("id", data.user.id)
+      .single(),
+    supabase
+      .from("usuario_condominio")
+      .select("condominio_id, role")
+      .eq("user_id", data.user.id)
+      .eq("active", true),
+  ]);
+
+  const profile = profileResult.data;
+  type UcRow = { condominio_id: string; role: string };
+  const ucRows = (ucResult.data ?? []) as UcRow[];
+
+  // Role do perfil ou fallback via user_metadata (para MASTER_ADMIN sem RLS)
+  const resolvedRole = profile?.role ?? (data.user.user_metadata?.role as string | undefined);
+
+  // MASTER_ADMIN não precisa estar vinculado a nenhum condomínio
+  if (resolvedRole === "MASTER_ADMIN") {
+    const user: User = {
+      id: data.user.id,
+      name: profile?.name ?? data.user.email ?? "",
+      email: data.user.email ?? "",
+      phone: profile?.phone ?? "",
+      role: "MASTER_ADMIN",
+      condominioId: null,
+      condominioUUID: null,
+      condominioName: undefined,
+      residentType: profile?.resident_type ?? undefined,
+      status: profile?.status ?? undefined,
+      carPlate: profile?.car_plate ?? undefined,
+      petsCount: profile?.pets_count ?? undefined,
+      avatarUrl: profile?.avatar_url ?? undefined,
+    };
+    setStoredUser(user);
+    return { requiresSelection: false, user };
+  }
+
+  // Busca dados dos condomínios vinculados (nome + status + plano)
+  const uuidsAll = ucRows.map((r) => r.condominio_id);
+  const { data: condData } = await supabase
+    .from("condominios")
+    .select("id, name, active, plan")
+    .in("id", uuidsAll);
+  const condMap = new Map<string, { name: string; active: boolean; plan: string | null }>(
+    ((condData ?? []) as { id: string; name: string; active: boolean; plan: string | null }[]).map((c) => [c.id, { name: c.name, active: c.active, plan: c.plan }]),
+  );
+
+  // Filtra apenas condomínios ativos
+  // Se condMap estiver vazio (RLS bloqueou a leitura), assume ativo por padrão
+  const activeUcRows = resolvedRole === "MASTER_ADMIN"
+    ? ucRows
+    : ucRows.filter((r) => {
+        const cond = condMap.get(r.condominio_id);
+        return cond === undefined ? true : cond.active !== false;
+      });
+
+  if (activeUcRows.length === 0 && resolvedRole !== "MASTER_ADMIN") {
+    await supabase.auth.signOut();
+    localStorage.removeItem("token");
+    throw new Error("CONDOMINIO_INATIVO");
+  }
+
+  // Usuário vinculado a mais de um condomínio ativo → pedir seleção
+  if (activeUcRows.length > 1) {
+    const condominios: CondominioOption[] = activeUcRows
+      .map((row, idx) => ({
+        id: idx + 1,
+        uuid: row.condominio_id,
+        name: condMap.get(row.condominio_id)?.name ?? `Condomínio ${idx + 1}`,
+        role: (row.role as UserRole) ?? (profile?.role as UserRole) ?? "MORADOR",
+        plan: condMap.get(row.condominio_id)?.plan ?? null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+      .map((c, idx) => ({ ...c, id: idx + 1 }));
+
+    const pendingUser: PendingUser = {
+      id: data.user.id,
+      name: profile?.name ?? data.user.email ?? "",
+      email: data.user.email ?? "",
+      phone: profile?.phone ?? "",
+      role: (profile?.role as UserRole) ?? "MORADOR",
+      residentType: profile?.resident_type ?? undefined,
+      status: profile?.status ?? undefined,
+      carPlate: profile?.car_plate ?? undefined,
+      petsCount: profile?.pets_count ?? undefined,
+      avatarUrl: profile?.avatar_url ?? undefined,
+    };
+
+    return {
+      requiresSelection: true,
+      condominios,
+      pendingUser,
+      userName: pendingUser.name,
+    };
+  }
+
+  const ucRow = activeUcRows[0] ?? null;
+  const condInfo = ucRow ? condMap.get(ucRow.condominio_id) : undefined;
+  const condominioName = condInfo?.name;
+  const condPlan = condInfo?.plan ?? null;
+
+  const user: User = {
+    id: data.user.id,
+    name: profile?.name ?? data.user.email ?? "",
+    email: data.user.email ?? "",
+    phone: profile?.phone ?? "",
+    role: (profile?.role as UserRole) ?? "MORADOR",
+    condominioId: null,
+    condominioUUID: ucRow?.condominio_id ?? null,
+    condominioName,
+    plan: condPlan,
+    residentType: profile?.resident_type ?? undefined,
+    status: profile?.status ?? undefined,
+    carPlate: profile?.car_plate ?? undefined,
+    petsCount: profile?.pets_count ?? undefined,
+    avatarUrl: profile?.avatar_url ?? undefined,
+  };
+
+  setStoredUser(user);
+  return { requiresSelection: false, user };
+}
+
+// ─── Seleção de condomínio (fluxo Supabase direto) ──────────────────────────
+
+export function finalizeSupabaseLogin(pendingUser: PendingUser, option: CondominioOption): User {
+  const user: User = {
+    ...pendingUser,
+    condominioId: null,
+    condominioUUID: option.uuid ?? null,
+    condominioName: option.name,
+    plan: option.plan ?? null,
+  };
+  setStoredUser(user);
+  return user;
+}
+
+// ─── Seleção de condomínio (fluxo Fastify) ───────────────────────────────────
+
+export async function selectCondominio(condominioId: number): Promise<User> {
+  const selectionToken = getSelectionToken();
+  if (!selectionToken) throw new Error("Sessão expirada. Faça login novamente.");
+
+  const res = await fetch(`${API_URL}/auth/select-condominio`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${selectionToken}`,
+    },
+    body: JSON.stringify({ condominioId }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).message ?? "Erro ao selecionar condomínio.");
+  }
+
+  const data = await res.json();
+  sessionStorage.removeItem("selectionToken");
+
+  const user: User = {
+    id: data.user.id,
+    name: data.user.name,
+    email: data.user.email,
+    phone: data.user.phone ?? "",
+    role: data.user.role as UserRole,
+    condominioId: data.user.condominioId,
+    condominioName: data.user.condominioName ?? "",
+  };
+
+  localStorage.setItem("token", data.token);
+  setStoredUser(user);
+
+  return user;
+}
+
+// ─── OAuth (Google) ───────────────────────────────────────────────────────────
+
 export async function loginWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -74,14 +343,20 @@ export async function checkOAuthSession(): Promise<User | null> {
   if (!data.session) return null;
 
   const session = data.session;
-  const profile = await getProfile(session.user.id);
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, role, phone, car_plate, pets_count, resident_type, status, avatar_url")
+    .eq("id", session.user.id)
+    .single();
 
   const user: User = {
     id: session.user.id,
     name: profile?.name ?? session.user.email ?? "",
     email: session.user.email ?? "",
     phone: profile?.phone ?? "",
-    role: resolveUserRole(session.user.email ?? "", profile?.role),
+    role: (profile?.role as UserRole) ?? "MORADOR",
+    condominioId: null,
     residentType: profile?.resident_type ?? undefined,
     status: profile?.status ?? undefined,
     carPlate: profile?.car_plate ?? undefined,
@@ -90,34 +365,11 @@ export async function checkOAuthSession(): Promise<User | null> {
   };
 
   localStorage.setItem("token", session.access_token);
-  localStorage.setItem("user", JSON.stringify(user));
+  setStoredUser(user);
   return user;
 }
 
-export async function login(email: string, password: string): Promise<User> {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) throw new Error(error.message);
-
-  const profile = await getProfile(data.user.id);
-
-  const user: User = {
-    id: data.user.id,
-    name: profile?.name ?? data.user.email ?? "",
-    email: data.user.email ?? "",
-    phone: profile?.phone ?? "",
-    role: resolveUserRole(data.user.email ?? "", profile?.role),
-    residentType: profile?.resident_type ?? undefined,
-    status: profile?.status ?? undefined,
-    carPlate: profile?.car_plate ?? undefined,
-    petsCount: profile?.pets_count ?? undefined,
-    avatarUrl: profile?.avatar_url ?? undefined,
-  };
-
-  localStorage.setItem("token", data.session.access_token);
-  localStorage.setItem("user", JSON.stringify(user));
-  return user;
-}
+// ─── Password reset ───────────────────────────────────────────────────────────
 
 export async function resetPassword(email: string): Promise<void> {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -131,40 +383,11 @@ export async function updatePassword(newPassword: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// ─── Logout ───────────────────────────────────────────────────────────────────
+
 export async function logout() {
   await supabase.auth.signOut();
   localStorage.removeItem("token");
   localStorage.removeItem("user");
-}
-
-export function getToken() {
-  return localStorage.getItem("token");
-}
-
-export function getUser(): User | null {
-  const raw = localStorage.getItem("user");
-  if (!raw) return null;
-
-  const user = JSON.parse(raw) as User;
-  const nextRole = resolveUserRole(user.email, user.role);
-
-  if (nextRole !== user.role) {
-    const nextUser = { ...user, role: nextRole };
-    localStorage.setItem("user", JSON.stringify(nextUser));
-    return nextUser;
-  }
-
-  return user;
-}
-
-export function setStoredUser(user: User) {
-  const next = { ...user, role: resolveUserRole(user.email, user.role) };
-  localStorage.setItem("user", JSON.stringify(next));
-  return next;
-}
-
-export function updateUser(updated: Partial<User>) {
-  const current = getUser();
-  if (!current) return null;
-  return setStoredUser({ ...current, ...updated });
+  sessionStorage.removeItem("selectionToken");
 }

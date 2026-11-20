@@ -1,12 +1,14 @@
+import { useEffect, useState } from "react";
 import { Paperclip, X } from "lucide-react";
-import { AVISO_TIPOS, type AvisoTipo, type CreateAvisoPayload } from "../services/avisos";
+import { AVISO_TIPOS, type AvisoTipo, type CreateAvisoPayload, type CondominioSimples, type MoradorOption, listCondominiosAtivos, listMoradoresDoCondominio } from "../services/avisos";
+import { getUser } from "../../auth/services/auth";
 
 const inputCls =
   "px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
 
 type AvisoFormProps = {
   form: CreateAvisoPayload;
-  onFieldChange: (field: keyof CreateAvisoPayload, value: string) => void;
+  onFieldChange: (field: keyof CreateAvisoPayload, value: string | null) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   submitting: boolean;
@@ -15,6 +17,8 @@ type AvisoFormProps = {
   onAnexoChange: (file: File | null) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   submitLabel: string;
+  onCondominioChange?: (uuid: string | null) => void;
+  selectedCondominioUUID?: string | null;
 };
 
 export function AvisoForm({
@@ -28,9 +32,99 @@ export function AvisoForm({
   onAnexoChange,
   fileInputRef,
   submitLabel,
+  onCondominioChange,
+  selectedCondominioUUID,
 }: AvisoFormProps) {
+  const user = getUser();
+  const isMasterAdmin = user?.role === "MASTER_ADMIN";
+  const condominioUUID = selectedCondominioUUID ?? user?.condominioUUID ?? null;
+
+  const [condominios, setCondominios] = useState<CondominioSimples[]>([]);
+  const [moradores, setMoradores] = useState<MoradorOption[]>([]);
+  const [destinoTipo, setDestinoTipo] = useState<"condominio" | "pessoa">("condominio");
+
+  // Carrega lista de condomínios se MASTER_ADMIN
+  useEffect(() => {
+    if (!isMasterAdmin) return;
+    listCondominiosAtivos().then(setCondominios);
+  }, [isMasterAdmin]);
+
+  // Carrega moradores quando condomínio estiver definido e destino for "pessoa"
+  useEffect(() => {
+    if (!condominioUUID || destinoTipo !== "pessoa") {
+      setMoradores([]);
+      onFieldChange("destinatario_user_id", null);
+      return;
+    }
+    listMoradoresDoCondominio(condominioUUID).then(setMoradores);
+  }, [condominioUUID, destinoTipo]);
+
+  function handleDestinoTipo(tipo: "condominio" | "pessoa") {
+    setDestinoTipo(tipo);
+    if (tipo === "condominio") onFieldChange("destinatario_user_id", null);
+  }
+
   return (
     <form className="grid gap-4" onSubmit={onSubmit}>
+
+      {/* 1. Seletor de condomínio — só MASTER_ADMIN */}
+      {isMasterAdmin && (
+        <div className="grid gap-2">
+          <label className="text-sm font-semibold text-gray-600">Condomínio</label>
+          <select
+            value={selectedCondominioUUID ?? ""}
+            onChange={(e) => onCondominioChange?.(e.target.value || null)}
+            required
+            className={inputCls}
+          >
+            <option value="">Selecione um condomínio</option>
+            {condominios.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* 2. Destinatário */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid gap-2">
+          <label className="text-sm font-semibold text-gray-600">Enviar para</label>
+          <select
+            value={destinoTipo}
+            onChange={(e) => handleDestinoTipo(e.target.value as "condominio" | "pessoa")}
+            className={inputCls}
+          >
+            <option value="condominio">Condomínio inteiro</option>
+            <option value="pessoa">Pessoa específica</option>
+          </select>
+        </div>
+
+        {destinoTipo === "pessoa" && (
+          <div className="grid gap-2">
+            <label className="text-sm font-semibold text-gray-600">Morador</label>
+            <select
+              value={form.destinatario_user_id ?? ""}
+              onChange={(e) => onFieldChange("destinatario_user_id", e.target.value || null)}
+              required
+              className={inputCls}
+              disabled={!condominioUUID || moradores.length === 0}
+            >
+              <option value="">
+                {!condominioUUID
+                  ? "Selecione um condomínio primeiro"
+                  : moradores.length === 0
+                  ? "Carregando..."
+                  : "Selecione um morador"}
+              </option>
+              {moradores.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Título */}
       <div className="grid gap-2">
         <label className="text-sm font-semibold text-gray-600">Título</label>
         <input
@@ -44,6 +138,7 @@ export function AvisoForm({
         />
       </div>
 
+      {/* 4. Descrição */}
       <div className="grid gap-2">
         <label className="text-sm font-semibold text-gray-600">Descrição</label>
         <textarea
@@ -56,6 +151,7 @@ export function AvisoForm({
         />
       </div>
 
+      {/* 5. Tipo + Data expiração */}
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="grid gap-2">
           <label className="text-sm font-semibold text-gray-600">Tipo</label>
@@ -96,6 +192,7 @@ export function AvisoForm({
         </div>
       </div>
 
+      {/* 6. Anexo */}
       <div className="grid gap-2">
         <label className="text-sm font-semibold text-gray-600">
           Anexo <span className="text-gray-400 font-normal">(PDF, Word, Imagem — máx 10MB)</span>

@@ -5,7 +5,7 @@ import { AvisoForm } from "./aviso-form";
 type AvisoCriarModalProps = {
   open: boolean;
   form: CreateAvisoPayload;
-  onFieldChange: (field: keyof CreateAvisoPayload, value: string) => void;
+  onFieldChange: (field: keyof CreateAvisoPayload, value: string | null) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   submitting: boolean;
@@ -13,6 +13,8 @@ type AvisoCriarModalProps = {
   anexoFile: File | null;
   onAnexoChange: (file: File | null) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
+  onCondominioChange?: (uuid: string | null) => void;
+  selectedCondominioUUID?: string | null;
 };
 
 export function AvisoCriarModal({
@@ -26,6 +28,8 @@ export function AvisoCriarModal({
   anexoFile,
   onAnexoChange,
   fileInputRef,
+  onCondominioChange,
+  selectedCondominioUUID,
 }: AvisoCriarModalProps) {
   if (!open) return null;
 
@@ -56,6 +60,8 @@ export function AvisoCriarModal({
           onAnexoChange={onAnexoChange}
           fileInputRef={fileInputRef}
           submitLabel={submitting ? "Publicando..." : "Publicar aviso"}
+          onCondominioChange={onCondominioChange}
+          selectedCondominioUUID={selectedCondominioUUID}
         />
       </div>
     </div>

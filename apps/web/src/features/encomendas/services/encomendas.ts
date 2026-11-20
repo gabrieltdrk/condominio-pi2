@@ -1,5 +1,8 @@
 import { getUser } from "../../auth/services/auth";
 import { supabase } from "../../../lib/supabase";
+import { requireSessionUser } from "../../../lib/auth-helpers";
+import { getStoragePathFromPublicUrl } from "../../../lib/file";
+import { getCondominioUUIDAsync } from "../../../lib/condominio";
 
 export type DeliveryStatus = "RECEBIDA" | "AVISADA" | "RETIRADA";
 
@@ -101,37 +104,23 @@ function mapDelivery(row: DeliveryRow, apartmentMap: Map<string, string>): Deliv
   };
 }
 
-function getStoragePathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
-  if (!url) return null;
-
-  try {
-    const parsed = new URL(url);
-    const marker = `/object/public/${bucket}/`;
-    const index = parsed.pathname.indexOf(marker);
-    if (index === -1) return null;
-    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
-  } catch {
-    return null;
-  }
-}
-
-async function requireSessionUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    throw new Error("Sessao invalida. Faca login novamente.");
-  }
-
-  return data.user;
-}
 
 export async function listDeliveryApartmentOptions(): Promise<DeliveryApartmentOption[]> {
-  const { data, error } = await supabase
+  const condominioUUID = await getCondominioUUIDAsync();
+
+  let query = supabase
     .from("condo_apartments")
     .select("id, tower, level, number, resident_id, resident:profiles!condo_apartments_resident_id_fkey(id, name)")
     .not("resident_id", "is", null)
     .order("tower", { ascending: true })
     .order("level", { ascending: true })
     .order("number", { ascending: true });
+
+  if (condominioUUID) {
+    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
 
@@ -154,11 +143,16 @@ export async function listDeliveryApartmentOptions(): Promise<DeliveryApartmentO
 export async function listDeliveries(): Promise<Delivery[]> {
   const authUser = await requireSessionUser();
   const currentUser = getUser();
+  const condominioUUID = await getCondominioUUIDAsync();
 
   let query = supabase
     .from("deliveries")
     .select("id, apartment_id, resident_id, recipient_name, carrier, tracking_code, description, status, notes, photo_url, received_at, notified_at, picked_up_at, picked_up_by_name, created_by_user_id, created_by_name, created_at, updated_at")
     .order("received_at", { ascending: false });
+
+  if (condominioUUID) {
+    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
 
   if (currentUser?.role === "MORADOR") {
     query = query.eq("resident_id", authUser.id);
@@ -197,6 +191,7 @@ export async function createDelivery(input: CreateDeliveryInput): Promise<void> 
     photo_url: input.photoUrl?.trim() || null,
     created_by_user_id: authUser.id,
     created_by_name: currentUser?.name?.trim() || authUser.email || "Portaria",
+    condominio_id: currentUser?.condominioUUID ?? null,
   });
 
   if (error) throw new Error(error.message);

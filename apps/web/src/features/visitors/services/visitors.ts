@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { getUser } from "../../auth/services/auth";
 import { supabase } from "../../../lib/supabase";
+import { getCondominioUUIDAsync } from "../../../lib/condominio";
 
 export type VisitorRequestStatus =
   | "PENDENTE_CONFIRMACAO"
@@ -175,6 +176,7 @@ function mapGuest(row: VisitorGuestRow): VisitorGuest {
 }
 
 export async function listVisitorRequests(): Promise<VisitorRequest[]> {
+  const condominioUUID = await getCondominioUUIDAsync();
   const storedUser = getUser();
   const authResult = await supabase.auth.getUser();
   const currentUserId = authResult.data.user?.id ?? null;
@@ -185,6 +187,10 @@ export async function listVisitorRequests(): Promise<VisitorRequest[]> {
       "id, resident_id, apartment_id, status, requires_portaria_qr, adults_count, children_count, pets_count, expected_check_in, expected_check_out, notes, confirmation_email_sent_at, principal_confirmed_at, resident_validated_at, checked_in_at, checked_out_at, created_at",
     )
     .order("created_at", { ascending: false });
+
+  if (condominioUUID) {
+    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
 
   if (storedUser?.role === "MORADOR" && currentUserId) {
     query = query.eq("resident_id", currentUserId);
@@ -319,6 +325,7 @@ export async function createVisitorRequest(input: VisitorRequestInput): Promise<
       expected_check_out: input.expectedCheckOut,
       requires_portaria_qr: input.requiresPortariaQr,
       notes: input.notes.trim() || null,
+      condominio_id: storedUser?.condominioUUID ?? null,
     })
     .select("id")
     .single();

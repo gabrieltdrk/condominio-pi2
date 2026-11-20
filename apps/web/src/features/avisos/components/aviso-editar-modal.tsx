@@ -5,7 +5,7 @@ import { AvisoForm } from "./aviso-form";
 type AvisoEditarModalProps = {
   editando: Aviso | null;
   form: CreateAvisoPayload;
-  onFieldChange: (field: keyof CreateAvisoPayload, value: string) => void;
+  onFieldChange: (field: keyof CreateAvisoPayload, value: string | null) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   submitting: boolean;
