@@ -167,6 +167,12 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
   // Role do perfil ou fallback via user_metadata (para MASTER_ADMIN sem RLS)
   const resolvedRole = profile?.role ?? (data.user.user_metadata?.role as string | undefined);
 
+  async function abortLogin(message: string): Promise<never> {
+    await supabase.auth.signOut();
+    localStorage.removeItem("token");
+    throw new Error(message);
+  }
+
   // MASTER_ADMIN não precisa estar vinculado a nenhum condomínio
   if (resolvedRole === "MASTER_ADMIN") {
     const user: User = {
@@ -188,6 +194,16 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
     return { requiresSelection: false, user };
   }
 
+  // Falha ao consultar os vínculos (tabela ausente, RLS, rede...) não é "condomínio inativo"
+  if (ucResult.error) {
+    console.error("Erro ao carregar usuario_condominio:", ucResult.error);
+    return abortLogin(`Não foi possível carregar seus condomínios: ${ucResult.error.message}`);
+  }
+
+  if (ucRows.length === 0) {
+    return abortLogin("Sua conta não está vinculada a nenhum condomínio. Entre em contato com o síndico responsável.");
+  }
+
   // Busca dados dos condomínios vinculados (nome + status + plano)
   const uuidsAll = ucRows.map((r) => r.condominio_id);
   const { data: condData } = await supabase
@@ -200,17 +216,14 @@ async function loginViaSupabase(email: string, password: string): Promise<LoginR
 
   // Filtra apenas condomínios ativos
   // Se condMap estiver vazio (RLS bloqueou a leitura), assume ativo por padrão
-  const activeUcRows = resolvedRole === "MASTER_ADMIN"
-    ? ucRows
-    : ucRows.filter((r) => {
-        const cond = condMap.get(r.condominio_id);
-        return cond === undefined ? true : cond.active !== false;
-      });
+  const activeUcRows = ucRows.filter((r) => {
+    const cond = condMap.get(r.condominio_id);
+    return cond === undefined ? true : cond.active !== false;
+  });
 
-  if (activeUcRows.length === 0 && resolvedRole !== "MASTER_ADMIN") {
-    await supabase.auth.signOut();
-    localStorage.removeItem("token");
-    throw new Error("CONDOMINIO_INATIVO");
+  // Só chega aqui com vínculos existentes: se nenhum sobrou, todos os condomínios estão inativos
+  if (activeUcRows.length === 0) {
+    return abortLogin("CONDOMINIO_INATIVO");
   }
 
   // Usuário vinculado a mais de um condomínio ativo → pedir seleção
