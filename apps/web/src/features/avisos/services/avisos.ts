@@ -1,4 +1,6 @@
-import { supabase } from "../../../lib/supabase";
+import { supabase, getSupabaseAdmin } from "../../../lib/supabase";
+import { getUser } from "../../auth/services/auth";
+import { getCondominioUUIDAsync } from "../../../lib/condominio";
 
 export type AvisoTipo = "Manutenção" | "Assembleia" | "Segurança" | "Informativo" | "Eventos";
 
@@ -16,6 +18,7 @@ export type Aviso = {
   author_name?: string;
   curtidas_count: number;
   user_curtiu: boolean;
+  destinatario_user_id: string | null;
 };
 
 export type CreateAvisoPayload = {
@@ -24,7 +27,58 @@ export type CreateAvisoPayload = {
   tipo: AvisoTipo;
   data_expiracao?: string;
   arquivo_url?: string;
+  destinatario_user_id?: string | null;
 };
+
+export type MoradorOption = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+export async function listMoradoresDoCondominio(condominioUUID: string): Promise<MoradorOption[]> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const currentUserId = authUser?.id ?? null;
+  const admin = getSupabaseAdmin();
+
+  // Usa admin para bypassar RLS — GADM só enxergaria o próprio registro com cliente normal
+  const { data: ucData, error: ucError } = await admin
+    .from("usuario_condominio")
+    .select("user_id")
+    .eq("condominio_id", condominioUUID)
+    .eq("active", true);
+
+  if (ucError || !ucData || ucData.length === 0) return [];
+
+  const userIds = (ucData as Array<{ user_id: string }>)
+    .map((r) => r.user_id)
+    .filter((id) => id !== currentUserId);
+
+  if (userIds.length === 0) return [];
+
+  const { data: profilesData } = await admin
+    .from("profiles")
+    .select("id, name, email")
+    .in("id", userIds);
+
+  if (!profilesData) return [];
+
+  return (profilesData as Array<{ id: string; name: string; email: string }>)
+    .filter((p) => p.name || p.email)
+    .map((p) => ({ id: p.id, name: p.name || p.email, email: p.email }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export type CondominioSimples = { id: string; name: string };
+
+export async function listCondominiosAtivos(): Promise<CondominioSimples[]> {
+  const { data } = await supabase
+    .from("condominios")
+    .select("id, name")
+    .eq("active", true)
+    .order("name");
+  return (data ?? []) as CondominioSimples[];
+}
 
 export type Notificacao = {
   id: string;
@@ -55,12 +109,33 @@ export const AVISO_TIPO_COLORS: Record<AvisoTipo, string> = {
 export async function listAvisos(): Promise<Aviso[]> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   const uid = authUser?.id ?? null;
+  const storedUser = getUser();
+  const isMasterAdmin = storedUser?.role === "MASTER_ADMIN";
+  const condominioUUID = await getCondominioUUIDAsync();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("avisos")
     .select("*, profiles!created_by(name)")
+    .eq("removed", false)
     .order("fixado", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (isMasterAdmin) {
+    // MASTER_ADMIN não vê avisos — apenas cria
+    return [];
+  }
+
+  if (condominioUUID) {
+    query = query.eq("condominio_id", condominioUUID);
+    // Mostrar avisos para o condomínio todo OU especificamente para este usuário
+    if (uid) {
+      query = query.or(`destinatario_user_id.is.null,destinatario_user_id.eq.${uid}`);
+    } else {
+      query = query.is("destinatario_user_id", null);
+    }
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error("Erro ao carregar avisos.");
 
@@ -99,14 +174,21 @@ export async function listAvisos(): Promise<Aviso[]> {
   }));
 }
 
-export async function createAviso(payload: CreateAvisoPayload): Promise<void> {
+export async function createAviso(payload: CreateAvisoPayload, condominioUUID?: string | null): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado.");
 
+  const resolvedCondominioId = condominioUUID ?? getUser()?.condominioUUID ?? null;
+
   const { error } = await supabase.from("avisos").insert({
-    ...payload,
-    created_by: user.id,
+    titulo: payload.titulo,
+    descricao: payload.descricao,
+    tipo: payload.tipo,
     data_expiracao: payload.data_expiracao || null,
+    arquivo_url: payload.arquivo_url || null,
+    destinatario_user_id: payload.destinatario_user_id ?? null,
+    created_by: user.id,
+    condominio_id: resolvedCondominioId,
   });
 
   if (error) throw new Error(error.message);
@@ -130,7 +212,10 @@ export async function uploadAvisoAnexo(file: File): Promise<string> {
 }
 
 export async function deleteAviso(id: string): Promise<void> {
-  const { error } = await supabase.from("avisos").delete().eq("id", id);
+  const { error } = await supabase
+    .from("avisos")
+    .update({ removed: true, updated_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -181,6 +266,7 @@ export async function listNotificacoes(): Promise<Notificacao[]> {
     .from("system_notifications")
     .select("id, title, message, category, link, read, created_at")
     .eq("read", false)
+    .lte("created_at", new Date().toISOString())
     .order("created_at", { ascending: false });
 
   const [avisosResult, systemResult] = await Promise.all([avisosPromise, systemPromise]);

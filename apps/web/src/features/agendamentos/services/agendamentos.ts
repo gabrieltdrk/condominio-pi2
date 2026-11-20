@@ -1,5 +1,6 @@
 import { getUser } from "../../auth/services/auth";
 import { supabase } from "../../../lib/supabase";
+import { getCondominioUUIDAsync } from "../../../lib/condominio";
 
 export type ResourceBooking = {
   id: string;
@@ -38,12 +39,21 @@ function mapRow(row: BookingRow, profileMap: Map<string, string>): ResourceBooki
   };
 }
 
+
 export async function listResourceBookings(): Promise<ResourceBooking[]> {
-  const { data, error } = await supabase
+  const condominioUUID = await getCondominioUUIDAsync();
+
+  let query = supabase
     .from("resource_bookings")
     .select("id, resource_id, booking_date, booking_time, duration, note, created_at, user_id")
     .order("booking_date", { ascending: true })
     .order("booking_time", { ascending: true });
+
+  if (condominioUUID) {
+    query = query.or(`condominio_id.is.null,condominio_id.eq.${condominioUUID}`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -63,6 +73,20 @@ export async function listResourceBookings(): Promise<ResourceBooking[]> {
   return rows.map((row) => mapRow(row, profileMap));
 }
 
+function timeToMin(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+function durToMin(d: string) {
+  const match = d.match(/^(\d+)h$/);
+  return match ? parseInt(match[1]) * 60 : 60;
+}
+function timesOverlap(startA: string, durA: string, startB: string, durB: string) {
+  const sA = timeToMin(startA), eA = sA + durToMin(durA);
+  const sB = timeToMin(startB), eB = sB + durToMin(durB);
+  return sA < eB && sB < eA;
+}
+
 export async function createResourceBooking(input: {
   resourceId: string;
   date: string;
@@ -75,19 +99,18 @@ export async function createResourceBooking(input: {
     throw new Error("Sessao invalida. Faca login novamente.");
   }
 
-  const { data: existing, error: existingError } = await supabase
+  const { data: sameDay, error: existingError } = await supabase
     .from("resource_bookings")
-    .select("id")
+    .select("booking_time, duration")
     .eq("resource_id", input.resourceId)
-    .eq("booking_date", input.date)
-    .maybeSingle();
+    .eq("booking_date", input.date);
 
-  if (existingError) {
-    throw new Error(existingError.message);
-  }
+  if (existingError) throw new Error(existingError.message);
 
-  if (existing) {
-    throw new Error("Esta data ja esta reservada para este local.");
+  for (const b of sameDay ?? []) {
+    if (timesOverlap(input.time, input.duration, b.booking_time.slice(0, 5), b.duration)) {
+      throw new Error("Conflito de horário com reserva existente neste dia.");
+    }
   }
 
   const { error } = await supabase.from("resource_bookings").insert({
@@ -97,14 +120,10 @@ export async function createResourceBooking(input: {
     duration: input.duration,
     note: input.note.trim() || null,
     user_id: user.id,
+    condominio_id: getUser()?.condominioUUID ?? null,
   });
 
-  if (error) {
-    if (error.code === "23505") {
-      throw new Error("Esta data ja esta reservada para este local.");
-    }
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 }
 
 export async function cancelResourceBooking(bookingId: string): Promise<void> {

@@ -1,5 +1,7 @@
 import { getUser } from "../../auth/services/auth";
 import { supabase } from "../../../lib/supabase";
+import { requireSessionUser } from "../../../lib/auth-helpers";
+import { getStoragePathFromPublicUrl, validateFile } from "../../../lib/file";
 
 export type MaintenanceStatus = "AGENDADA" | "EM_ANDAMENTO" | "CONCLUIDA" | "ATRASADA" | "CANCELADA";
 export type MaintenancePriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
@@ -224,20 +226,6 @@ function mapAttachment(row: MaintenanceAttachmentRow): MaintenanceAttachment {
   };
 }
 
-function getStoragePathFromPublicUrl(url: string | null | undefined, bucket: string): string | null {
-  if (!url) return null;
-
-  try {
-    const parsed = new URL(url);
-    const marker = `/object/public/${bucket}/`;
-    const index = parsed.pathname.indexOf(marker);
-    if (index === -1) return null;
-    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
-  } catch {
-    return null;
-  }
-}
-
 function resolveApprovedAt(nextApproverName: string, current: Pick<MaintenanceOrder, "approvedAt" | "approvedByName"> | null) {
   const trimmed = nextApproverName.trim();
   if (!trimmed) return null;
@@ -245,14 +233,6 @@ function resolveApprovedAt(nextApproverName: string, current: Pick<MaintenanceOr
   return new Date().toISOString();
 }
 
-async function requireSessionUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    throw new Error("Sessao invalida. Faca login novamente.");
-  }
-
-  return data.user;
-}
 
 async function getMaintenanceOrder(orderId: string): Promise<MaintenanceOrder | null> {
   const { data, error } = await supabase.from("maintenance_orders").select(ORDER_SELECT).eq("id", orderId).maybeSingle();
@@ -423,15 +403,10 @@ export async function cancelMaintenanceOrder(orderId: string): Promise<void> {
 export async function uploadMaintenanceAttachment(orderId: string, file: File): Promise<MaintenanceAttachment> {
   const authUser = await requireSessionUser();
   const currentUser = getUser();
-  const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-
-  if (!allowedTypes.has(file.type)) {
-    throw new Error("Envie um arquivo JPG, PNG, WEBP ou PDF.");
-  }
-
-  if (file.size > 10 * 1024 * 1024) {
-    throw new Error("O arquivo deve ter no maximo 10 MB.");
-  }
+  validateFile(file, {
+    maxMb: 10,
+    types: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+  });
 
   const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
   const path = `${orderId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;

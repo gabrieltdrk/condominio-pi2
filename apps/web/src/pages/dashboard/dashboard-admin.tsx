@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Trash2, X, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle, CloudSun, Droplets, Wind } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, Users, CalendarDays, AlertTriangle, TrendingDown, Clock, CalendarCheck, Megaphone, Building2, BarChart2, Activity, CheckCircle2, UserPlus, FileText, AlertCircle, CloudSun, Droplets, Wind } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
@@ -15,38 +15,24 @@ import {
   Cell,
 } from "recharts";
 import AppLayout from "../../features/layout/components/app-layout";
-import { createUser, listUsers, updateUserRecord, type CreateUserPayload, type UpdateUserPayload, type UserRecord } from "../../features/dashboard/services/users";
-import { fetchSantosWeather, type WeatherSnapshot } from "../../features/dashboard/services/weather";
+import { getUser } from "../../features/auth/services/auth";
+import { inviteUser, listUsers, updateUserRecord, type InviteUserPayload, type UpdateUserPayload, type UserRecord } from "../../features/dashboard/services/users";
+import { fetchWeather, type WeatherSnapshot } from "../../features/dashboard/services/weather";
 import { listOcorrencias, type Ocorrencia } from "../../features/ocorrencias/services/ocorrencias";
+import { UserFormModal, EMPTY_USER_FORM, type UserFormState } from "./components/user-form-modal";
 
 type Pending = { title: string; subtitle: string; tag: string; tagColor: string };
-type UserFormState = CreateUserPayload;
 
-const EMPTY_FORM: CreateUserPayload = {
-  name: "",
-  email: "",
-  phone: "",
-  password: "",
-  carPlate: "",
-  petsCount: null,
-  role: "MORADOR",
-  residentType: "PROPRIETARIO",
-  status: "ATIVO",
-  apartmentId: null,
-};
-
-const RESIDENT_TYPE_LABEL: Record<CreateUserPayload["residentType"], string> = {
+const RESIDENT_TYPE_LABEL: Record<UpdateUserPayload["residentType"], string> = {
   PROPRIETARIO: "Proprietário",
   INQUILINO: "Inquilino",
   VISITANTE: "Visitante",
 };
 
-const USER_STATUS_LABEL: Record<CreateUserPayload["status"], string> = {
+const USER_STATUS_LABEL: Record<UpdateUserPayload["status"], string> = {
   ATIVO: "Ativo",
   INATIVO: "Inativo",
 };
-
-const inputCls = "px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-[13px] outline-none w-full focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition";
 
 // ── Financial trend data (mock) ──
 const financeiroTrend = [
@@ -81,6 +67,7 @@ function ChartTooltip({ active, payload, label }: any) {
 
 export default function DashboardAdmin() {
   const nav = useNavigate();
+  const currentUser = getUser();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState("");
@@ -93,7 +80,7 @@ export default function DashboardAdmin() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
-  const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
+  const [form, setForm] = useState<UserFormState>(EMPTY_USER_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -112,13 +99,13 @@ export default function DashboardAdmin() {
       .then(setOcorrencias)
       .catch((e: Error) => setOcorrenciasError(e.message))
       .finally(() => setOcorrenciasLoading(false));
-    fetchSantosWeather()
+    fetchWeather()
       .then(setWeather)
       .catch(() => setWeather(null))
       .finally(() => setWeatherLoading(false));
   }, []);
 
-  function openCreateModal() { setEditingUser(null); setForm(EMPTY_FORM); setFormError(""); setModalOpen(true); }
+  function openCreateModal() { setEditingUser(null); setForm(EMPTY_USER_FORM); setFormError(""); setModalOpen(true); }
   function closeModal() { setModalOpen(false); setEditingUser(null); }
 
   function openEditModal(user: UserRecord) {
@@ -127,7 +114,6 @@ export default function DashboardAdmin() {
       name: user.name,
       email: user.email,
       phone: user.phone ?? "",
-      password: "",
       carPlate: user.car_plate ?? "",
       petsCount: user.pets_count ?? null,
       role: user.role,
@@ -158,7 +144,13 @@ export default function DashboardAdmin() {
           apartmentId: form.apartmentId,
         } satisfies UpdateUserPayload);
       } else {
-        await createUser(form);
+        await inviteUser({
+          email: form.email,
+          role: form.role,
+          residentType: form.residentType,
+          apartmentId: form.apartmentId,
+          condominioId: currentUser?.condominioUUID ?? null,
+        } satisfies InviteUserPayload);
       }
       closeModal();
       loadUsers();
@@ -212,80 +204,81 @@ export default function DashboardAdmin() {
 
   return (
     <AppLayout title="Dashboard · Visão Geral">
+      <style>{`
+        @keyframes kpi-scroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .kpi-track { display: flex; animation: kpi-scroll 28s linear infinite; }
+        .kpi-track:hover { animation-play-state: paused; }
+        .kpi-group { display: flex; gap: 1rem; padding-right: 1rem; }
+      `}</style>
       <div className="grid gap-5">
 
-        {/* ── KPIs ── */}
-        <section className="grid grid-cols-12 gap-4">
-          {kpis.map((k) => {
-            const Icon = k.icon;
-            return (
-              <div
-                key={k.title}
-                className={`col-span-12 sm:col-span-6 lg:col-span-3 bg-linear-to-br ${k.gradient} border ${k.border} rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className={`w-9 h-9 rounded-xl ${k.iconBg} flex items-center justify-center shrink-0`}>
-                    <Icon size={18} className={k.iconColor} />
-                  </div>
-                  <span className="text-[11px] text-gray-400 border border-gray-200 bg-white px-2 py-1 rounded-full whitespace-nowrap">
-                    {k.badge}
-                  </span>
-                </div>
-                <div className="mt-3 text-[30px] font-extrabold tracking-tight text-gray-900 leading-none">
-                  {k.kpi}
-                </div>
-                <p className="mt-1 text-xs font-semibold text-gray-700">{k.title}</p>
-                <p className="mt-0.5 text-[11px] text-gray-400">{k.foot}</p>
+        {/* ── Clima + KPIs em esteira ── */}
+        <section className="flex gap-4 overflow-hidden">
+
+          {/* Weather compact card */}
+          <div className="shrink-0 w-52 rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm flex flex-col">
+            {weatherLoading ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-500" />
               </div>
-            );
-          })}
+            ) : weather ? (
+              <>
+                <div className="flex items-start justify-between">
+                  <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center shrink-0">
+                    <CloudSun size={18} className="text-sky-500" />
+                  </div>
+                  <span className="text-[10px] text-gray-400 border border-gray-200 bg-white px-2 py-0.5 rounded-full">Clima</span>
+                </div>
+                <div className="mt-3 text-[28px] font-extrabold tracking-tight text-slate-900 leading-none">{Math.round(weather.temperature)}°C</div>
+                <p className="mt-1 text-xs font-semibold text-gray-700">{weather.condition}</p>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  <span className="inline-flex items-center gap-1 mr-2"><Droplets size={10} className="text-sky-400" />{weather.humidity}%</span>
+                  <span className="inline-flex items-center gap-1"><Wind size={10} className="text-sky-400" />{Math.round(weather.windSpeed)} km/h</span>
+                </p>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center gap-1 text-center">
+                <CloudSun size={24} className="text-gray-300" />
+                <p className="text-[11px] text-gray-400">Clima indisponível</p>
+              </div>
+            )}
+          </div>
+
+          {/* KPI esteira */}
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="kpi-track" style={{ width: "max-content" }}>
+              {[0, 1].map((g) => (
+                <div key={g} className="kpi-group">
+                  {kpis.map((k, i) => {
+                    const Icon = k.icon;
+                    return (
+                      <div key={i}
+                        className={`w-52 shrink-0 bg-gradient-to-br ${k.gradient} border ${k.border} rounded-2xl p-4 shadow-sm cursor-default`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className={`w-9 h-9 rounded-xl ${k.iconBg} flex items-center justify-center shrink-0`}>
+                            <Icon size={18} className={k.iconColor} />
+                          </div>
+                          <span className="text-[10px] text-gray-400 border border-gray-200 bg-white px-2 py-0.5 rounded-full whitespace-nowrap">
+                            {k.badge}
+                          </span>
+                        </div>
+                        <div className="mt-3 text-[28px] font-extrabold tracking-tight text-gray-900 leading-none">{k.kpi}</div>
+                        <p className="mt-1 text-xs font-semibold text-gray-700">{k.title}</p>
+                        <p className="mt-0.5 text-[11px] text-gray-400">{k.foot}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* ── Financeiro + Inadimplência ── */}
         <section className="grid grid-cols-12 gap-4">
-
-          {/* Resumo Financeiro — line chart */}
-          <div className="col-span-12 overflow-hidden rounded-[28px] border border-sky-100 bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.35),_transparent_28%),linear-gradient(135deg,_#f0f9ff_0%,_#ffffff_45%,_#ecfeff_100%)] p-5 shadow-sm">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl">
-                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-                  <CloudSun size={13} />
-                  Tempo em Santos
-                </div>
-                <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">Clima atual para acompanhar operação e rotina do condomínio</h3>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Visão rápida com temperatura, sensação térmica e condições do dia em Santos, SP.</p>
-              </div>
-
-              {weather ? (
-                <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Agora</p>
-                    <p className="mt-1 break-words text-[clamp(1.5rem,2vw,2.2rem)] font-black leading-tight tracking-[-0.04em] text-slate-950">{Math.round(weather.temperature)}°C</p>
-                    <p className="mt-1 text-xs text-slate-500">{weather.condition}</p>
-                  </div>
-                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sensacao</p>
-                    <p className="mt-1 text-lg font-bold text-slate-950">{Math.round(weather.apparentTemperature)}°C</p>
-                    <p className="mt-1 text-xs text-slate-500">Max {Math.round(weather.high)}°C - Min {Math.round(weather.low)}°C</p>
-                  </div>
-                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
-                    <div className="flex items-center gap-2 text-slate-500"><Droplets size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Umidade</span></div>
-                    <p className="mt-2 text-lg font-bold text-slate-950">{weather.humidity}%</p>
-                    <p className="mt-1 text-xs text-slate-500">{weather.city}</p>
-                  </div>
-                  <div className="min-w-0 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
-                    <div className="flex items-center gap-2 text-slate-500"><Wind size={14} /><span className="text-[11px] font-semibold uppercase tracking-wide">Vento</span></div>
-                    <p className="mt-2 text-lg font-bold text-slate-950">{Math.round(weather.windSpeed)} km/h</p>
-                    <p className="mt-1 text-xs text-slate-500">Atualizado {new Date(`${weather.fetchedAt}:00`).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-4 text-sm text-slate-500 shadow-sm">
-                  {weatherLoading ? "Carregando clima de Santos..." : "Não foi possível carregar o clima agora."}
-                </div>
-              )}
-            </div>
-          </div>
 
           <div className="col-span-12 lg:col-span-8 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-start justify-between gap-3 mb-4">
@@ -801,146 +794,16 @@ export default function DashboardAdmin() {
 
       </div>
 
-      {/* ── Modal — Novo usuário ── */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-1000 p-4">
-          <div
-            className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-md p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="m-0 text-base font-semibold text-gray-900">{editingUser ? "Editar usuário" : "Novo usuário"}</h3>
-              <button className="p-1.5 rounded-lg border-none bg-transparent text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer transition-colors" onClick={closeModal}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form className="grid gap-4" onSubmit={handleCreate}>
-              {[
-                { id: "u-name", label: "Nome completo", type: "text", placeholder: "Nome completo", key: "name" as const },
-                { id: "u-email", label: "Email", type: "email", placeholder: "email@exemplo.com", key: "email" as const },
-                { id: "u-phone", label: "Telefone", type: "tel", placeholder: "(11) 99999-9999", key: "phone" as const },
-              ].map((f) => (
-                <div key={f.id} className="grid gap-1.5">
-                  <label htmlFor={f.id} className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{f.label}</label>
-                  <input
-                    id={f.id}
-                    type={f.type}
-                    placeholder={f.placeholder}
-                    value={form[f.key]}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                    required
-                    className={inputCls}
-                  />
-                </div>
-              ))}
-
-              {!editingUser && (
-                <div className="grid gap-1.5">
-                  <label htmlFor="u-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Senha</label>
-                  <input
-                    id="u-password"
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    required
-                    minLength={6}
-                    className={inputCls}
-                  />
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="grid gap-1.5">
-                  <label htmlFor="u-car-plate" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Placa do carro</label>
-                  <input
-                    id="u-car-plate"
-                    type="text"
-                    placeholder="ABC-1234"
-                    value={form.carPlate}
-                    onChange={(e) => setForm({ ...form, carPlate: e.target.value.toUpperCase() })}
-                    className={inputCls}
-                  />
-                </div>
-
-                <div className="grid gap-1.5">
-                  <label htmlFor="u-pets-count" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Número de pets</label>
-                  <input
-                    id="u-pets-count"
-                    type="number"
-                    min={0}
-                    placeholder="0"
-                    value={form.petsCount ?? ""}
-                    onChange={(e) => setForm({ ...form, petsCount: e.target.value === "" ? null : Number(e.target.value) })}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-1.5">
-                <label htmlFor="u-role" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Perfil</label>
-                <select
-                  id="u-role"
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value as "ADMIN" | "MORADOR" })}
-                  className={inputCls}
-                >
-                  <option value="MORADOR">Morador</option>
-                  <option value="ADMIN">Administrador</option>
-                </select>
-              </div>
-
-              <div className="grid gap-1.5">
-                <label htmlFor="u-resident-type" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo de morador</label>
-                <select
-                  id="u-resident-type"
-                  value={form.residentType}
-                  onChange={(e) => setForm({ ...form, residentType: e.target.value as CreateUserPayload["residentType"] })}
-                  className={inputCls}
-                >
-                  <option value="PROPRIETARIO">Proprietário</option>
-                  <option value="INQUILINO">Inquilino</option>
-                  <option value="VISITANTE">Visitante</option>
-                </select>
-              </div>
-
-              <div className="grid gap-1.5">
-                <label htmlFor="u-status" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
-                <select
-                  id="u-status"
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value as CreateUserPayload["status"] })}
-                  className={inputCls}
-                >
-                  <option value="ATIVO">Ativo</option>
-                  <option value="INATIVO">Inativo</option>
-                </select>
-              </div>
-
-              {formError && <p className="text-xs text-rose-500 m-0">{formError}</p>}
-
-              <div className="flex justify-end gap-2.5 mt-1">
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold cursor-pointer border border-gray-200 transition-colors"
-                  onClick={closeModal}
-                  disabled={submitting}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer border-none transition-colors"
-                  disabled={submitting}
-                >
-                  {submitting ? "Salvando..." : editingUser ? "Salvar alterações" : "Criar usuário"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <UserFormModal
+        open={modalOpen}
+        editingUser={editingUser}
+        form={form}
+        setForm={setForm}
+        submitting={submitting}
+        formError={formError}
+        onClose={closeModal}
+        onSubmit={handleCreate}
+      />
     </AppLayout>
   );
 }
